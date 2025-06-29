@@ -15,7 +15,7 @@ interface Audiobook {
   duration_seconds: number;
   last_playback_position_seconds: number;
   storage_path: string;
-  chapters_json: Record<string, number>;
+  chapters_json: Record<string, number> | null;
 }
 
 const Player = () => {
@@ -84,7 +84,17 @@ const Player = () => {
 
       if (error) throw error;
       
-      setAudiobook(data);
+      // Transform the data to match our interface
+      const transformedData: Audiobook = {
+        id: data.id,
+        title: data.title,
+        duration_seconds: data.duration_seconds,
+        last_playback_position_seconds: data.last_playback_position_seconds || 0,
+        storage_path: data.storage_path,
+        chapters_json: data.chapters_json as Record<string, number> | null
+      };
+      
+      setAudiobook(transformedData);
 
       // Get signed URL for the audio file
       const { data: urlData, error: urlError } = await supabase.storage
