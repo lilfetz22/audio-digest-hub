@@ -9,7 +9,90 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          key_hash: string
+          last_used_at: string | null
+          name: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key_hash: string
+          last_used_at?: string | null
+          name?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key_hash?: string
+          last_used_at?: string | null
+          name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      audiobooks: {
+        Row: {
+          chapters_json: Json | null
+          created_at: string
+          duration_seconds: number
+          id: string
+          last_playback_position_seconds: number | null
+          storage_path: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          chapters_json?: Json | null
+          created_at?: string
+          duration_seconds: number
+          id?: string
+          last_playback_position_seconds?: number | null
+          storage_path: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          chapters_json?: Json | null
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          last_playback_position_seconds?: number | null
+          storage_path?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      newsletter_sources: {
+        Row: {
+          created_at: string
+          custom_name: string
+          id: string
+          sender_email: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_name: string
+          id?: string
+          sender_email: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string
+          id?: string
+          sender_email?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
