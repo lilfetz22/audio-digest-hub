@@ -1,0 +1,10 @@
+requests
+google-api-python-client
+google-auth-oauthlib
+pydub
+coqui-tts
+torch
+torchaudio
+pytest
+pytest-mock
+requests-mock
