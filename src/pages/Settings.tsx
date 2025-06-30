@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trash2, Plus, Key } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ApiKeyModal } from '@/components/ui/api-key-modal';
 
 interface NewsletterSource {
   id: string;
@@ -29,6 +29,8 @@ const Settings = () => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [newSource, setNewSource] = useState({ sender_email: '', custom_name: '' });
   const [loading, setLoading] = useState(true);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [generatedApiKey, setGeneratedApiKey] = useState('');
 
   useEffect(() => {
     fetchSources();
@@ -135,10 +137,8 @@ const Settings = () => {
     if (!user) return;
 
     try {
-      // Generate a random API key
       const apiKey = `dda_${Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')}`;
       
-      // Hash the key for storage
       const encoder = new TextEncoder();
       const data = encoder.encode(apiKey);
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -156,12 +156,8 @@ const Settings = () => {
       if (error) throw error;
 
       fetchApiKeys();
-      
-      // Show the key to the user (only time they'll see it)
-      toast({
-        title: 'API Key Generated',
-        description: `Your API key: ${apiKey}. Save this key - you won't see it again!`,
-      });
+      setGeneratedApiKey(apiKey);
+      setShowApiKeyModal(true);
     } catch (error) {
       console.error('Error generating API key:', error);
       toast({
@@ -289,6 +285,12 @@ const Settings = () => {
           )}
         </CardContent>
       </Card>
+
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        apiKey={generatedApiKey}
+      />
     </div>
   );
 };
