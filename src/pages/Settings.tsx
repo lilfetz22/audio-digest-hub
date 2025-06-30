@@ -168,6 +168,32 @@ const Settings = () => {
     }
   };
 
+  const deleteApiKey = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('api_keys')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setApiKeys(prev => prev.filter(key => key.id !== id));
+      toast({
+        title: 'Success',
+        description: 'API key deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting API key:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete API key',
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -279,6 +305,14 @@ const Settings = () => {
                       {key.last_used_at && ` • Last used: ${new Date(key.last_used_at).toLocaleDateString()}`}
                     </p>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => deleteApiKey(key.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
             </div>
