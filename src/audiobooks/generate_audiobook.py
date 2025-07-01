@@ -1,5 +1,5 @@
 # generate_audiobook.py
-
+import numpy as np
 import os
 import sys
 import argparse
@@ -34,16 +34,30 @@ TTS_CLIENT = None
 
 
 def setup_logging():
-    """Configures the root logger for console and file output."""
+    """Configures the root logger for console and file output with UTF-8 encoding."""
     log_file = "audiobook_generator.log"
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_file, mode="a"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
+
+    # Get the root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Remove existing handlers to avoid duplication
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    # Create a formatter
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    # Create a file handler with UTF-8 encoding
+    file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Create a console handler with UTF-8 encoding
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
     logger.info("-" * 50)
     logger.info(f"Starting new run of audiobook generator.")
     logger.info(f"Logging initialized. Output will be saved to {log_file}")
@@ -261,38 +275,53 @@ def process_emails(service, sources, target_date_str):
 
 
 def generate_audio(text_content, reference_voice_path):
-    """Generates an MP3 file from text using the Coqui-TTS Python API."""
+    """
+    Generates an MP3 file by splitting text into chunks, synthesizing each,
+    and concatenating the audio.
+    """
     if not text_content.strip():
         logger.info("No text content to synthesize. Skipping audio generation.")
         return False
 
-    logger.info("Starting Coqui-TTS audio generation using Python API...")
+    logger.info("Starting Coqui-TTS audio generation using chunking method...")
 
+    # Determine which speaker to use (clone or built-in)
     speaker_wav_path = None
     speaker_name = None
-
     if reference_voice_path and os.path.exists(reference_voice_path):
         logger.info(f"Using reference voice for cloning: {reference_voice_path}")
         speaker_wav_path = reference_voice_path
     else:
-        # If no reference voice is found, use one of the model's built-in speakers.
         default_speaker = "Claribel Dervla"
         logger.info(
-            f"No valid reference voice found. Using a default built-in speaker: {default_speaker}"
+            f"No valid reference voice found. Using default built-in speaker: {default_speaker}"
         )
         speaker_name = default_speaker
 
     try:
-        # Generate speech to a WAV file.
-        # Note the change: we pass either speaker or speaker_wav, but not both.
-        TTS_CLIENT.tts_to_file(
-            text=text_content,
-            speaker=speaker_name,  # Use this for built-in speakers
-            speaker_wav=speaker_wav_path,  # Use this for voice cloning
-            language="en",
-            file_path=TEMP_AUDIO_WAV,
-            speed=1.0,
-        )
+        # Use the synthesizer's built-in text splitter
+        sentences = TTS_CLIENT.synthesizer.split_into_sentences(text_content)
+        logger.info(f"Text content split into {len(sentences)} chunks for synthesis.")
+
+        audio_chunks = []
+        for i, sentence in enumerate(sentences):
+            logger.info(f"Synthesizing chunk {i + 1}/{len(sentences)}...")
+
+            # Synthesize the chunk. Note we use tts() which returns a numpy array, not tts_to_file().
+            wav_chunk = TTS_CLIENT.tts(
+                text=sentence,
+                speaker=speaker_name,
+                speaker_wav=speaker_wav_path,
+                language="en",
+            )
+            audio_chunks.append(np.array(wav_chunk))
+
+        # Concatenate all audio chunks into a single audio array
+        logger.info("All chunks synthesized. Concatenating into a single audio file.")
+        full_audio = np.concatenate(audio_chunks)
+
+        # Save the final concatenated audio to a WAV file
+        TTS_CLIENT.synthesizer.save_wav(wav=full_audio, path=TEMP_AUDIO_WAV)
 
         logger.info(f"WAV file generated successfully: {TEMP_AUDIO_WAV}")
         logger.info(f"Converting WAV to MP3: {TEMP_AUDIO_MP3}")
@@ -305,7 +334,9 @@ def generate_audio(text_content, reference_voice_path):
         return True
 
     except Exception:
-        logger.error("Coqui-TTS API failed with an error.", exc_info=True)
+        logger.error(
+            "Coqui-TTS API failed during chunk-based synthesis.", exc_info=True
+        )
         return False
 
 
@@ -367,6 +398,11 @@ def main():
     try:
         config = load_config()
         initialize_tts_model()
+        # --- TEMPORARY CODE TO LIST SPEAKERS ---
+        if TTS_CLIENT.is_multi_speaker:
+            logger.info("Available built-in speakers:")
+            for speaker in TTS_CLIENT.speakers:
+                logger.info(f"- {speaker}")
         sources = fetch_sources(config["api_url"], config["api_key"])
 
         if not sources:
