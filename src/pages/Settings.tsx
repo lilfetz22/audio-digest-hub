@@ -1,13 +1,12 @@
+
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trash2, Plus, Key } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ApiKeyModal } from '@/components/ui/api-key-modal';
+import { UserInfoCard } from '@/components/settings/UserInfoCard';
+import { NewsletterSourcesCard } from '@/components/settings/NewsletterSourcesCard';
+import { ApiKeysCard } from '@/components/settings/ApiKeysCard';
 
 interface NewsletterSource {
   id: string;
@@ -168,6 +167,32 @@ const Settings = () => {
     }
   };
 
+  const deleteApiKey = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('api_keys')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setApiKeys(prev => prev.filter(key => key.id !== id));
+      toast({
+        title: 'Success',
+        description: 'API key deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting API key:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete API key',
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -183,108 +208,21 @@ const Settings = () => {
         <p className="text-gray-600 mt-2">Manage your newsletter sources and API keys</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>User Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600">Email: {user?.email}</p>
-        </CardContent>
-      </Card>
+      <UserInfoCard user={user} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Newsletter Sources</CardTitle>
-          <CardDescription>
-            Add email addresses from newsletters you want to convert to audio
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form onSubmit={addSource} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="sender_email">Sender Email</Label>
-              <Input
-                id="sender_email"
-                type="email"
-                value={newSource.sender_email}
-                onChange={(e) => setNewSource(prev => ({ ...prev, sender_email: e.target.value }))}
-                placeholder="newsletter@example.com"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="custom_name">Custom Name</Label>
-              <Input
-                id="custom_name"
-                value={newSource.custom_name}
-                onChange={(e) => setNewSource(prev => ({ ...prev, custom_name: e.target.value }))}
-                placeholder="My Newsletter"
-                required
-              />
-            </div>
-            <div className="flex items-end">
-              <Button type="submit" className="w-full">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Source
-              </Button>
-            </div>
-          </form>
+      <NewsletterSourcesCard
+        sources={sources}
+        newSource={newSource}
+        setNewSource={setNewSource}
+        onAddSource={addSource}
+        onDeleteSource={deleteSource}
+      />
 
-          {sources.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="font-medium">Current Sources</h4>
-              {sources.map((source) => (
-                <div key={source.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium">{source.custom_name}</p>
-                    <p className="text-sm text-gray-600">{source.sender_email}</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => deleteSource(source.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>API Keys</CardTitle>
-          <CardDescription>
-            Generate API keys for your local processor application
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button onClick={generateApiKey}>
-            <Key className="h-4 w-4 mr-2" />
-            Generate New API Key
-          </Button>
-
-          {apiKeys.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="font-medium">Active API Keys</h4>
-              {apiKeys.map((key) => (
-                <div key={key.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium">{key.name}</p>
-                    <p className="text-sm text-gray-600">
-                      Created: {new Date(key.created_at).toLocaleDateString()}
-                      {key.last_used_at && ` • Last used: ${new Date(key.last_used_at).toLocaleDateString()}`}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ApiKeysCard
+        apiKeys={apiKeys}
+        onGenerateApiKey={generateApiKey}
+        onDeleteApiKey={deleteApiKey}
+      />
 
       <ApiKeyModal
         isOpen={showApiKeyModal}
