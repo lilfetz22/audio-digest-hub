@@ -158,7 +158,6 @@ def initialize_tts_model():
 
 
 def authenticate_gmail(token_file, credentials_file):
-    # ... (no changes needed) ...
     creds = None
     if os.path.exists(token_file):
         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
@@ -182,7 +181,6 @@ def authenticate_gmail(token_file, credentials_file):
 
 
 def process_emails(service, sources, target_date_str):
-    # ... (no changes needed) ...
     logger.info(f"Processing emails for date: {target_date_str}")
     sender_emails = [source["sender_email"] for source in sources]
     if not sender_emails:
@@ -263,31 +261,49 @@ def process_emails(service, sources, target_date_str):
 
 
 def generate_audio(text_content, reference_voice_path):
-    # ... (no changes needed) ...
+    """Generates an MP3 file from text using the Coqui-TTS Python API."""
     if not text_content.strip():
         logger.info("No text content to synthesize. Skipping audio generation.")
         return False
+
     logger.info("Starting Coqui-TTS audio generation using Python API...")
-    speaker_wav = None
+
+    speaker_wav_path = None
+    speaker_name = None
+
     if reference_voice_path and os.path.exists(reference_voice_path):
-        logger.info(f"Using reference voice: {reference_voice_path}")
-        speaker_wav = reference_voice_path
+        logger.info(f"Using reference voice for cloning: {reference_voice_path}")
+        speaker_wav_path = reference_voice_path
     else:
-        logger.info("No valid reference voice found. Using the model's default voice.")
+        # If no reference voice is found, use one of the model's built-in speakers.
+        default_speaker = "Claribel Dervla"
+        logger.info(
+            f"No valid reference voice found. Using a default built-in speaker: {default_speaker}"
+        )
+        speaker_name = default_speaker
+
     try:
+        # Generate speech to a WAV file.
+        # Note the change: we pass either speaker or speaker_wav, but not both.
         TTS_CLIENT.tts_to_file(
             text=text_content,
-            speaker_wav=speaker_wav,
+            speaker=speaker_name,  # Use this for built-in speakers
+            speaker_wav=speaker_wav_path,  # Use this for voice cloning
             language="en",
             file_path=TEMP_AUDIO_WAV,
             speed=1.0,
         )
+
         logger.info(f"WAV file generated successfully: {TEMP_AUDIO_WAV}")
         logger.info(f"Converting WAV to MP3: {TEMP_AUDIO_MP3}")
+
+        # Convert the WAV file to MP3 for upload
         sound = AudioSegment.from_wav(TEMP_AUDIO_WAV)
         sound.export(TEMP_AUDIO_MP3, format="mp3")
+
         logger.info("MP3 conversion successful.")
         return True
+
     except Exception:
         logger.error("Coqui-TTS API failed with an error.", exc_info=True)
         return False

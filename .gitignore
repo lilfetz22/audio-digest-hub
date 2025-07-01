@@ -26,3 +26,6 @@ dist-ssr
 # virtual environment
 audiogeneratorenv/
 src/audiobooks/config.ini
+src/audiobooks/credentials.json
+.gitignore
+src/audiobooks/token.json
