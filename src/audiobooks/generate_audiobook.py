@@ -194,6 +194,20 @@ def authenticate_gmail(token_file, credentials_file):
     return creds
 
 
+def remove_markdown_links(text):
+    """
+    Removes markdown-style links from a string, keeping only the display text.
+    Example: "[Click here](http://example.com)" becomes "Click here".
+    """
+    # Regex to find markdown links: [text](url)
+    markdown_link_regex = r"\[([^\]]+)\]\(.*?\)"
+
+    # Replace the full markdown link with just the first captured group (the display text)
+    cleaned_text = re.sub(markdown_link_regex, r"\1", text)
+
+    return cleaned_text
+
+
 def process_emails(service, sources, target_date_str):
     logger.info(f"Processing emails for date: {target_date_str}")
     sender_emails = [source["sender_email"] for source in sources]
@@ -274,40 +288,107 @@ def process_emails(service, sources, target_date_str):
     return concatenated_text, all_text_blocks
 
 
+def validate_and_process_chunk(chunk, max_len=250):
+    """
+    Validates and cleans a single text chunk before TTS.
+    1. Removes any standalone http/https URLs.
+    2. If the chunk is still too long, splits it into smaller sub-chunks.
+    Returns a list of clean, valid-length chunks.
+    """
+    # 1. Remove any remaining URLs (e.g., http://example.com)
+    # This regex finds http or https, followed by ://, then any non-space characters.
+    url_regex = r"https?://\S+"
+    cleaned_chunk = re.sub(url_regex, "", chunk)
+
+    # Remove extra whitespace that might have been created by removing links
+    cleaned_chunk = " ".join(cleaned_chunk.split())
+
+    # If the chunk is empty after cleaning, return an empty list
+    if not cleaned_chunk:
+        return []
+
+    # 2. Check length and split if necessary
+    if len(cleaned_chunk) <= max_len:
+        return [cleaned_chunk]
+    else:
+        logger.warning(
+            f"Chunk exceeds {max_len} chars after initial split, performing hard split: '{cleaned_chunk[:80]}...'"
+        )
+        sub_chunks = []
+        # Continue splitting until the remaining part is within the length limit
+        while len(cleaned_chunk) > max_len:
+            # Find the last space within the max_len limit to avoid cutting words
+            split_pos = cleaned_chunk.rfind(" ", 0, max_len)
+
+            # If no space is found, we have to make a hard cut
+            if split_pos == -1:
+                split_pos = max_len
+
+            # Add the part before the split to our list
+            sub_chunks.append(cleaned_chunk[:split_pos])
+
+            # The remainder becomes the new chunk to process
+            cleaned_chunk = cleaned_chunk[split_pos:].lstrip()
+
+        # Add the final remaining part of the chunk
+        sub_chunks.append(cleaned_chunk)
+
+        return sub_chunks
+
+
 def generate_audio(text_content, reference_voice_path):
     """
-    Generates an MP3 file by splitting text into chunks, synthesizing each,
-    and concatenating the audio.
+    Generates an MP3 file by splitting text, validating every chunk,
+    synthesizing each, and concatenating the audio.
     """
     if not text_content.strip():
         logger.info("No text content to synthesize. Skipping audio generation.")
         return False
 
-    logger.info("Starting Coqui-TTS audio generation using chunking method...")
+    logger.info("Starting Coqui-TTS audio generation with validation...")
 
-    # Determine which speaker to use (clone or built-in)
-    speaker_wav_path = None
-    speaker_name = None
-    if reference_voice_path and os.path.exists(reference_voice_path):
+    # Determine speaker
+    speaker_wav_path, speaker_name = (
+        (reference_voice_path, None)
+        if reference_voice_path and os.path.exists(reference_voice_path)
+        else (None, "Claribel Dervla")
+    )
+    if speaker_wav_path:
         logger.info(f"Using reference voice for cloning: {reference_voice_path}")
-        speaker_wav_path = reference_voice_path
     else:
-        default_speaker = "Claribel Dervla"
         logger.info(
-            f"No valid reference voice found. Using default built-in speaker: {default_speaker}"
+            f"No valid reference voice found. Using default built-in speaker: {speaker_name}"
         )
-        speaker_name = default_speaker
 
     try:
-        # Use the synthesizer's built-in text splitter
-        sentences = TTS_CLIENT.synthesizer.split_into_sentences(text_content)
-        logger.info(f"Text content split into {len(sentences)} chunks for synthesis.")
+        # Initial split by newline and then by sentence
+        paragraphs = text_content.split("\n")
+        initial_chunks = []
+        for para in paragraphs:
+            if para.strip():
+                initial_chunks.extend(TTS_CLIENT.synthesizer.split_into_sentences(para))
+
+        # --- NEW VALIDATION AND PROCESSING STEP ---
+        final_chunks = []
+        logger.info(f"Validating and cleaning {len(initial_chunks)} initial chunks...")
+        for chunk in initial_chunks:
+            # Each chunk is processed to ensure it's clean and meets length requirements
+            processed_sub_chunks = validate_and_process_chunk(chunk)
+            final_chunks.extend(processed_sub_chunks)
+        # --- END OF NEW STEP ---
+
+        logger.info(
+            f"Total of {len(final_chunks)} validated chunks will be synthesized."
+        )
 
         audio_chunks = []
-        for i, sentence in enumerate(sentences):
-            logger.info(f"Synthesizing chunk {i + 1}/{len(sentences)}...")
+        for i, sentence in enumerate(final_chunks):
+            if not sentence.strip():
+                continue
+            logger.info(
+                f"Synthesizing chunk {i + 1}/{len(final_chunks)}: '{sentence[:80]}...'"
+            )
 
-            # Synthesize the chunk. Note we use tts() which returns a numpy array, not tts_to_file().
             wav_chunk = TTS_CLIENT.tts(
                 text=sentence,
                 speaker=speaker_name,
@@ -316,20 +397,19 @@ def generate_audio(text_content, reference_voice_path):
             )
             audio_chunks.append(np.array(wav_chunk))
 
-        # Concatenate all audio chunks into a single audio array
-        logger.info("All chunks synthesized. Concatenating into a single audio file.")
-        full_audio = np.concatenate(audio_chunks)
+        if not audio_chunks:
+            logger.warning(
+                "No audio was generated, possibly due to empty text content after cleaning."
+            )
+            return False
 
-        # Save the final concatenated audio to a WAV file
+        logger.info("All chunks synthesized. Concatenating audio.")
+        full_audio = np.concatenate(audio_chunks)
         TTS_CLIENT.synthesizer.save_wav(wav=full_audio, path=TEMP_AUDIO_WAV)
 
-        logger.info(f"WAV file generated successfully: {TEMP_AUDIO_WAV}")
-        logger.info(f"Converting WAV to MP3: {TEMP_AUDIO_MP3}")
-
-        # Convert the WAV file to MP3 for upload
+        logger.info(f"WAV file generated: {TEMP_AUDIO_WAV}. Converting to MP3.")
         sound = AudioSegment.from_wav(TEMP_AUDIO_WAV)
         sound.export(TEMP_AUDIO_MP3, format="mp3")
-
         logger.info("MP3 conversion successful.")
         return True
 
@@ -398,11 +478,6 @@ def main():
     try:
         config = load_config()
         initialize_tts_model()
-        # --- TEMPORARY CODE TO LIST SPEAKERS ---
-        if TTS_CLIENT.is_multi_speaker:
-            logger.info("Available built-in speakers:")
-            for speaker in TTS_CLIENT.speakers:
-                logger.info(f"- {speaker}")
         sources = fetch_sources(config["api_url"], config["api_key"])
 
         if not sources:
@@ -419,10 +494,23 @@ def main():
             logger.info(f"No content generated for {args.date}. Exiting.")
             return
 
-        if not generate_audio(full_text, config["reference_voice_file"]):
+        # --- NEW CLEANING STEP ---
+        logger.info("Cleaning text by removing markdown-style links...")
+        # 1. Clean the full concatenated text string
+        cleaned_full_text = remove_markdown_links(full_text)
+
+        # 2. Also clean the text within each block. This is crucial for accurate
+        #    chapter timing calculations later on.
+        for block in text_blocks:
+            block["text"] = remove_markdown_links(block["text"])
+        # --- END OF NEW CLEANING STEP ---
+
+        # Pass the CLEANED text to the audio generator
+        if not generate_audio(cleaned_full_text, config["reference_voice_file"]):
             logger.error("Audio generation failed. Halting process.")
             return
 
+        # The metadata function will now use the cleaned text blocks
         metadata = generate_metadata(text_blocks)
         if not metadata:
             logger.error("Could not generate metadata. Halting before upload.")
