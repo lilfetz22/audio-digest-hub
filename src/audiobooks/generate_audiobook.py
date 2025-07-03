@@ -9,6 +9,7 @@ import json
 import base64
 import re
 import logging
+import math
 from pathlib import Path
 
 # 3rd Party Libraries
@@ -24,42 +25,38 @@ from TTS.api import TTS
 
 # --- Configuration & Constants ---
 logger = logging.getLogger(__name__)
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-TEMP_AUDIO_WAV = "temp_output.wav"
-TEMP_AUDIO_MP3 = "temp_output.mp3"
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+
+TEMP_WAV_FILE = "temp_output.wav"
+UPLOAD_MP3_BASENAME = "temp_output"
+
 TTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
 TTS_CLIENT = None
+MAX_UPLOAD_SIZE_MB = 15.0
 
-# --- Core Functions ---
+# NEW: Define a default speaker to use if no reference voice file is provided.
+DEFAULT_SPEAKER = "Claribel Dervla"
+
+
+# --- Core Functions (No changes in this section) ---
 
 
 def setup_logging():
     """Configures the root logger for console and file output with UTF-8 encoding."""
     log_file = "audiobook_generator.log"
-
-    # Get the root logger
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-
-    # Remove existing handlers to avoid duplication
     if logger.hasHandlers():
         logger.handlers.clear()
-
-    # Create a formatter
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-    # Create a file handler with UTF-8 encoding
     file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-
-    # Create a console handler with UTF-8 encoding
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
-
     logger.info("-" * 50)
-    logger.info(f"Starting new run of audiobook generator.")
+    logger.info("Starting new run of audiobook generator.")
     logger.info(f"Logging initialized. Output will be saved to {log_file}")
 
 
@@ -68,12 +65,10 @@ def load_config(config_path="config.ini"):
     if not os.path.exists(config_path):
         logger.error(f"Configuration file '{config_path}' not found.")
         sys.exit(1)
-
     config = configparser.ConfigParser()
     config.read(config_path)
-
     try:
-        app_config = {
+        return {
             "api_url": config["WebApp"]["API_URL"],
             "api_key": config["WebApp"]["API_KEY"],
             "credentials_file": config["Gmail"]["CREDENTIALS_FILE"],
@@ -82,7 +77,6 @@ def load_config(config_path="config.ini"):
                 "TTS", "REFERENCE_VOICE_FILE", fallback=None
             ),
         }
-        return app_config
     except KeyError as e:
         logger.error(f"Missing key in config.ini: {e}")
         sys.exit(1)
@@ -92,74 +86,47 @@ def fetch_sources(api_url, api_key):
     """Fetches newsletter sources from the Supabase Edge Function."""
     logger.info("Fetching newsletter sources from Web App...")
     headers = {"Authorization": f"Bearer {api_key}"}
-
-    # CORRECTED URL CONSTRUCTION: Appends /sources to the base Supabase URL.
     url = f"{api_url}/sources"
-
     try:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         return response.json()
-
-    except requests.exceptions.JSONDecodeError:
-        logger.error(f"CRITICAL: Failed to decode JSON from the API response at {url}")
-        logger.error(f"Status Code: {response.status_code}")
-        logger.error(f"Response Body Received: {response.text[:500]}...")
-        logger.error("Traceback:", exc_info=True)
-        sys.exit(1)
-
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"HTTP Error occurred calling {url}")
-        logger.error(f"Status Code: {e.response.status_code}")
-        logger.error(f"Response Body: {e.response.text[:500]}...")
-        logger.error("Traceback:", exc_info=True)
-        sys.exit(1)
-
     except requests.exceptions.RequestException as e:
-        logger.error(
-            f"A fundamental network error occurred calling {url}", exc_info=True
-        )
+        logger.error(f"A network error occurred calling {url}", exc_info=True)
         sys.exit(1)
 
 
-def upload_audiobook(api_url, api_key, metadata):
-    """Uploads the MP3 and its metadata to the Supabase Edge Function."""
-    logger.info("Uploading audiobook to the web application...")
+def upload_audiobook(api_url, api_key, filepath, metadata):
+    """Uploads a single audio file and its metadata."""
+    logger.info(f"Uploading '{filepath}' to the web application...")
     headers = {"Authorization": f"Bearer {api_key}"}
-
-    # CORRECTED URL CONSTRUCTION: Appends /audiobooks to the base Supabase URL.
     url = f"{api_url}/audiobooks"
-
-    files = {
-        "audio_file": (TEMP_AUDIO_MP3, open(TEMP_AUDIO_MP3, "rb"), "audio/mpeg"),
-        "metadata": (None, json.dumps(metadata), "application/json"),
-    }
     try:
-        response = requests.post(url, headers=headers, files=files, timeout=300)
-        response.raise_for_status()
-        logger.info(f"Upload successful. Server response: {response.json()}")
-    except requests.exceptions.HTTPError as e:
-        logger.error(
-            f"HTTP Error occurred while uploading audiobook to {url}", exc_info=True
-        )
-        logger.error(f"Status Code: {e.response.status_code}")
-        logger.error(f"Response Body: {e.response.text[:500]}...")
-        sys.exit(1)
+        with open(filepath, "rb") as audio_file:
+            files = {
+                "audio_file": (os.path.basename(filepath), audio_file, "audio/mpeg"),
+                "metadata": (None, json.dumps(metadata), "application/json"),
+            }
+            response = requests.post(url, headers=headers, files=files, timeout=300)
+            response.raise_for_status()
+            logger.info(f"Upload successful. Server response: {response.json()}")
+            return True
+    except FileNotFoundError:
+        logger.error(f"Upload failed: The file '{filepath}' was not found.")
+        return False
     except requests.exceptions.RequestException as e:
         logger.error(
-            f"A network error occurred while uploading audiobook to {url}",
+            f"A network/HTTP error occurred while uploading '{filepath}' to {url}",
             exc_info=True,
         )
-        sys.exit(1)
+        return False
 
 
-# --- (The other functions like initialize_tts_model, authenticate_gmail, etc., do not need changes) ---
 def initialize_tts_model():
     """Loads the Coqui-TTS model into memory."""
     global TTS_CLIENT
     if TTS_CLIENT is None:
         logger.info(f"Loading Coqui-TTS model: {TTS_MODEL}")
-        logger.info("This may take a moment and require significant RAM...")
         try:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Using device: {device}")
@@ -167,7 +134,6 @@ def initialize_tts_model():
             logger.info("Coqui-TTS model loaded successfully.")
         except Exception:
             logger.error("Failed to load the TTS model.", exc_info=True)
-            logger.error("Please ensure Coqui-TTS and PyTorch are installed correctly.")
             sys.exit(1)
 
 
@@ -177,303 +143,382 @@ def authenticate_gmail(token_file, credentials_file):
         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            logger.info("Refreshing expired Gmail token...")
             creds.refresh(Request())
         else:
-            logger.info("Performing first-time Google authentication...")
             if not os.path.exists(credentials_file):
-                logger.error(
-                    f"Gmail credentials file ('{credentials_file}') not found."
-                )
+                logger.error(f"Credentials file '{credentials_file}' not found.")
                 sys.exit(1)
             flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
             creds = flow.run_local_server(port=0)
         with open(token_file, "w") as token:
             token.write(creds.to_json())
-            logger.info(f"Gmail token saved to '{token_file}'.")
     return creds
 
 
 def remove_markdown_links(text):
-    """
-    Removes markdown-style links from a string, keeping only the display text.
-    Example: "[Click here](http://example.com)" becomes "Click here".
-    """
-    # Regex to find markdown links: [text](url)
-    markdown_link_regex = r"\[([^\]]+)\]\(.*?\)"
-
-    # Replace the full markdown link with just the first captured group (the display text)
-    cleaned_text = re.sub(markdown_link_regex, r"\1", text)
-
-    return cleaned_text
+    return re.sub(r"\[([^\]]+)\]\(.*?\)", r"\1", text)
 
 
 def process_emails(service, sources, target_date_str):
     logger.info(f"Processing emails for date: {target_date_str}")
     sender_emails = [source["sender_email"] for source in sources]
     if not sender_emails:
-        logger.info("No sources configured. Nothing to process.")
         return "", []
-
     sender_query = " OR ".join([f"from:{email}" for email in sender_emails])
     target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
     after_date = target_date.strftime("%Y/%m/%d")
     before_date = (target_date + datetime.timedelta(days=1)).strftime("%Y/%m/%d")
-
     query = f"({sender_query}) after:{after_date} before:{before_date}"
     logger.info(f"Using Gmail query: {query}")
-
     try:
         results = service.users().messages().list(userId="me", q=query).execute()
         messages = results.get("messages", [])
     except HttpError as error:
         logger.error(f"An error occurred fetching emails: {error}", exc_info=True)
         return "", []
-
     if not messages:
-        logger.info("No matching emails found for the specified date and senders.")
         return "", []
-
     all_text_blocks = []
     sender_to_custom_name = {
         s["sender_email"].lower(): s["custom_name"] for s in sources
     }
-
-    for message_info in reversed(messages):
-        msg = (
-            service.users().messages().get(userId="me", id=message_info["id"]).execute()
+    for msg_info in reversed(messages):
+        msg = service.users().messages().get(userId="me", id=msg_info["id"]).execute()
+        if "UNREAD" in msg.get("labelIds", []):
+            try:
+                subject = next(
+                    (
+                        h["value"]
+                        for h in msg["payload"]["headers"]
+                        if h["name"] == "Subject"
+                    ),
+                    "No Subject",
+                )
+                logger.info(
+                    f"Marking email as read: '{subject[:50]}...' (ID: {msg_info['id']})"
+                )
+                service.users().messages().modify(
+                    userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
+                ).execute()
+            except HttpError as e:
+                logger.warning(
+                    f"Could not mark email {msg_info['id']} as read. Error: {e}. Continuing."
+                )
+        headers = msg["payload"]["headers"]
+        sender_email = next(
+            (
+                re.search(r"<(.+?)>", h["value"]).group(1).lower()
+                for h in headers
+                if h["name"] == "From" and re.search(r"<(.+?)>", h["value"])
+            ),
+            "",
         )
-        payload = msg["payload"]
-        headers = payload["headers"]
-        sender_email = ""
-        for h in headers:
-            if h["name"] == "From":
-                match = re.search(r"<(.+?)>", h["value"])
-                sender_email = match.group(1).lower() if match else h["value"].lower()
-
         custom_name = sender_to_custom_name.get(sender_email, "Unknown Source")
-        received_date_str = target_date.strftime("%B %d, %Y")
         body_text = ""
         try:
-            if "parts" in payload:
+            if "parts" in msg["payload"]:
                 part = next(
-                    (p for p in payload["parts"] if p["mimeType"] == "text/plain"),
-                    next(
-                        (p for p in payload["parts"] if p["mimeType"] == "text/html"),
-                        None,
+                    (
+                        p
+                        for p in msg["payload"]["parts"]
+                        if p["mimeType"] in ["text/plain", "text/html"]
                     ),
+                    None,
                 )
                 if part:
-                    data = part["body"]["data"]
-                    body_text = base64.urlsafe_b64decode(data).decode("utf-8")
+                    data = base64.urlsafe_b64decode(part["body"]["data"])
+                    body_text = data.decode("utf-8", errors="replace")
                     if part["mimeType"] == "text/html":
                         body_text = re.sub("<[^<]+?>", "", body_text)
-                else:
-                    body_text = "Could not find a readable text part."
             else:
-                data = payload["body"]["data"]
-                body_text = base64.urlsafe_b64decode(data).decode("utf-8")
-            text_block = f"\n\nNewsletter from: {custom_name}. Received on: {received_date_str}.\n\n{body_text.strip()}"
+                data = base64.urlsafe_b64decode(msg["payload"]["body"]["data"])
+                body_text = data.decode("utf-8", errors="replace")
+            text_block = f"\n\nNewsletter from: {custom_name}.\n\n{body_text.strip()}"
             all_text_blocks.append({"text": text_block, "title": custom_name})
         except Exception:
             logger.error(f"Failed to parse email from {custom_name}", exc_info=True)
-            error_block = (
-                f"\n\n{custom_name} could not be processed and has been skipped.\n\n"
-            )
             all_text_blocks.append(
-                {"text": error_block, "title": f"{custom_name} (Error)"}
+                {
+                    "text": f"\n\n{custom_name} could not be processed.\n\n",
+                    "title": f"{custom_name} (Error)",
+                }
             )
-
-    concatenated_text = "".join([block["text"] for block in all_text_blocks])
-    return concatenated_text, all_text_blocks
+    return "".join([b["text"] for b in all_text_blocks]), all_text_blocks
 
 
 def validate_and_process_chunk(chunk, max_len=250):
-    """
-    Validates and cleans a single text chunk before TTS.
-    1. Removes any standalone http/https URLs.
-    2. If the chunk is still too long, splits it into smaller sub-chunks.
-    Returns a list of clean, valid-length chunks.
-    """
-    # 1. Remove any remaining URLs (e.g., http://example.com)
-    # This regex finds http or https, followed by ://, then any non-space characters.
-    url_regex = r"https?://\S+"
-    cleaned_chunk = re.sub(url_regex, "", chunk)
-
-    # Remove extra whitespace that might have been created by removing links
-    cleaned_chunk = " ".join(cleaned_chunk.split())
-
-    # If the chunk is empty after cleaning, return an empty list
+    cleaned_chunk = re.sub(r"https?://\S+", "", chunk).strip()
     if not cleaned_chunk:
         return []
-
-    # 2. Check length and split if necessary
     if len(cleaned_chunk) <= max_len:
         return [cleaned_chunk]
-    else:
-        logger.warning(
-            f"Chunk exceeds {max_len} chars after initial split, performing hard split: '{cleaned_chunk[:80]}...'"
-        )
-        sub_chunks = []
-        # Continue splitting until the remaining part is within the length limit
-        while len(cleaned_chunk) > max_len:
-            # Find the last space within the max_len limit to avoid cutting words
-            split_pos = cleaned_chunk.rfind(" ", 0, max_len)
-
-            # If no space is found, we have to make a hard cut
-            if split_pos == -1:
-                split_pos = max_len
-
-            # Add the part before the split to our list
-            sub_chunks.append(cleaned_chunk[:split_pos])
-
-            # The remainder becomes the new chunk to process
-            cleaned_chunk = cleaned_chunk[split_pos:].lstrip()
-
-        # Add the final remaining part of the chunk
-        sub_chunks.append(cleaned_chunk)
-
-        return sub_chunks
+    sub_chunks = []
+    while len(cleaned_chunk) > max_len:
+        split_pos = cleaned_chunk.rfind(" ", 0, max_len)
+        if split_pos == -1:
+            split_pos = max_len
+        sub_chunks.append(cleaned_chunk[:split_pos])
+        cleaned_chunk = cleaned_chunk[split_pos:].lstrip()
+    sub_chunks.append(cleaned_chunk)
+    return sub_chunks
 
 
-def generate_audio(text_content, reference_voice_path):
+# MODIFIED: Logic to handle default speaker fallback
+def generate_and_upload_audio(text_content, text_blocks, config, date_str):
     """
-    Generates an MP3 file by splitting text, validating every chunk,
-    synthesizing each, and concatenating the audio.
+    Generates audio, converts to MP3, and handles chunking/uploading.
+    Returns a list of file paths created for cleanup.
     """
     if not text_content.strip():
         logger.info("No text content to synthesize. Skipping audio generation.")
-        return False
+        return []
 
-    logger.info("Starting Coqui-TTS audio generation with validation...")
-
-    # Determine speaker
-    speaker_wav_path, speaker_name = (
-        (reference_voice_path, None)
-        if reference_voice_path and os.path.exists(reference_voice_path)
-        else (None, "Claribel Dervla")
+    logger.info("Starting Coqui-TTS audio generation...")
+    # Determine which voice to use: custom file or default speaker
+    speaker_wav = (
+        config.get("reference_voice_file")
+        if config.get("reference_voice_file")
+        and os.path.exists(config["reference_voice_file"])
+        else None
     )
-    if speaker_wav_path:
-        logger.info(f"Using reference voice for cloning: {reference_voice_path}")
+
+    tts_kwargs = {}
+    if speaker_wav:
+        logger.info(f"Using reference voice file for TTS: {speaker_wav}")
+        tts_kwargs["speaker_wav"] = speaker_wav
     else:
         logger.info(
-            f"No valid reference voice found. Using default built-in speaker: {speaker_name}"
+            f"Reference voice file not found or specified. Using default speaker: '{DEFAULT_SPEAKER}'"
         )
+        tts_kwargs["speaker"] = DEFAULT_SPEAKER
 
     try:
-        # Initial split by newline and then by sentence
         paragraphs = text_content.split("\n")
-        initial_chunks = []
-        for para in paragraphs:
-            if para.strip():
-                initial_chunks.extend(TTS_CLIENT.synthesizer.split_into_sentences(para))
-
-        # --- NEW VALIDATION AND PROCESSING STEP ---
-        final_chunks = []
-        logger.info(f"Validating and cleaning {len(initial_chunks)} initial chunks...")
-        for chunk in initial_chunks:
-            # Each chunk is processed to ensure it's clean and meets length requirements
-            processed_sub_chunks = validate_and_process_chunk(chunk)
-            final_chunks.extend(processed_sub_chunks)
-        # --- END OF NEW STEP ---
-
-        logger.info(
-            f"Total of {len(final_chunks)} validated chunks will be synthesized."
-        )
-
+        initial_chunks = [
+            c
+            for p in paragraphs
+            if p.strip()
+            for c in TTS_CLIENT.synthesizer.split_into_sentences(p)
+        ]
+        final_chunks = [
+            sc for chunk in initial_chunks for sc in validate_and_process_chunk(chunk)
+        ]
         audio_chunks = []
         for i, sentence in enumerate(final_chunks):
-            if not sentence.strip():
-                continue
             logger.info(
                 f"Synthesizing chunk {i + 1}/{len(final_chunks)}: '{sentence[:80]}...'"
             )
-
-            wav_chunk = TTS_CLIENT.tts(
-                text=sentence,
-                speaker=speaker_name,
-                speaker_wav=speaker_wav_path,
-                language="en",
-            )
+            # Use the determined TTS arguments
+            wav_chunk = TTS_CLIENT.tts(text=sentence, language="en", **tts_kwargs)
             audio_chunks.append(np.array(wav_chunk))
 
         if not audio_chunks:
+            logger.warning("No audio generated, content may be empty after cleaning.")
+            return []
+
+        full_audio_np = np.concatenate(audio_chunks)
+        TTS_CLIENT.synthesizer.save_wav(wav=full_audio_np, path=TEMP_WAV_FILE)
+        logger.info(f"Full audio saved to temporary WAV: {TEMP_WAV_FILE}")
+
+        full_audio_segment = AudioSegment.from_wav(TEMP_WAV_FILE)
+        with open(TEMP_WAV_FILE, "rb") as f:
+            mp3_data_size = len(AudioSegment.from_wav(f).export(format="mp3").read())
+        mp3_size_mb = mp3_data_size / (1024 * 1024)
+        logger.info(f"Estimated full MP3 size is {mp3_size_mb:.2f} MB.")
+
+        files_to_cleanup = [TEMP_WAV_FILE]
+        base_title = f"Daily Digest for {date_str}"
+        if mp3_size_mb <= MAX_UPLOAD_SIZE_MB:
+            logger.info("MP3 size is within the limit. Uploading as a single file.")
+            filepath = f"{UPLOAD_MP3_BASENAME}.mp3"
+            full_audio_segment.export(filepath, format="mp3")
+            files_to_cleanup.append(filepath)
+            metadata = _create_metadata(base_title, full_audio_segment, text_blocks)
+            if not upload_audiobook(
+                config["api_url"], config["api_key"], filepath, metadata
+            ):
+                logger.error("Single file upload failed.")
+        else:
+            num_chunks = math.ceil(mp3_size_mb / MAX_UPLOAD_SIZE_MB)
             logger.warning(
-                "No audio was generated, possibly due to empty text content after cleaning."
+                f"MP3 size exceeds {MAX_UPLOAD_SIZE_MB:.1f} MB. Splitting into {num_chunks} chunks."
             )
-            return False
-
-        logger.info("All chunks synthesized. Concatenating audio.")
-        full_audio = np.concatenate(audio_chunks)
-        TTS_CLIENT.synthesizer.save_wav(wav=full_audio, path=TEMP_AUDIO_WAV)
-
-        logger.info(f"WAV file generated: {TEMP_AUDIO_WAV}. Converting to MP3.")
-        sound = AudioSegment.from_wav(TEMP_AUDIO_WAV)
-        sound.export(TEMP_AUDIO_MP3, format="mp3")
-        logger.info("MP3 conversion successful.")
-        return True
-
+            chunk_duration_ms = math.ceil(len(full_audio_segment) / num_chunks)
+            original_chapters = _create_chapter_list(
+                len(full_audio_segment), text_blocks
+            )
+            for i in range(num_chunks):
+                start_ms = i * chunk_duration_ms
+                end_ms = min((i + 1) * chunk_duration_ms, len(full_audio_segment))
+                audio_chunk = full_audio_segment[start_ms:end_ms]
+                chunk_filepath = f"{UPLOAD_MP3_BASENAME}_part_{i+1}_of_{num_chunks}.mp3"
+                logger.info(
+                    f"Exporting chunk {i+1}: {chunk_filepath} ({start_ms}ms to {end_ms}ms)"
+                )
+                audio_chunk.export(chunk_filepath, format="mp3")
+                files_to_cleanup.append(chunk_filepath)
+                chunk_title = f"{base_title} (Part {i+1} of {num_chunks})"
+                chunk_metadata = _create_metadata_for_chunk(
+                    chunk_title, audio_chunk, original_chapters, start_ms
+                )
+                if not upload_audiobook(
+                    config["api_url"], config["api_key"], chunk_filepath, chunk_metadata
+                ):
+                    logger.error(
+                        f"Upload failed for chunk {i+1}. Stopping further uploads."
+                    )
+                    break
+        return files_to_cleanup
     except Exception:
         logger.error(
-            "Coqui-TTS API failed during chunk-based synthesis.", exc_info=True
+            "An error occurred during audio generation or uploading.", exc_info=True
         )
-        return False
+        return [
+            f
+            for f in [TEMP_WAV_FILE, f"{UPLOAD_MP3_BASENAME}*.mp3"]
+            if os.path.exists(f)
+        ]
 
 
-def generate_metadata(text_blocks):
-    # ... (no changes needed) ...
-    if not os.path.exists(TEMP_AUDIO_MP3):
-        logger.info("MP3 file does not exist, skipping metadata generation.")
-        return None
-    logger.info("Generating metadata...")
-    audio = AudioSegment.from_mp3(TEMP_AUDIO_MP3)
-    total_duration_s = len(audio) / 1000.0
+def _create_chapter_list(total_duration_ms, text_blocks):
     total_chars = sum(len(block["text"]) for block in text_blocks)
     chapters = []
     cumulative_chars = 0
     for block in text_blocks:
-        start_time = (
-            (cumulative_chars / total_chars) * total_duration_s
+        start_time_ms = (
+            (cumulative_chars / total_chars) * total_duration_ms
             if total_chars > 0
             else 0
         )
-        chapters.append({"title": block["title"], "start_time": int(start_time)})
+        chapters.append({"title": block["title"], "start_time_ms": start_time_ms})
         cumulative_chars += len(block["text"])
-    metadata = {
-        "title": f"Daily Digest for {datetime.date.today().strftime('%Y-%m-%d')}",
-        "duration": int(total_duration_s),
-        "chapters_json": json.dumps(chapters),
+    return chapters
+
+
+def _create_metadata(title, audio_segment, text_blocks):
+    duration_s = len(audio_segment) / 1000.0
+    chapters = _create_chapter_list(len(audio_segment), text_blocks)
+    chapters_json = [
+        {"title": c["title"], "start_time": int(c["start_time_ms"] / 1000)}
+        for c in chapters
+    ]
+    return {
+        "title": title,
+        "duration_seconds": int(duration_s),
+        "chapters_json": json.dumps(chapters_json),
     }
-    return metadata
 
 
-def cleanup():
-    # ... (no changes needed) ...
-    logger.info("Cleaning up temporary files...")
-    for f in [TEMP_AUDIO_WAV, TEMP_AUDIO_MP3]:
+def _create_metadata_for_chunk(
+    title, audio_chunk_segment, original_chapters, chunk_start_ms
+):
+    chunk_duration_s = len(audio_chunk_segment) / 1000.0
+    chunk_end_ms = chunk_start_ms + len(audio_chunk_segment)
+    chunk_chapters = []
+    for chapter in original_chapters:
+        if chunk_start_ms <= chapter["start_time_ms"] < chunk_end_ms:
+            relative_start_time_s = int(
+                (chapter["start_time_ms"] - chunk_start_ms) / 1000
+            )
+            chunk_chapters.append(
+                {"title": chapter["title"], "start_time": relative_start_time_s}
+            )
+    if chunk_chapters and chunk_chapters[0]["start_time"] != 0:
+        first_title = chunk_chapters[0]["title"]
+        if not any(c["start_time"] == 0 for c in chunk_chapters):
+            chunk_chapters.insert(0, {"title": first_title, "start_time": 0})
+    return {
+        "title": title,
+        "duration_seconds": int(chunk_duration_s),
+        "chapters_json": json.dumps(chunk_chapters),
+    }
+
+
+def cleanup(files_to_remove):
+    """Cleans up specified temporary audio files."""
+    if not files_to_remove:
+        return
+    logger.info("Cleaning up temporary audio files...")
+    for file_path in files_to_remove:
         try:
-            if os.path.exists(f):
-                os.remove(f)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Removed temporary file: {file_path}")
         except OSError as e:
-            logger.error(f"Could not remove temporary file {f}: {e}")
+            logger.error(f"Could not remove temporary file {file_path}: {e}")
 
 
 # --- Main Execution Logic ---
+
+
 def main():
-    """Main execution function."""
+    """
+    Main execution function.
+    Processes emails for a single day or a date range and generates audiobooks.
+    """
     setup_logging()
     parser = argparse.ArgumentParser(
-        description="Generate and upload a daily audio digest."
+        description="Generate and upload a daily audio digest from emails.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime(
-        "%Y-%m-%d"
+
+    date_group = parser.add_mutually_exclusive_group()
+    date_group.add_argument(
+        "--date", help="Process a single specific date (YYYY-MM-DD)."
+    )
+    date_group.add_argument(
+        "--start-date",
+        help="Process a date range starting from this date (YYYY-MM-DD).",
     )
     parser.add_argument(
-        "--date",
-        default=yesterday,
-        help=f"The date to process emails for (default: {yesterday}).",
+        "--end-date",
+        help="The end of the date range (YYYY-MM-DD). Defaults to yesterday if --start-date is used.",
     )
+
     args = parser.parse_args()
+
+    dates_to_process = []
+    try:
+        if args.date:
+            # Single date mode
+            process_date = datetime.datetime.strptime(args.date, "%Y-%m-%d").date()
+            dates_to_process.append(process_date)
+        else:
+            # Range mode or default mode
+            yesterday = datetime.date.today() - datetime.timedelta(days=1)
+            end_date = (
+                datetime.datetime.strptime(args.end_date, "%Y-%m-%d").date()
+                if args.end_date
+                else yesterday
+            )
+            start_date = (
+                datetime.datetime.strptime(args.start_date, "%Y-%m-%d").date()
+                if args.start_date
+                else end_date
+            )
+
+            if start_date > end_date:
+                logger.error(
+                    f"Error: Start date ({start_date}) cannot be after end date ({end_date})."
+                )
+                sys.exit(1)
+
+            current_date = start_date
+            while current_date <= end_date:
+                dates_to_process.append(current_date)
+                current_date += datetime.timedelta(days=1)
+
+    except ValueError as e:
+        logger.error(f"Error: Invalid date format. Please use YYYY-MM-DD. Details: {e}")
+        sys.exit(1)
+
+    if not dates_to_process:
+        logger.info("No dates selected for processing. Exiting.")
+        return
+
+    logger.info(
+        f"Will process the following date(s): {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
+    )
 
     try:
         config = load_config()
@@ -489,44 +534,45 @@ def main():
         )
         gmail_service = build("gmail", "v1", credentials=gmail_creds)
 
-        full_text, text_blocks = process_emails(gmail_service, sources, args.date)
-        if not full_text.strip():
-            logger.info(f"No content generated for {args.date}. Exiting.")
-            return
+        for process_date in dates_to_process:
+            date_str = process_date.strftime("%Y-%m-%d")
+            logger.info(f"--- Starting process for date: {date_str} ---")
+            files_created = []
 
-        # --- NEW CLEANING STEP ---
-        logger.info("Cleaning text by removing markdown-style links...")
-        # 1. Clean the full concatenated text string
-        cleaned_full_text = remove_markdown_links(full_text)
+            try:
+                full_text, text_blocks = process_emails(
+                    gmail_service, sources, date_str
+                )
+                if not full_text.strip():
+                    logger.info(f"No email content found for {date_str}. Skipping.")
+                    continue
 
-        # 2. Also clean the text within each block. This is crucial for accurate
-        #    chapter timing calculations later on.
-        for block in text_blocks:
-            block["text"] = remove_markdown_links(block["text"])
-        # --- END OF NEW CLEANING STEP ---
+                cleaned_full_text = remove_markdown_links(full_text)
+                for block in text_blocks:
+                    block["text"] = remove_markdown_links(block["text"])
 
-        # Pass the CLEANED text to the audio generator
-        if not generate_audio(cleaned_full_text, config["reference_voice_file"]):
-            logger.error("Audio generation failed. Halting process.")
-            return
+                files_created = generate_and_upload_audio(
+                    cleaned_full_text, text_blocks, config, date_str
+                )
+                logger.info(f"Successfully completed process for {date_str}.")
 
-        # The metadata function will now use the cleaned text blocks
-        metadata = generate_metadata(text_blocks)
-        if not metadata:
-            logger.error("Could not generate metadata. Halting before upload.")
-            return
-
-        upload_audiobook(config["api_url"], config["api_key"], metadata)
-        logger.info(f"Audiobook for {args.date} generated and uploaded successfully.")
+            except Exception as e:
+                logger.error(
+                    f"An error occurred while processing {date_str}. Moving to next date.",
+                    exc_info=True,
+                )
+            finally:
+                # Cleanup files for the current date before starting the next
+                cleanup(files_created)
 
     except Exception:
         logger.critical(
-            "A fatal, unexpected error occurred in the main process.", exc_info=True
+            "A fatal, non-recoverable error occurred in the main process.",
+            exc_info=True,
         )
         sys.exit(1)
     finally:
-        cleanup()
-        logger.info("Run finished.")
+        logger.info("All processing runs finished.")
 
 
 if __name__ == "__main__":

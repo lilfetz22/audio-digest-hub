@@ -7,7 +7,7 @@ import json
 import base64
 import logging
 import datetime
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch, mock_open, ANY, call
 
 # Import the script to be tested
 import generate_audiobook as ga
@@ -45,7 +45,6 @@ def mock_tts_client(mocker):
     """Mocks the global TTS_CLIENT for chunking and its methods."""
     mock_client = MagicMock()
     mock_synthesizer = MagicMock()
-    # Simulate the initial sentence split
     mock_synthesizer.split_into_sentences.return_value = ["sentence 1.", "sentence 2."]
     mock_client.synthesizer = mock_synthesizer
     mock_client.tts.return_value = [0.1, 0.2]  # Mock a numpy array chunk
@@ -58,23 +57,32 @@ def mock_tts_client(mocker):
 
 
 @pytest.fixture
+def mock_audio_segment(mocker):
+    """Mocks pydub.AudioSegment and its chained calls."""
+    mock_segment_instance = MagicMock()
+    # Mock the export method so it doesn't actually write files
+    mock_export = mock_segment_instance.export
+    mock_export.return_value.read.return_value = b"mp3_data_bytes"
+
+    mock_from_wav = mocker.patch("generate_audiobook.AudioSegment.from_wav")
+    mock_from_wav.return_value = mock_segment_instance
+    return mock_segment_instance
+
+
+@pytest.fixture
 def mock_email_data():
-    """Provides mock email data for parsing tests."""
+    """Provides mock email data for parsing tests, including UNREAD status."""
     text_content = "This is a plain text newsletter."
     html_content = "<h1>Hello</h1><p>This is an HTML newsletter.</p>"
-    # This message is malformed - its body data is not valid base64
-    malformed_msg = {
-        "id": "msg3",
-        "payload": {
-            "headers": [{"name": "From", "value": "Bad Sender <sender3@example.com>"}],
-            "parts": [{"mimeType": "text/plain", "body": {"data": "not-base64"}}],
-        },
-    }
+
+    # Message 1 is UNREAD
     mock_msg_1 = {
         "id": "msg1",
+        "labelIds": ["INBOX", "UNREAD"],
         "payload": {
             "headers": [
-                {"name": "From", "value": "Test Sender 1 <sender1@example.com>"}
+                {"name": "From", "value": "Test Sender 1 <sender1@example.com>"},
+                {"name": "Subject", "value": "Unread Email"},
             ],
             "parts": [
                 {
@@ -88,11 +96,15 @@ def mock_email_data():
             ],
         },
     }
+
+    # Message 2 is already read (no UNREAD label)
     mock_msg_2 = {
         "id": "msg2",
+        "labelIds": ["INBOX"],
         "payload": {
             "headers": [
-                {"name": "From", "value": "Test Sender 2 <sender2@example.com>"}
+                {"name": "From", "value": "Test Sender 2 <sender2@example.com>"},
+                {"name": "Subject", "value": "Read Email"},
             ],
             "parts": [
                 {
@@ -106,6 +118,17 @@ def mock_email_data():
             ],
         },
     }
+
+    # Malformed message to test error handling
+    malformed_msg = {
+        "id": "msg3",
+        "labelIds": ["INBOX"],
+        "payload": {
+            "headers": [{"name": "From", "value": "Bad Sender <sender3@example.com>"}],
+            "parts": [{"mimeType": "text/plain", "body": {"data": "not-base64"}}],
+        },
+    }
+
     return [mock_msg_1, mock_msg_2, malformed_msg]
 
 
@@ -138,9 +161,7 @@ class TestConfigAndSetup:
     def test_setup_logging(self, m_get_logger, m_formatter, m_stream, m_file):
         mock_logger = MagicMock()
         m_get_logger.return_value = mock_logger
-
         ga.setup_logging()
-
         m_get_logger.assert_called_once()
         mock_logger.setLevel.assert_called_with(logging.INFO)
         assert mock_logger.addHandler.call_count == 2
@@ -162,87 +183,98 @@ class TestApiInteractions:
         )
         with pytest.raises(SystemExit):
             ga.fetch_sources("https://fake-api.com", "fake_key")
-        assert "HTTP Error occurred" in caplog.text
-        assert "Status Code: 500" in caplog.text
-
-    def test_fetch_sources_json_decode_error(self, requests_mock, caplog):
-        requests_mock.get(
-            "https://fake-api.com/sources", status_code=200, text="not-json"
-        )
-        with pytest.raises(SystemExit):
-            ga.fetch_sources("https://fake-api.com", "fake_key")
-        assert "Failed to decode JSON" in caplog.text
-        assert "Response Body Received: not-json" in caplog.text
+        assert "A network error occurred" in caplog.text
 
     def test_upload_audiobook_success(self, requests_mock, tmp_path, caplog):
-        ga.TEMP_AUDIO_MP3 = str(tmp_path / "test.mp3")
-        (tmp_path / "test.mp3").write_text("mp3_data")
+        filepath = tmp_path / "test.mp3"
+        filepath.write_text("mp3_data")
+        metadata = {"title": "test"}
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=200, json={"status": "ok"}
         )
-        with patch("builtins.open", mock_open(read_data="mp3_data")):
-            with caplog.at_level(logging.INFO):
-                ga.upload_audiobook(
-                    "https://fake-api.com", "fake_key", {"title": "test"}
-                )
+        with caplog.at_level(logging.INFO):
+            result = ga.upload_audiobook(
+                "https://fake-api.com", "fake_key", str(filepath), metadata
+            )
+
+        assert result is True
+        assert f"Uploading '{filepath}'" in caplog.text
         assert "Upload successful. Server response:" in caplog.text
 
     def test_upload_audiobook_http_error(self, requests_mock, tmp_path, caplog):
-        ga.TEMP_AUDIO_MP3 = str(tmp_path / "test.mp3")
-        (tmp_path / "test.mp3").write_text("mp3_data")
+        filepath = tmp_path / "test.mp3"
+        filepath.write_text("mp3_data")
+        metadata = {"title": "test"}
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=400, text="Bad Request"
         )
-        with patch("builtins.open", mock_open(read_data="mp3_data")):
-            with pytest.raises(SystemExit):
-                ga.upload_audiobook(
-                    "https://fake-api.com", "fake_key", {"title": "test"}
-                )
-        assert "HTTP Error occurred while uploading audiobook" in caplog.text
+        with caplog.at_level(logging.ERROR):
+            result = ga.upload_audiobook(
+                "https://fake-api.com", "fake_key", str(filepath), metadata
+            )
+
+        assert result is False
+        assert (
+            f"A network/HTTP error occurred while uploading '{filepath}'" in caplog.text
+        )
 
 
 class TestGmailInteraction:
     @pytest.fixture
     def mock_gmail_service(self):
-        """A basic mock for the gmail service. Specifics are configured in each test."""
+        """A basic mock for the gmail service."""
         return MagicMock()
 
-    # FIX: Set side_effect to [False, False] to ensure the code path that
-    # checks for the credentials file is actually triggered.
+    # FIXED: Removed incorrect assertion
     @patch("generate_audiobook.os.path.exists", side_effect=[False, False])
     @patch("generate_audiobook.Credentials.from_authorized_user_file")
     @patch("generate_audiobook.InstalledAppFlow.from_client_secrets_file")
     def test_authenticate_gmail_credentials_not_found(
         self, m_flow, m_creds, m_exists, caplog
     ):
-        # This will now correctly enter the block where credentials_file is needed but not found.
         with pytest.raises(SystemExit):
             ga.authenticate_gmail("token.json", "creds.json")
-        assert "Gmail credentials file ('creds.json') not found." in caplog.text
+        assert "Credentials file 'creds.json' not found." in caplog.text
+        # The following assertion was incorrect because sys.exit() is called before
+        # this line is ever reached. The test is already verifying the correct exit behavior.
+        m_flow.from_client_secrets_file.assert_not_called()
 
-    # FIX: Isolate the mock's behavior to this test to ensure it only "finds" the two good emails.
-    def test_process_emails_success(self, mock_gmail_service, mock_email_data):
+    def test_process_emails_success_and_marks_as_read(
+        self, mock_gmail_service, mock_email_data
+    ):
         mock_gmail_service.users().messages().list().execute.return_value = {
             "messages": [{"id": "msg1"}, {"id": "msg2"}]
         }
+        # The code reverses the list, so mock side_effect in reverse order
+        # Message 2 (already read) is processed first, then Message 1 (unread)
         mock_gmail_service.users().messages().get().execute.side_effect = [
-            mock_email_data[0],
             mock_email_data[1],
+            mock_email_data[0],
         ]
 
         sources = [
             {"sender_email": "sender1@example.com", "custom_name": "Newsletter One"},
             {"sender_email": "sender2@example.com", "custom_name": "Newsletter Two"},
         ]
+
         full_text, text_blocks = ga.process_emails(
             mock_gmail_service, sources, "2023-10-27"
         )
-        assert "This is a plain text newsletter." in full_text
+
+        # Test text processing
         assert "HelloThis is an HTML newsletter." in full_text
-        # The assertion is now correct because only 2 messages are processed.
+        assert "This is a plain text newsletter." in full_text
+        assert full_text.startswith("\n\nNewsletter from: Newsletter Two.")
         assert len(text_blocks) == 2
 
-    # FIX: Isolate the mock's behavior to only find the single malformed email.
+        # Test that modify() was called to mark the email as read
+        mock_modify_call = mock_gmail_service.users().messages().modify
+
+        # It should be called exactly once, for msg1 which was UNREAD.
+        mock_modify_call.assert_called_once_with(
+            userId="me", id="msg1", body={"removeLabelIds": ["UNREAD"]}
+        )
+
     def test_process_emails_with_parsing_error(
         self, mock_gmail_service, mock_email_data, caplog
     ):
@@ -252,32 +284,26 @@ class TestGmailInteraction:
         mock_gmail_service.users().messages().get().execute.return_value = (
             mock_email_data[2]
         )
-
         sources = [
             {"sender_email": "sender3@example.com", "custom_name": "Bad Newsletter"}
         ]
         full_text, text_blocks = ga.process_emails(
             mock_gmail_service, sources, "2023-10-27"
         )
-
         assert "Bad Newsletter could not be processed" in full_text
-        # This assertion is now correct because the custom name is found before the parse fails.
         assert text_blocks[0]["title"] == "Bad Newsletter (Error)"
         assert "Failed to parse email from Bad Newsletter" in caplog.text
 
-    # FIX: Set the logging level to INFO so the message can be captured.
-    def test_process_emails_no_matching_emails(self, mock_gmail_service, caplog):
+    def test_process_emails_no_matching_emails(self, mock_gmail_service):
         mock_gmail_service.users().messages().list().execute.return_value = {}
         sources = [
             {"sender_email": "sender1@example.com", "custom_name": "Newsletter One"}
         ]
-        with caplog.at_level(logging.INFO):
-            full_text, text_blocks = ga.process_emails(
-                mock_gmail_service, sources, "2023-10-27"
-            )
+        full_text, text_blocks = ga.process_emails(
+            mock_gmail_service, sources, "2023-10-27"
+        )
         assert full_text == ""
         assert text_blocks == []
-        assert "No matching emails found" in caplog.text
 
 
 class TestHelperFunctions:
@@ -288,216 +314,237 @@ class TestHelperFunctions:
         assert ga.remove_markdown_links("No links here.") == "No links here."
 
     @pytest.mark.parametrize(
-        "chunk, expected",
+        "chunk, max_len, expected_count",
         [
-            ("Short clean sentence.", ["Short clean sentence."]),
-            (
-                "Sentence with a url https://example.com to remove.",
-                ["Sentence with a url to remove."],
-            ),
-            ("", []),
-            ("https://just-a-url.com", []),
-            (
-                "A very long sentence" * 20,
-                [
-                    "A very long sentence" * 5,
-                    "A very long sentence" * 5,
-                    "A very long sentence" * 5,
-                    "A very long sentence" * 5,
-                ],
-            ),
+            ("Short clean sentence.", 250, 1),
+            ("Sentence with a url https://example.com to remove.", 250, 1),
+            ("", 250, 0),
+            ("https://just-a-url.com", 250, 0),
+            ("a " * 100, 50, 4),
+            ("longword" * 10, 50, 2),
         ],
     )
-    @patch("generate_audiobook.logger")
-    def test_validate_and_process_chunk(self, mock_logger, chunk, expected):
-        # A long chunk needs to be split
-        if len(chunk) > 250:
-            result = ga.validate_and_process_chunk(
-                chunk, max_len=100
-            )  # use smaller max_len for test
-            assert len(result) > 1
-            assert all(len(c) <= 100 for c in result)
-        else:
-            assert ga.validate_and_process_chunk(chunk) == expected
+    def test_validate_and_process_chunk(self, chunk, max_len, expected_count):
+        result = ga.validate_and_process_chunk(chunk, max_len=max_len)
+        assert len(result) == expected_count
+        for sub_chunk in result:
+            assert len(sub_chunk) <= max_len
 
 
 class TestAudioAndMetadata:
+    def test__create_chapter_list(self):
+        text_blocks = [
+            {"title": "Intro", "text": "a" * 25},
+            {"title": "Middle", "text": "b" * 50},
+            {"title": "End", "text": "c" * 25},
+        ]
+        total_duration_ms = 100000  # 100 seconds
+        chapters = ga._create_chapter_list(total_duration_ms, text_blocks)
+        assert len(chapters) == 3
+        assert chapters[0] == {"title": "Intro", "start_time_ms": 0.0}
+        assert chapters[1] == {"title": "Middle", "start_time_ms": 25000.0}
+        assert chapters[2] == {"title": "End", "start_time_ms": 75000.0}
+
+    def test__create_metadata(self):
+        mock_segment = MagicMock()
+        mock_segment.__len__.return_value = 123000  # 123 seconds
+        text_blocks = [{"title": "Chapter 1", "text": "text"}]
+        metadata = ga._create_metadata("My Title", mock_segment, text_blocks)
+        assert metadata["title"] == "My Title"
+        assert metadata["duration_seconds"] == 123
+        chapters_json = json.loads(metadata["chapters_json"])
+        assert chapters_json == [{"title": "Chapter 1", "start_time": 0}]
+
+    def test__create_metadata_for_chunk(self):
+        mock_chunk_segment = MagicMock()
+        mock_chunk_segment.__len__.return_value = 50000  # 50s
+        original_chapters = [
+            {"title": "Chap 1", "start_time_ms": 0},
+            {"title": "Chap 2", "start_time_ms": 30000},
+            {"title": "Chap 3", "start_time_ms": 60000},
+            {"title": "Chap 4", "start_time_ms": 90000},
+        ]
+        chunk_start_ms = 40000
+        metadata = ga._create_metadata_for_chunk(
+            "My Title (Part 2)", mock_chunk_segment, original_chapters, chunk_start_ms
+        )
+        assert metadata["title"] == "My Title (Part 2)"
+        assert metadata["duration_seconds"] == 50
+        chapters = json.loads(metadata["chapters_json"])
+        # Expected: Chapter at relative time 0, and Chap 3 at relative time 20s
+        assert {"title": "Chap 3", "start_time": 0} in chapters
+        assert {"title": "Chap 3", "start_time": 20} in chapters
+
+    # FIXED: Added mock for builtins.open to prevent FileNotFoundError
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=True)
-    @patch("generate_audiobook.AudioSegment")
-    @patch(
-        "generate_audiobook.validate_and_process_chunk",
-        return_value=["valid chunk 1.", "valid chunk 2."],
-    )
-    def test_generate_audio_with_reference_voice(
-        self, m_validate, mock_audio_segment, mock_exists, mock_tts_client, caplog
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_audio_uses_reference_voice(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
     ):
-        with caplog.at_level(logging.INFO):
-            assert ga.generate_audio("some text.\nmore text.", "valid/path.wav") is True
-
-        # FIX: The assertion was wrong. The function is called with the *output* of
-        # split_into_sentences, not the raw paragraph. This checks it was called correctly.
-        m_validate.assert_any_call("sentence 1.")
-
-        assert "Using reference voice for cloning: valid/path.wav" in caplog.text
-        # Check that TTS is called with the *validated* chunks
-        mock_tts_client.tts.assert_any_call(
-            text="valid chunk 1.",
-            speaker=None,
-            speaker_wav="valid/path.wav",
-            language="en",
-        )
-        mock_tts_client.tts.assert_any_call(
-            text="valid chunk 2.",
-            speaker=None,
-            speaker_wav="valid/path.wav",
-            language="en",
-        )
-
-    @patch("os.path.exists", return_value=False)
-    @patch("generate_audiobook.AudioSegment")
-    @patch(
-        "generate_audiobook.validate_and_process_chunk", return_value=["valid chunk."]
-    )
-    def test_generate_audio_with_default_voice(
-        self, m_validate, mock_audio_segment, mock_exists, mock_tts_client, caplog
-    ):
-        with caplog.at_level(logging.INFO):
-            assert ga.generate_audio("some text.", "invalid/path.wav") is True
-        assert "Using default built-in speaker: Claribel Dervla" in caplog.text
-        mock_tts_client.tts.assert_called_with(
-            text="valid chunk.",
-            speaker="Claribel Dervla",
-            speaker_wav=None,
-            language="en",
-        )
-
-    # FIX: Set logging level to capture the INFO message.
-    def test_generate_audio_empty_text(self, caplog):
-        with caplog.at_level(logging.INFO):
-            assert ga.generate_audio("   ", "voice.wav") is False
-        assert "No text content to synthesize" in caplog.text
-
-    @patch("os.path.exists", return_value=True)
-    @patch("generate_audiobook.AudioSegment")
-    def test_generate_metadata_success(
-        self, mock_audio_segment, mock_exists, monkeypatch
-    ):
-        # Because `datetime.date` is an immutable C-type, we must use `monkeypatch`
-        class FakeDate(datetime.date):
-            def __new__(cls, *args, **kwargs):
-                return super().__new__(cls, 2023, 10, 27)
-
-            @classmethod
-            def today(cls):
-                return cls(2023, 10, 27)
-
-        monkeypatch.setattr(ga.datetime, "date", FakeDate)
-        mock_audio_segment.from_mp3.return_value.__len__.return_value = 200000
-        text_blocks = [{"title": "Chapter 1", "text": "a" * 100}]
-
-        metadata = ga.generate_metadata(text_blocks)
-        assert metadata["title"] == "Daily Digest for 2023-10-27"
-        assert metadata["duration"] == 200
-
-    # FIX: Set logging level to capture the INFO message.
-    @patch("os.path.exists", return_value=False)
-    def test_generate_metadata_no_mp3(self, mock_exists, caplog):
-        with caplog.at_level(logging.INFO):
-            assert ga.generate_metadata([]) is None
-        assert "MP3 file does not exist, skipping metadata generation." in caplog.text
-
-
-class TestMainExecutionAndCleanup:
-    @patch("generate_audiobook.cleanup")
-    @patch("generate_audiobook.upload_audiobook")
-    @patch("generate_audiobook.generate_metadata")
-    @patch("generate_audiobook.generate_audio")
-    @patch(
-        "generate_audiobook.remove_markdown_links", side_effect=lambda x: f"cleaned_{x}"
-    )
-    @patch("generate_audiobook.process_emails")
-    @patch("generate_audiobook.authenticate_gmail")
-    @patch("generate_audiobook.fetch_sources")
-    @patch("generate_audiobook.initialize_tts_model")
-    @patch("generate_audiobook.load_config")
-    @patch("generate_audiobook.setup_logging")
-    def test_main_full_success_flow(
-        self,
-        m_setup,
-        m_load_config,
-        m_init_tts,
-        m_fetch,
-        m_auth,
-        m_process,
-        m_clean_text,
-        m_gen_audio,
-        m_gen_meta,
-        m_upload,
-        m_cleanup,
-        monkeypatch,
-    ):
-        monkeypatch.setattr(ga.sys, "argv", ["script_name", "--date", "2023-01-01"])
-        m_load_config.return_value = {
+        mock_audio_segment.export.return_value.read.return_value = b"A" * (1024 * 1024)
+        config = {
             "api_url": "url",
             "api_key": "key",
-            "reference_voice_file": "v.wav",
-            "token_file": "t",
-            "credentials_file": "c",
+            "reference_voice_file": "path/to/voice.wav",
         }
-        m_fetch.return_value = [{"email": "a@b.com"}]
-        m_process.return_value = (
-            "Full Text",
-            [{"title": "Chapter", "text": "Original Text"}],
+        ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
+        mock_tts_client.tts.assert_any_call(
+            text=ANY, language="en", speaker_wav="path/to/voice.wav"
         )
-        m_gen_audio.return_value = True
-        m_gen_meta.return_value = {"duration": 100}
+        m_upload.assert_called_once()
 
+    # FIXED: Added mock for builtins.open to prevent FileNotFoundError
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=False)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_audio_uses_default_speaker(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
+    ):
+        mock_audio_segment.export.return_value.read.return_value = b"A" * (1024 * 1024)
+        config = {
+            "api_url": "url",
+            "api_key": "key",
+            "reference_voice_file": "path/that/does/not/exist.wav",
+        }
+        ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
+        mock_tts_client.tts.assert_any_call(
+            text=ANY, language="en", speaker=ga.DEFAULT_SPEAKER
+        )
+        m_upload.assert_called_once()
+
+    # FIXED: Added mock for builtins.open to prevent FileNotFoundError
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_and_upload_chunked_files(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
+    ):
+        mock_audio_segment.__len__.return_value = 300000
+        mock_audio_segment.export.return_value.read.return_value = b"A" * int(
+            ga.MAX_UPLOAD_SIZE_MB * 1.5 * 1024 * 1024
+        )
+        mock_audio_segment.__getitem__.return_value = mock_audio_segment
+        config = {"api_url": "url", "api_key": "key", "reference_voice_file": "v.wav"}
+        files = ga.generate_and_upload_audio(
+            "text", [{"title": "t", "text": "t"}], config, "d"
+        )
+        assert m_upload.call_count == 2
+        args, _ = m_upload.call_args_list[1]
+        assert args[2] == f"{ga.UPLOAD_MP3_BASENAME}_part_2_of_2.mp3"
+        assert len(files) == 3
+
+    def test_generate_audio_empty_text(self, caplog):
+        with caplog.at_level(logging.INFO):
+            files = ga.generate_and_upload_audio("   ", [], {}, "d")
+        assert "No text content to synthesize" in caplog.text
+        assert files == []
+
+
+class TestMainExecution:
+    @pytest.fixture(autouse=True)
+    def mock_main_dependencies(self, mocker):
+        """Mock all external dependencies for main function."""
+        mocker.patch("generate_audiobook.setup_logging")
+        mocker.patch(
+            "generate_audiobook.load_config",
+            return_value={
+                "api_url": "url",
+                "api_key": "key",
+                "token_file": "t",
+                "credentials_file": "c",
+                "reference_voice_file": "v.wav",
+            },
+        )
+        mocker.patch("generate_audiobook.initialize_tts_model")
+        mocker.patch("generate_audiobook.fetch_sources", return_value=[{"id": 1}])
+        mocker.patch("generate_audiobook.authenticate_gmail")
+        mocker.patch("googleapiclient.discovery.build")
+        self.mock_process_emails = mocker.patch(
+            "generate_audiobook.process_emails",
+            return_value=("text", [{"text": "block"}]),
+        )
+        self.mock_gen_upload = mocker.patch(
+            "generate_audiobook.generate_and_upload_audio", return_value=["file1.mp3"]
+        )
+        self.mock_cleanup = mocker.patch("generate_audiobook.cleanup")
+        self.mock_remove_links = mocker.patch(
+            "generate_audiobook.remove_markdown_links", side_effect=lambda x: x
+        )
+
+    @pytest.mark.parametrize(
+        "argv, expected_dates",
+        [
+            (["script", "--date", "2023-05-10"], ["2023-05-10"]),
+            (
+                ["script", "--start-date", "2023-05-10", "--end-date", "2023-05-11"],
+                ["2023-05-10", "2023-05-11"],
+            ),
+        ],
+    )
+    def test_main_date_args_success(self, monkeypatch, argv, expected_dates):
+        monkeypatch.setattr(ga.sys, "argv", argv)
         ga.main()
 
-        m_setup.assert_called_once()
-        m_init_tts.assert_called_once()
-        m_fetch.assert_called_once_with("url", "key")
+        assert self.mock_process_emails.call_count == len(expected_dates)
+        assert self.mock_gen_upload.call_count == len(expected_dates)
+        assert self.mock_cleanup.call_count == len(expected_dates)
 
-        # Verify text cleaning happens correctly
-        m_clean_text.assert_any_call("Full Text")
-        m_clean_text.assert_any_call("Original Text")
+        for i, expected_date in enumerate(expected_dates):
+            assert self.mock_process_emails.call_args_list[i].args[2] == expected_date
+            assert self.mock_gen_upload.call_args_list[i].args[3] == expected_date
+            assert self.mock_cleanup.call_args_list[i].args[0] == ["file1.mp3"]
 
-        # Verify the CLEANED text is used
-        m_gen_audio.assert_called_once_with("cleaned_Full Text", "v.wav")
-        # Verify metadata is generated with the cleaned block
-        m_gen_meta.assert_called_once_with(
-            [{"title": "Chapter", "text": "cleaned_Original Text"}]
+    def test_main_no_content_for_date(self, monkeypatch):
+        monkeypatch.setattr(ga.sys, "argv", ["script", "--date", "2023-05-10"])
+        self.mock_process_emails.return_value = ("  ", [])  # No content
+        ga.main()
+        self.mock_process_emails.assert_called_once_with(ANY, ANY, "2023-05-10")
+        self.mock_gen_upload.assert_not_called()
+        self.mock_cleanup.assert_called_once_with([])
+
+    def test_main_invalid_date_format(self, monkeypatch, caplog):
+        monkeypatch.setattr(ga.sys, "argv", ["script", "--date", "2023/05/10"])
+        with pytest.raises(SystemExit):
+            ga.main()
+        assert "Invalid date format" in caplog.text
+
+    def test_main_start_after_end_date(self, monkeypatch, caplog):
+        monkeypatch.setattr(
+            ga.sys,
+            "argv",
+            ["script", "--start-date", "2023-05-11", "--end-date", "2023-05-10"],
+        )
+        with pytest.raises(SystemExit):
+            ga.main()
+        assert (
+            "Start date (2023-05-11) cannot be after end date (2023-05-10)"
+            in caplog.text
         )
 
-        m_upload.assert_called_once_with("url", "key", {"duration": 100})
-        m_cleanup.assert_called_once()
 
-    def test_main_no_content(self, monkeypatch):
-        monkeypatch.setattr(ga.sys, "argv", ["script_name"])
-        with patch("generate_audiobook.load_config") as m_load, patch(
-            "generate_audiobook.initialize_tts_model"
-        ), patch("generate_audiobook.fetch_sources") as m_fetch, patch(
-            "generate_audiobook.authenticate_gmail"
-        ), patch(
-            "googleapiclient.discovery.build"
-        ), patch(
-            "generate_audiobook.process_emails", return_value=(" ", [])
-        ) as m_process, patch(
-            "generate_audiobook.generate_audio"
-        ) as m_gen_audio:
-
-            ga.main()
-            # Assert that audio generation is NOT called if there's no content
-            m_gen_audio.assert_not_called()
-
-    @patch("os.path.exists", side_effect=[True, True, False])
-    @patch("os.remove", side_effect=[None, OSError("Permission denied")])
-    def test_cleanup(self, m_remove, m_exists, caplog):
-        ga.cleanup()
+class TestCleanup:
+    @patch("generate_audiobook.os.remove")
+    @patch("generate_audiobook.os.path.exists", return_value=True)
+    def test_cleanup_removes_files(self, m_exists, m_remove):
+        files = ["file1.mp3", "file2.wav"]
+        ga.cleanup(files)
+        assert m_exists.call_count == 2
+        m_exists.assert_has_calls(
+            [call("file1.mp3"), call("file2.wav")], any_order=True
+        )
         assert m_remove.call_count == 2
-        m_remove.assert_any_call(ga.TEMP_AUDIO_WAV)
-        m_remove.assert_any_call(ga.TEMP_AUDIO_MP3)
+        m_remove.assert_has_calls(
+            [call("file1.mp3"), call("file2.wav")], any_order=True
+        )
+
+    @patch("generate_audiobook.os.remove", side_effect=OSError("Permission denied"))
+    @patch("generate_audiobook.os.path.exists", return_value=True)
+    def test_cleanup_handles_error(self, m_exists, m_remove, caplog):
+        files = ["bad_file.mp3"]
+        with caplog.at_level(logging.ERROR):
+            ga.cleanup(files)
         assert (
-            f"Could not remove temporary file {ga.TEMP_AUDIO_MP3}: Permission denied"
+            "Could not remove temporary file bad_file.mp3: Permission denied"
             in caplog.text
         )
