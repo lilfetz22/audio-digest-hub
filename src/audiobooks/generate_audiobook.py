@@ -10,6 +10,7 @@ import base64
 import re
 import logging
 import math
+import subprocess
 from pathlib import Path
 
 # 3rd Party Libraries
@@ -80,6 +81,48 @@ def load_config(config_path="config.ini"):
     except KeyError as e:
         logger.error(f"Missing key in config.ini: {e}")
         sys.exit(1)
+
+
+def verify_authentication(api_url, api_key):
+    """
+    Performs a pre-flight check to verify the API key is valid.
+    Tries to fetch sources and exits gracefully if authentication fails.
+    """
+    logger.info("Performing pre-flight authentication check...")
+    test_url = f"{api_url}/sources"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    try:
+        response = requests.get(test_url, headers=headers, timeout=15)
+
+        if response.status_code == 200:
+            logger.info("✅ Authentication successful.")
+            return True
+
+        elif response.status_code == 401:
+            logger.critical("-" * 60)
+            logger.critical("FATAL: AUTHENTICATION FAILED (401 Unauthorized).")
+            logger.critical(
+                "The API_KEY in your config.ini is incorrect, expired, or revoked."
+            )
+            logger.critical(
+                "Please get a valid service_role key from your Supabase dashboard."
+            )
+            logger.critical("-" * 60)
+            return False
+
+        else:
+            logger.error(
+                f"Pre-flight check failed with unexpected status code: {response.status_code}"
+            )
+            logger.error(f"Response: {response.text}")
+            return False
+
+    except requests.exceptions.RequestException as e:
+        logger.error(
+            "A network error occurred during the pre-flight check.", exc_info=True
+        )
+        return False
 
 
 def fetch_sources(api_url, api_key):
@@ -263,7 +306,6 @@ def validate_and_process_chunk(chunk, max_len=250):
     return sub_chunks
 
 
-# MODIFIED: Logic to handle default speaker fallback
 def generate_and_upload_audio(text_content, text_blocks, config, date_str):
     """
     Generates audio, converts to MP3, and handles chunking/uploading.
@@ -272,6 +314,9 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
     if not text_content.strip():
         logger.info("No text content to synthesize. Skipping audio generation.")
         return []
+    date_specific_basename = f"digest_{date_str}"
+
+    logger.info(f"Using base filename: '{date_specific_basename}' for this run.")
 
     logger.info("Starting Coqui-TTS audio generation...")
     # Determine which voice to use: custom file or default speaker
@@ -330,7 +375,7 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
         base_title = f"Daily Digest for {date_str}"
         if mp3_size_mb <= MAX_UPLOAD_SIZE_MB:
             logger.info("MP3 size is within the limit. Uploading as a single file.")
-            filepath = f"{UPLOAD_MP3_BASENAME}.mp3"
+            filepath = f"{date_specific_basename}.mp3"
             full_audio_segment.export(filepath, format="mp3")
             files_to_cleanup.append(filepath)
             metadata = _create_metadata(base_title, full_audio_segment, text_blocks)
@@ -351,7 +396,9 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
                 start_ms = i * chunk_duration_ms
                 end_ms = min((i + 1) * chunk_duration_ms, len(full_audio_segment))
                 audio_chunk = full_audio_segment[start_ms:end_ms]
-                chunk_filepath = f"{UPLOAD_MP3_BASENAME}_part_{i+1}_of_{num_chunks}.mp3"
+                chunk_filepath = (
+                    f"{date_specific_basename}_part_{i+1}_of_{num_chunks}.mp3"
+                )
                 logger.info(
                     f"Exporting chunk {i+1}: {chunk_filepath} ({start_ms}ms to {end_ms}ms)"
                 )
@@ -368,6 +415,7 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
                         f"Upload failed for chunk {i+1}. Stopping further uploads."
                     )
                     break
+
         return files_to_cleanup
     except Exception:
         logger.error(
@@ -434,18 +482,72 @@ def _create_metadata_for_chunk(
     }
 
 
+# In generate_audiobook.py
+
+
 def cleanup(files_to_remove):
-    """Cleans up specified temporary audio files."""
+    """
+    Cleans up temporary audio files based on their type.
+    - Deletes .wav files.
+    - Unpins .mp3 files from OneDrive (for testing).
+    """
     if not files_to_remove:
         return
-    logger.info("Cleaning up temporary audio files...")
+    logger.info("Cleaning up temporary files...")
     for file_path in files_to_remove:
         try:
             if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Removed temporary file: {file_path}")
+                # Check the file extension to decide the action
+                if file_path.lower().endswith(".wav"):
+                    os.remove(file_path)
+                    logger.info(f"Deleted temporary file: {file_path}")
+                elif file_path.lower().endswith(".mp3"):
+                    # For MP3s, unpin them instead of deleting
+                    unpin_file_from_onedrive(Path(file_path))
+                    # The unpin function has its own logging, so we don't need another message here.
+                else:
+                    logger.warning(
+                        f"Skipping unknown file type during cleanup: {file_path}"
+                    )
+            else:
+                logger.warning(
+                    f"File not found for cleanup, already removed?: {file_path}"
+                )
         except OSError as e:
-            logger.error(f"Could not remove temporary file {file_path}: {e}")
+            logger.error(f"Could not process temporary file {file_path}: {e}")
+
+
+def unpin_file_from_onedrive(file_path: Path) -> None:
+    """
+    Executes the 'attrib' command to mark a file as 'cloud-only' in OneDrive.
+    This unpins the file from the local device, freeing up space. This is a
+    Windows-specific command.
+    """
+    # On non-Windows systems, this will fail gracefully.
+    # if sys.platform != "win32":
+    #     logging.warning(f"Unpinning is a Windows-only feature. Skipping for {file_path}.")
+    #     return
+
+    try:
+        # The '+U' attribute marks the file as not being fully present on the local machine.
+        # The '-P' attribute removes the 'pinned' status, ensuring it can be dehydrated.
+        subprocess.run(
+            ["attrib", "+U", "-P", str(file_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        logging.info(f"Successfully unpinned '{file_path}' from local storage.")
+    except FileNotFoundError:
+        logging.error(
+            "The 'attrib' command was not found. This function is intended for Windows."
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(
+            f"Failed to execute 'attrib' command for '{file_path}'.\n"
+            f"Return code: {e.returncode}\n"
+            f"Stderr: {e.stderr}"
+        )
 
 
 # --- Main Execution Logic ---
@@ -522,6 +624,10 @@ def main():
 
     try:
         config = load_config()
+
+        if not verify_authentication(config["api_url"], config["api_key"]):
+            sys.exit(1)
+
         initialize_tts_model()
         sources = fetch_sources(config["api_url"], config["api_key"])
 
@@ -564,6 +670,7 @@ def main():
             finally:
                 # Cleanup files for the current date before starting the next
                 cleanup(files_created)
+                # pass
 
     except Exception:
         logger.critical(

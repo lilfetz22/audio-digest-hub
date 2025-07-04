@@ -1,5 +1,3 @@
-# --- START OF FILE generate_audiobook_test.py ---
-
 import pytest
 import os
 import configparser
@@ -7,7 +5,9 @@ import json
 import base64
 import logging
 import datetime
+import subprocess
 from unittest.mock import MagicMock, patch, mock_open, ANY, call
+from pathlib import Path
 
 # Import the script to be tested
 import generate_audiobook as ga
@@ -225,7 +225,6 @@ class TestGmailInteraction:
         """A basic mock for the gmail service."""
         return MagicMock()
 
-    # FIXED: Removed incorrect assertion
     @patch("generate_audiobook.os.path.exists", side_effect=[False, False])
     @patch("generate_audiobook.Credentials.from_authorized_user_file")
     @patch("generate_audiobook.InstalledAppFlow.from_client_secrets_file")
@@ -235,9 +234,8 @@ class TestGmailInteraction:
         with pytest.raises(SystemExit):
             ga.authenticate_gmail("token.json", "creds.json")
         assert "Credentials file 'creds.json' not found." in caplog.text
-        # The following assertion was incorrect because sys.exit() is called before
-        # this line is ever reached. The test is already verifying the correct exit behavior.
-        m_flow.from_client_secrets_file.assert_not_called()
+        # Assert that we exit *before* attempting to use the missing credentials file.
+        m_flow.assert_not_called()
 
     def test_process_emails_success_and_marks_as_read(
         self, mock_gmail_service, mock_email_data
@@ -375,7 +373,6 @@ class TestAudioAndMetadata:
         assert {"title": "Chap 3", "start_time": 0} in chapters
         assert {"title": "Chap 3", "start_time": 20} in chapters
 
-    # FIXED: Added mock for builtins.open to prevent FileNotFoundError
     @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=True)
     @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
@@ -394,7 +391,6 @@ class TestAudioAndMetadata:
         )
         m_upload.assert_called_once()
 
-    # FIXED: Added mock for builtins.open to prevent FileNotFoundError
     @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=False)
     @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
@@ -413,7 +409,6 @@ class TestAudioAndMetadata:
         )
         m_upload.assert_called_once()
 
-    # FIXED: Added mock for builtins.open to prevent FileNotFoundError
     @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=True)
     @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
@@ -426,13 +421,26 @@ class TestAudioAndMetadata:
         )
         mock_audio_segment.__getitem__.return_value = mock_audio_segment
         config = {"api_url": "url", "api_key": "key", "reference_voice_file": "v.wav"}
-        files = ga.generate_and_upload_audio(
-            "text", [{"title": "t", "text": "t"}], config, "d"
+        date_str = "2023-01-01"
+
+        files_created = ga.generate_and_upload_audio(
+            "text", [{"title": "t", "text": "t"}], config, date_str
         )
+        base_name = f"digest_{date_str}"
+        part1_name = f"{base_name}_part_1_of_2.mp3"
+        part2_name = f"{base_name}_part_2_of_2.mp3"
+
         assert m_upload.call_count == 2
-        args, _ = m_upload.call_args_list[1]
-        assert args[2] == f"{ga.UPLOAD_MP3_BASENAME}_part_2_of_2.mp3"
-        assert len(files) == 3
+        # Check call arguments for both chunk uploads
+        m_upload.assert_has_calls(
+            [call(ANY, ANY, part1_name, ANY), call(ANY, ANY, part2_name, ANY)],
+            any_order=False,
+        )
+        # Check returned list of files for cleanup
+        assert len(files_created) == 3
+        assert ga.TEMP_WAV_FILE in files_created
+        assert part1_name in files_created
+        assert part2_name in files_created
 
     def test_generate_audio_empty_text(self, caplog):
         with caplog.at_level(logging.INFO):
@@ -456,6 +464,7 @@ class TestMainExecution:
                 "reference_voice_file": "v.wav",
             },
         )
+        mocker.patch("generate_audiobook.verify_authentication", return_value=True)
         mocker.patch("generate_audiobook.initialize_tts_model")
         mocker.patch("generate_audiobook.fetch_sources", return_value=[{"id": 1}])
         mocker.patch("generate_audiobook.authenticate_gmail")
@@ -524,27 +533,61 @@ class TestMainExecution:
 
 
 class TestCleanup:
+    @patch("generate_audiobook.unpin_file_from_onedrive")
     @patch("generate_audiobook.os.remove")
     @patch("generate_audiobook.os.path.exists", return_value=True)
-    def test_cleanup_removes_files(self, m_exists, m_remove):
-        files = ["file1.mp3", "file2.wav"]
-        ga.cleanup(files)
-        assert m_exists.call_count == 2
+    def test_cleanup_handles_file_types_correctly(self, m_exists, m_remove, m_unpin):
+        files_to_clean = ["audio.mp3", "temp.wav", "unknown.txt"]
+        ga.cleanup(files_to_clean)
+
         m_exists.assert_has_calls(
-            [call("file1.mp3"), call("file2.wav")], any_order=True
+            [call("audio.mp3"), call("temp.wav"), call("unknown.txt")]
         )
-        assert m_remove.call_count == 2
-        m_remove.assert_has_calls(
-            [call("file1.mp3"), call("file2.wav")], any_order=True
-        )
+        m_remove.assert_called_once_with("temp.wav")
+        m_unpin.assert_called_once_with(Path("audio.mp3"))
 
     @patch("generate_audiobook.os.remove", side_effect=OSError("Permission denied"))
     @patch("generate_audiobook.os.path.exists", return_value=True)
-    def test_cleanup_handles_error(self, m_exists, m_remove, caplog):
-        files = ["bad_file.mp3"]
+    def test_cleanup_handles_remove_error(self, m_exists, m_remove, caplog):
+        files = ["bad_file.wav"]
         with caplog.at_level(logging.ERROR):
             ga.cleanup(files)
         assert (
-            "Could not remove temporary file bad_file.mp3: Permission denied"
+            "Could not process temporary file bad_file.wav: Permission denied"
             in caplog.text
         )
+
+    @patch("generate_audiobook.subprocess.run")
+    def test_unpin_success(self, mock_run, caplog):
+        test_path = Path("my_file.mp3")
+        with caplog.at_level(logging.INFO):
+            ga.unpin_file_from_onedrive(test_path)
+
+        mock_run.assert_called_once_with(
+            ["attrib", "+U", "-P", str(test_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert f"Successfully unpinned '{test_path}'" in caplog.text
+
+    @patch("generate_audiobook.subprocess.run", side_effect=FileNotFoundError)
+    def test_unpin_attrib_not_found(self, mock_run, caplog):
+        test_path = Path("my_file.mp3")
+        with caplog.at_level(logging.ERROR):
+            ga.unpin_file_from_onedrive(test_path)
+        assert "The 'attrib' command was not found." in caplog.text
+
+    @patch("generate_audiobook.subprocess.run")
+    def test_unpin_subprocess_error(self, mock_run, caplog):
+        test_path = Path("my_file.mp3")
+        error = subprocess.CalledProcessError(
+            returncode=1, cmd="attrib", stderr="Access denied."
+        )
+        mock_run.side_effect = error
+
+        with caplog.at_level(logging.ERROR):
+            ga.unpin_file_from_onedrive(test_path)
+
+        assert f"Failed to execute 'attrib' command for '{test_path}'" in caplog.text
+        assert "Access denied." in caplog.text
