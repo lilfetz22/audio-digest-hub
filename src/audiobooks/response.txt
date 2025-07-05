@@ -1,0 +1,63 @@
+==================================================== FAILURES =====================================================
+___________________________ TestApiInteractions.test_check_existing_audiobook_api_error ___________________________
+
+self = <generate_audiobook_test.TestApiInteractions object at 0x0000022567F9B080>
+requests_mock = <requests_mock.mocker.Mocker object at 0x0000022567FBEA80>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x0000022568009400>
+
+    def test_check_existing_audiobook_api_error(self, requests_mock, caplog):
+        """Test that check_existing_audiobook handles API errors gracefully."""
+        requests_mock.get(
+            "https://fake-api.com/audiobooks",
+            status_code=500,
+            text="Internal Server Error"
+        )
+
+        with caplog.at_level(logging.ERROR):
+            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+
+        assert result is False
+>       assert "API returned status 500. Proceeding with generation to avoid blocking." in caplog.text
+E       AssertionError: assert 'API returned status 500. Proceeding with generation to avoid blocking.' in ''
+E        +  where '' = <_pytest.logging.LogCaptureFixture object at 0x0000022568009400>.text
+
+generate_audiobook_test.py:239: AssertionError
+_________________________ TestApiInteractions.test_check_existing_audiobook_network_error _________________________
+
+self = <generate_audiobook_test.TestApiInteractions object at 0x0000022571FA4B00>
+requests_mock = <requests_mock.mocker.Mocker object at 0x000002256800A270>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x000002256800A210>
+
+    def test_check_existing_audiobook_network_error(self, requests_mock, caplog):
+        """Test that check_existing_audiobook handles network errors gracefully."""
+        requests_mock.get(
+            "https://fake-api.com/audiobooks",
+            exc=requests.exceptions.ConnectionError("Connection failed")
+        )
+
+        with caplog.at_level(logging.ERROR):
+            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+
+        assert result is False
+        assert "Error checking for existing audiobook:" in caplog.text
+>       assert "Proceeding with generation due to API error." in caplog.text
+E       AssertionError: assert 'Proceeding with generation due to API error.' in 'ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existing audiobook: Connection failed\n'
+E        +  where 'ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existing audiobook: Connection failed\n' = <_pytest.logging.LogCaptureFixture object at 0x000002256800A210>.text
+
+generate_audiobook_test.py:253: AssertionError
+------------------------------------------------ Captured log call ------------------------------------------------
+ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existing audiobook: Connection failed
+================================================ warnings summary =================================================
+..\..\audiogeneratorenv\Lib\site-packages\pydub\utils.py:14
+  C:\Users\WilliamFetzner\OneDrive - Q-Centrix, LLC\audio-digest-hub\audiogeneratorenv\Lib\site-packages\pydub\utils.py:14: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+..\..\audiogeneratorenv\Lib\site-packages\dateparser\timezone_parser.py:81
+  C:\Users\WilliamFetzner\OneDrive - Q-Centrix, LLC\audio-digest-hub\audiogeneratorenv\Lib\site-packages\dateparser\timezone_parser.py:81: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    offset = datetime.now() - datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================= short test summary info =============================================
+FAILED generate_audiobook_test.py::TestApiInteractions::test_check_existing_audiobook_api_error - AssertionError: assert 'API returned status 500. Proceeding with generation to avoid blocking.' in ''
+FAILED generate_audiobook_test.py::TestApiInteractions::test_check_existing_audiobook_network_error - AssertionError: assert 'Proceeding with generation due to API error.' in 'ERROR    generate_audiobook:generate_...
+==================================== 2 failed, 40 passed, 2 warnings in 18.02s ====================================
