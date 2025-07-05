@@ -1,5 +1,4 @@
-
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Audiobook {
@@ -18,33 +17,95 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(2);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSeeking, setIsSeeking] = useState(false);
+
+  // Sync state with audio element
+  const syncAudioState = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setIsPlaying(!audio.paused);
+    setCurrentTime(audio.currentTime);
+    setDuration(audio.duration || 0);
+    setVolume(audio.volume);
+    setPlaybackRate(audio.playbackRate);
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const updateTime = () => {
-      setCurrentTime(audio.currentTime);
+      if (!isSeeking) {
+        setCurrentTime(audio.currentTime);
+      }
     };
+    
     const updateDuration = () => {
-      setDuration(audio.duration);
+      setDuration(audio.duration || 0);
     };
+    
     const handlePlay = () => {
       setIsPlaying(true);
+      setError(null);
     };
+    
     const handlePause = () => {
       setIsPlaying(false);
     };
+    
     const handleEnded = () => {
       setIsPlaying(false);
     };
 
+    const handleLoadStart = () => {
+      setIsLoading(true);
+      setError(null);
+    };
+
+    const handleCanPlay = () => {
+      setIsLoading(false);
+      syncAudioState();
+    };
+
+    const handleError = (e: Event) => {
+      setIsLoading(false);
+      setIsPlaying(false);
+      setError('Failed to load audio file');
+      console.error('Audio error:', e);
+    };
+
+    const handleWaiting = () => {
+      setIsLoading(true);
+    };
+
+    const handleSeeking = () => {
+      setIsSeeking(true);
+    };
+
+    const handleSeeked = () => {
+      setIsSeeking(false);
+      setCurrentTime(audio.currentTime);
+    };
+
+    // Add all event listeners
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('loadeddata', updateDuration);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('loadstart', handleLoadStart);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('seeking', handleSeeking);
+    audio.addEventListener('seeked', handleSeeked);
+
+    // Initial sync
+    syncAudioState();
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
@@ -53,8 +114,14 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('loadstart', handleLoadStart);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('seeking', handleSeeking);
+      audio.removeEventListener('seeked', handleSeeked);
     };
-  }, [audiobook]);
+  }, [audiobook, syncAudioState, isSeeking]);
 
   // Save playback position every 5 seconds when playing
   useEffect(() => {
@@ -89,14 +156,21 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     }
   };
 
-  const togglePlayPause = () => {
+  const togglePlayPause = async () => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
+    try {
+      if (isPlaying) {
+        audio.pause();
+      } else {
+        setIsLoading(true);
+        await audio.play();
+      }
+    } catch (error) {
+      console.error('Error toggling play/pause:', error);
+      setError('Failed to play audio');
+      setIsLoading(false);
     }
   };
 
@@ -104,14 +178,18 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + seconds));
+    const newTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + seconds));
+    audio.currentTime = newTime;
+    setCurrentTime(newTime);
   };
 
   const seekTo = (time: number) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.currentTime = time;
+    const clampedTime = Math.max(0, Math.min(audio.duration || 0, time));
+    audio.currentTime = clampedTime;
+    setCurrentTime(clampedTime);
   };
 
   const handleVolumeChange = (newVolume: number) => {
@@ -139,6 +217,9 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     if (audiobook && audiobook.last_playback_position_seconds > 0) {
       seekTo(audiobook.last_playback_position_seconds);
     }
+    
+    // Sync state after loading
+    syncAudioState();
   };
 
   return {
@@ -148,6 +229,9 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     duration,
     volume,
     playbackRate,
+    isLoading,
+    error,
+    isSeeking,
     togglePlayPause,
     skip,
     seekTo,

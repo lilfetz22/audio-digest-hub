@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +35,9 @@ const Player = () => {
     duration,
     volume,
     playbackRate,
+    isLoading,
+    error,
+    isSeeking,
     togglePlayPause,
     skip,
     seekTo,
@@ -155,6 +157,9 @@ const Player = () => {
                 duration={duration}
                 volume={volume}
                 playbackRate={playbackRate}
+                isLoading={isLoading}
+                error={error}
+                isSeeking={isSeeking}
                 onTogglePlayPause={togglePlayPause}
                 onSkip={skip}
                 onSeekTo={seekTo}

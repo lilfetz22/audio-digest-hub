@@ -1,8 +1,7 @@
-
-import React from 'react';
+import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Play, Pause, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Loader2 } from 'lucide-react';
 
 interface PlayerControlsProps {
   isPlaying: boolean;
@@ -10,6 +9,9 @@ interface PlayerControlsProps {
   duration: number;
   volume: number;
   playbackRate: number;
+  isLoading?: boolean;
+  error?: string | null;
+  isSeeking?: boolean;
   onTogglePlayPause: () => void;
   onSkip: (seconds: number) => void;
   onSeekTo: (time: number) => void;
@@ -24,6 +26,9 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   duration,
   volume,
   playbackRate,
+  isLoading = false,
+  error = null,
+  isSeeking = false,
   onTogglePlayPause,
   onSkip,
   onSeekTo,
@@ -31,8 +36,32 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   onPlaybackRateChange,
   formatTime,
 }) => {
+  const [sliderValue, setSliderValue] = React.useState(currentTime);
+
+  // Update slider value when currentTime changes (but not during seeking)
+  React.useEffect(() => {
+    if (!isSeeking) {
+      setSliderValue(currentTime);
+    }
+  }, [currentTime, isSeeking]);
+
+  const handleSliderChange = (value: number[]) => {
+    setSliderValue(value[0]);
+  };
+
+  const handleSliderCommit = (value: number[]) => {
+    onSeekTo(value[0]);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-3">
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
+
       {/* Progress Bar */}
       <div className="space-y-2">
         <div className="flex justify-between text-sm text-gray-500">
@@ -40,11 +69,13 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           <span>{formatTime(duration)}</span>
         </div>
         <Slider
-          value={[currentTime]}
+          value={[sliderValue]}
           max={duration}
           step={1}
-          onValueChange={([value]) => onSeekTo(value)}
+          onValueChange={handleSliderChange}
+          onValueCommit={handleSliderCommit}
           className="w-full"
+          disabled={isLoading || !!error}
         />
       </div>
 
@@ -54,6 +85,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           variant="outline"
           size="icon"
           onClick={() => onSkip(-15)}
+          disabled={isLoading || !!error}
         >
           <SkipBack className="h-4 w-4" />
         </Button>
@@ -62,14 +94,22 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           size="icon"
           onClick={onTogglePlayPause}
           className="h-12 w-12"
+          disabled={isLoading || !!error}
         >
-          {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+          {isLoading ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : isPlaying ? (
+            <Pause className="h-6 w-6" />
+          ) : (
+            <Play className="h-6 w-6" />
+          )}
         </Button>
         
         <Button
           variant="outline"
           size="icon"
           onClick={() => onSkip(15)}
+          disabled={isLoading || !!error}
         >
           <SkipForward className="h-4 w-4" />
         </Button>
@@ -85,6 +125,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
             step={0.1}
             onValueChange={([value]) => onVolumeChange(value)}
             className="w-24"
+            disabled={isLoading || !!error}
           />
         </div>
         
@@ -92,6 +133,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           value={playbackRate}
           onChange={(e) => onPlaybackRateChange(parseFloat(e.target.value))}
           className="px-3 py-1 border rounded-md text-sm"
+          disabled={isLoading || !!error}
         >
           <option value={1}>1x</option>
           <option value={1.25}>1.25x</option>
