@@ -17,7 +17,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [playbackRate, setPlaybackRate] = useState(2);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -41,16 +41,25 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     };
   }, []);
 
-  // Save playback position every 5 seconds
+  // Save playback position every 5 seconds when playing
   useEffect(() => {
-    if (!audiobook || !isPlaying) return;
+    if (!audiobook || !isPlaying || !audioRef.current) return;
 
     const interval = setInterval(() => {
       savePlaybackPosition();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [audiobook, isPlaying, currentTime]);
+  }, [audiobook, isPlaying]);
+
+  // Save position when pausing or component unmounts
+  useEffect(() => {
+    return () => {
+      if (audiobook && audioRef.current && audioRef.current.currentTime > 0) {
+        savePlaybackPosition();
+      }
+    };
+  }, [audiobook]);
 
   const savePlaybackPosition = async () => {
     if (!audiobook || !audioRef.current) return;
@@ -105,6 +114,13 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
   };
 
   const handleLoadedData = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    // Set playback rate to match state
+    audio.playbackRate = playbackRate;
+    
+    // Restore playback position
     if (audiobook && audiobook.last_playback_position_seconds > 0) {
       seekTo(audiobook.last_playback_position_seconds);
     }
