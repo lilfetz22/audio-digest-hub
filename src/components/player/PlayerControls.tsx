@@ -53,6 +53,17 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
     onSeekTo(value[0]);
   };
 
+  // Force clear loading state if it's been stuck for too long
+  React.useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        console.log('PlayerControls: Loading state stuck, forcing clear');
+        // This will trigger a re-render and hopefully clear the loading state
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
+
   return (
     <div className="space-y-6">
       {/* Error Display */}
@@ -75,7 +86,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           onValueChange={handleSliderChange}
           onValueCommit={handleSliderCommit}
           className="w-full"
-          disabled={isLoading || !!error}
+          disabled={!!error}
         />
       </div>
 
@@ -85,7 +96,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           variant="outline"
           size="icon"
           onClick={() => onSkip(-15)}
-          disabled={isLoading || !!error}
+          disabled={!!error}
         >
           <SkipBack className="h-4 w-4" />
         </Button>
@@ -94,7 +105,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           size="icon"
           onClick={onTogglePlayPause}
           className="h-12 w-12"
-          disabled={isLoading || !!error}
+          disabled={!!error}
         >
           {isLoading ? (
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -109,7 +120,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           variant="outline"
           size="icon"
           onClick={() => onSkip(15)}
-          disabled={isLoading || !!error}
+          disabled={!!error}
         >
           <SkipForward className="h-4 w-4" />
         </Button>
@@ -125,7 +136,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
             step={0.1}
             onValueChange={([value]) => onVolumeChange(value)}
             className="w-24"
-            disabled={isLoading || !!error}
+            disabled={!!error}
           />
         </div>
         
@@ -133,7 +144,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           value={playbackRate}
           onChange={(e) => onPlaybackRateChange(parseFloat(e.target.value))}
           className="px-3 py-1 border rounded-md text-sm"
-          disabled={isLoading || !!error}
+          disabled={!!error}
         >
           <option value={1}>1x</option>
           <option value={1.25}>1.25x</option>

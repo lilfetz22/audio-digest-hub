@@ -48,32 +48,38 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     };
     
     const handlePlay = () => {
+      console.log('Play event fired');
       setIsPlaying(true);
       setIsLoading(false);
       setError(null);
     };
     
     const handlePause = () => {
+      console.log('Pause event fired');
       setIsPlaying(false);
       setIsLoading(false);
     };
     
     const handleEnded = () => {
+      console.log('Ended event fired');
       setIsPlaying(false);
       setIsLoading(false);
     };
 
     const handleLoadStart = () => {
+      console.log('LoadStart event fired');
       setIsLoading(true);
       setError(null);
     };
 
     const handleCanPlay = () => {
+      console.log('CanPlay event fired');
       setIsLoading(false);
       syncAudioState();
     };
 
     const handleError = (e: Event) => {
+      console.log('Error event fired', e);
       setIsLoading(false);
       setIsPlaying(false);
       setError('Failed to load audio file');
@@ -81,19 +87,23 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     };
 
     const handleWaiting = () => {
+      console.log('Waiting event fired');
       setIsLoading(true);
     };
 
     const handleSeeking = () => {
+      console.log('Seeking event fired');
       setIsSeeking(true);
     };
 
     const handleSeeked = () => {
+      console.log('Seeked event fired');
       setIsSeeking(false);
       setCurrentTime(audio.currentTime);
     };
 
     const handlePlaying = () => {
+      console.log('Playing event fired');
       setIsLoading(false);
       setIsPlaying(true);
     };
@@ -132,6 +142,18 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       audio.removeEventListener('playing', handlePlaying);
     };
   }, [audiobook, syncAudioState, isSeeking]);
+
+  // Monitor loading state and provide fallback
+  useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        console.log('Loading state timeout - forcing clear');
+        setIsLoading(false);
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
 
   // Save playback position every 5 seconds when playing
   useEffect(() => {
@@ -176,8 +198,20 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       } else {
         setIsLoading(true);
         setError(null);
+        
+        // Add a timeout fallback to clear loading state
+        const loadingTimeout = setTimeout(() => {
+          console.log('Loading timeout - clearing loading state');
+          setIsLoading(false);
+        }, 5000); // 5 second timeout
+        
         await audio.play();
-        // Note: The loading state will be cleared by the 'playing' event listener
+        
+        // Clear the timeout since play was successful
+        clearTimeout(loadingTimeout);
+        
+        // Clear loading state immediately after successful play
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error toggling play/pause:', error);
