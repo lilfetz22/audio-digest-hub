@@ -232,7 +232,7 @@ class TestApiInteractions:
             text="Internal Server Error"
         )
         
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.WARNING):
             result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
         
         assert result is False
@@ -245,7 +245,7 @@ class TestApiInteractions:
             exc=requests.exceptions.ConnectionError("Connection failed")
         )
         
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.INFO):
             result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
         
         assert result is False
