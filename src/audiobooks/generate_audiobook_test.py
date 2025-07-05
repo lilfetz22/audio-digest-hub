@@ -8,6 +8,7 @@ import datetime
 import subprocess
 from unittest.mock import MagicMock, patch, mock_open, ANY, call
 from pathlib import Path
+import requests
 
 # Import the script to be tested
 import generate_audiobook as ga
@@ -184,6 +185,72 @@ class TestApiInteractions:
         with pytest.raises(SystemExit):
             ga.fetch_sources("https://fake-api.com", "fake_key")
         assert "A network error occurred" in caplog.text
+
+    def test_check_existing_audiobook_found(self, requests_mock, caplog):
+        """Test that check_existing_audiobook returns True when a duplicate title is found."""
+        mock_audiobooks = [
+            {"id": "1", "title": "Daily Digest for 2025-07-04", "created_at": "2025-07-04T10:00:00Z"},
+            {"id": "2", "title": "Daily Digest for 2025-07-03", "created_at": "2025-07-03T10:00:00Z"},
+        ]
+        requests_mock.get(
+            "https://fake-api.com/audiobooks", 
+            status_code=200, 
+            json=mock_audiobooks
+        )
+        
+        with caplog.at_level(logging.INFO):
+            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+        
+        assert result is True
+        assert "Checking if audiobook 'Daily Digest for 2025-07-04' already exists..." in caplog.text
+        assert "Audiobook 'Daily Digest for 2025-07-04' already exists. Skipping generation." in caplog.text
+
+    def test_check_existing_audiobook_not_found(self, requests_mock, caplog):
+        """Test that check_existing_audiobook returns False when no duplicate title is found."""
+        mock_audiobooks = [
+            {"id": "1", "title": "Daily Digest for 2025-07-03", "created_at": "2025-07-03T10:00:00Z"},
+            {"id": "2", "title": "Daily Digest for 2025-07-02", "created_at": "2025-07-02T10:00:00Z"},
+        ]
+        requests_mock.get(
+            "https://fake-api.com/audiobooks", 
+            status_code=200, 
+            json=mock_audiobooks
+        )
+        
+        with caplog.at_level(logging.INFO):
+            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+        
+        assert result is False
+        assert "Checking if audiobook 'Daily Digest for 2025-07-04' already exists..." in caplog.text
+        assert "No existing audiobook found with title 'Daily Digest for 2025-07-04'. Proceeding with generation." in caplog.text
+
+    def test_check_existing_audiobook_api_error(self, requests_mock, caplog):
+        """Test that check_existing_audiobook handles API errors gracefully."""
+        requests_mock.get(
+            "https://fake-api.com/audiobooks", 
+            status_code=500, 
+            text="Internal Server Error"
+        )
+        
+        with caplog.at_level(logging.ERROR):
+            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+        
+        assert result is False
+        assert "API returned status 500. Proceeding with generation to avoid blocking." in caplog.text
+
+    def test_check_existing_audiobook_network_error(self, requests_mock, caplog):
+        """Test that check_existing_audiobook handles network errors gracefully."""
+        requests_mock.get(
+            "https://fake-api.com/audiobooks", 
+            exc=requests.exceptions.ConnectionError("Connection failed")
+        )
+        
+        with caplog.at_level(logging.ERROR):
+            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+        
+        assert result is False
+        assert "Error checking for existing audiobook:" in caplog.text
+        assert "Proceeding with generation due to API error." in caplog.text
 
     def test_upload_audiobook_success(self, requests_mock, tmp_path, caplog):
         filepath = tmp_path / "test.mp3"
@@ -518,6 +585,9 @@ class TestMainExecution:
         self.mock_remove_links = mocker.patch(
             "generate_audiobook.remove_markdown_links", side_effect=lambda x: x
         )
+        self.mock_check_existing = mocker.patch(
+            "generate_audiobook.check_existing_audiobook", return_value=False
+        )
 
     @pytest.mark.parametrize(
         "argv, expected_dates",
@@ -533,14 +603,35 @@ class TestMainExecution:
         monkeypatch.setattr(ga.sys, "argv", argv)
         ga.main()
 
+        assert self.mock_check_existing.call_count == len(expected_dates)
         assert self.mock_process_emails.call_count == len(expected_dates)
         assert self.mock_gen_upload.call_count == len(expected_dates)
         assert self.mock_cleanup.call_count == len(expected_dates)
 
         for i, expected_date in enumerate(expected_dates):
+            expected_title = f"Daily Digest for {expected_date}"
+            assert self.mock_check_existing.call_args_list[i].args[2] == expected_title
             assert self.mock_process_emails.call_args_list[i].args[2] == expected_date
             assert self.mock_gen_upload.call_args_list[i].args[3] == expected_date
             assert self.mock_cleanup.call_args_list[i].args[0] == ["file1.mp3"]
+
+    def test_main_skips_existing_audiobook(self, monkeypatch, caplog):
+        """Test that main skips processing when an audiobook already exists."""
+        monkeypatch.setattr(ga.sys, "argv", ["script", "--date", "2023-05-10"])
+        self.mock_check_existing.return_value = True  # Simulate existing audiobook
+        
+        with caplog.at_level(logging.INFO):
+            ga.main()
+        
+        # Should check for existing audiobook
+        self.mock_check_existing.assert_called_once_with("url", "key", "Daily Digest for 2023-05-10")
+        
+        # Should skip processing and generation
+        self.mock_process_emails.assert_not_called()
+        self.mock_gen_upload.assert_not_called()
+        self.mock_cleanup.assert_called_once_with([])
+        
+        assert "Skipping 2023-05-10 - audiobook already exists." in caplog.text
 
     def test_main_no_content_for_date(self, monkeypatch):
         monkeypatch.setattr(ga.sys, "argv", ["script", "--date", "2023-05-10"])
@@ -568,6 +659,28 @@ class TestMainExecution:
             "Start date (2023-05-11) cannot be after end date (2023-05-10)"
             in caplog.text
         )
+
+    def test_main_mixed_existing_and_new_audiobooks(self, monkeypatch, caplog):
+        """Test that main handles a mix of existing and new audiobooks correctly."""
+        monkeypatch.setattr(ga.sys, "argv", ["script", "--start-date", "2023-05-10", "--end-date", "2023-05-11"])
+        
+        # First date exists, second date doesn't
+        self.mock_check_existing.side_effect = [True, False]
+        
+        with caplog.at_level(logging.INFO):
+            ga.main()
+        
+        # Should check for both dates
+        assert self.mock_check_existing.call_count == 2
+        assert self.mock_check_existing.call_args_list[0].args[2] == "Daily Digest for 2023-05-10"
+        assert self.mock_check_existing.call_args_list[1].args[2] == "Daily Digest for 2023-05-11"
+        
+        # Should only process the second date (first was skipped)
+        self.mock_process_emails.assert_called_once_with(ANY, ANY, "2023-05-11")
+        self.mock_gen_upload.assert_called_once_with(ANY, ANY, ANY, "2023-05-11")
+        assert self.mock_cleanup.call_count == 2  # Called for both dates (even if empty)
+        
+        assert "Skipping 2023-05-10 - audiobook already exists." in caplog.text
 
 
 class TestCleanup:
