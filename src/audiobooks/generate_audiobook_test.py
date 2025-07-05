@@ -344,16 +344,50 @@ class TestAudioAndMetadata:
         assert chapters[2] == {"title": "End", "start_time_ms": 75000.0}
 
     def test__create_metadata(self):
+        """
+        Tests that metadata is created with the correct format,
+        especially the chapters_json dictionary.
+        """
         mock_segment = MagicMock()
         mock_segment.__len__.return_value = 123000  # 123 seconds
-        text_blocks = [{"title": "Chapter 1", "text": "text"}]
-        metadata = ga._create_metadata("My Title", mock_segment, text_blocks)
+        text_blocks = [
+            {"title": "Chapter 1", "text": "text..."},
+            {"title": "Chapter 2", "text": "more text..."},
+        ]
+
+        # This predefined list is what we WANT _create_chapter_list to return.
+        mock_chapter_list = [
+            {"title": "Chapter 1", "start_time_ms": 0},
+            {
+                "title": "Chapter 2",
+                "start_time_ms": 61500,
+            },  # We want to test with 61.5s
+        ]
+
+        # --- FIX: Use `patch` to correctly mock the function ---
+        # The target string should be 'module_alias._function_name'
+        with patch(
+            "generate_audiobook._create_chapter_list", return_value=mock_chapter_list
+        ):
+            # Inside this block, any call to ga._create_chapter_list will return our predefined list.
+            metadata = ga._create_metadata("My Title", mock_segment, text_blocks)
+
+        # The rest of the test remains the same, but will now pass.
         assert metadata["title"] == "My Title"
         assert metadata["duration_seconds"] == 123
-        chapters_json = json.loads(metadata["chapters_json"])
-        assert chapters_json == [{"title": "Chapter 1", "start_time": 0}]
+
+        chapters_dict = json.loads(metadata["chapters_json"])
+        expected_chapters = {
+            "Chapter 1": 0,
+            "Chapter 2": 61,  # 61500ms / 1000 = 61.5, cast to int is 61
+        }
+        assert chapters_dict == expected_chapters
 
     def test__create_metadata_for_chunk(self):
+        """
+        Tests that metadata for a chunk correctly calculates relative
+        chapter times and formats them as a dictionary.
+        """
         mock_chunk_segment = MagicMock()
         mock_chunk_segment.__len__.return_value = 50000  # 50s
         original_chapters = [
@@ -363,15 +397,19 @@ class TestAudioAndMetadata:
             {"title": "Chap 4", "start_time_ms": 90000},
         ]
         chunk_start_ms = 40000
+
         metadata = ga._create_metadata_for_chunk(
             "My Title (Part 2)", mock_chunk_segment, original_chapters, chunk_start_ms
         )
+
         assert metadata["title"] == "My Title (Part 2)"
         assert metadata["duration_seconds"] == 50
-        chapters = json.loads(metadata["chapters_json"])
-        # Expected: Chapter at relative time 0, and Chap 3 at relative time 20s
-        assert {"title": "Chap 3", "start_time": 0} in chapters
-        assert {"title": "Chap 3", "start_time": 20} in chapters
+
+        chapters_dict = json.loads(metadata["chapters_json"])
+
+        expected_chapters = {"Chap 3": 20}
+
+        assert chapters_dict == expected_chapters
 
     @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=True)

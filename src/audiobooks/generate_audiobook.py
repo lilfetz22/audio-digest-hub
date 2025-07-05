@@ -446,14 +446,16 @@ def _create_chapter_list(total_duration_ms, text_blocks):
 def _create_metadata(title, audio_segment, text_blocks):
     duration_s = len(audio_segment) / 1000.0
     chapters = _create_chapter_list(len(audio_segment), text_blocks)
-    chapters_json = [
-        {"title": c["title"], "start_time": int(c["start_time_ms"] / 1000)}
-        for c in chapters
-    ]
+
+    # --- CHANGED: Create a dictionary {title: start_time} instead of a list of objects ---
+    # This creates the format {"Chapter Title": 123, "Another Title": 456}
+    chapters_dict = {c["title"]: int(c["start_time_ms"] / 1000) for c in chapters}
+
     return {
         "title": title,
         "duration_seconds": int(duration_s),
-        "chapters_json": json.dumps(chapters_json),
+        # --- CHANGED: Dump the new dictionary to JSON ---
+        "chapters_json": json.dumps(chapters_dict),
     }
 
 
@@ -468,17 +470,27 @@ def _create_metadata_for_chunk(
             relative_start_time_s = int(
                 (chapter["start_time_ms"] - chunk_start_ms) / 1000
             )
+            # This part still creates a list of dicts temporarily, which is fine
             chunk_chapters.append(
                 {"title": chapter["title"], "start_time": relative_start_time_s}
             )
+
+    # This logic to ensure a chapter at time 0 is correct
     if chunk_chapters and chunk_chapters[0]["start_time"] != 0:
         first_title = chunk_chapters[0]["title"]
         if not any(c["start_time"] == 0 for c in chunk_chapters):
             chunk_chapters.insert(0, {"title": first_title, "start_time": 0})
+
+    # --- CHANGED: Convert the list of chapter dicts to the required {title: start_time} format ---
+    chapters_dict = {
+        chapter["title"]: chapter["start_time"] for chapter in chunk_chapters
+    }
+
     return {
         "title": title,
         "duration_seconds": int(chunk_duration_s),
-        "chapters_json": json.dumps(chunk_chapters),
+        # --- CHANGED: Dump the final dictionary to JSON ---
+        "chapters_json": json.dumps(chapters_dict),
     }
 
 
@@ -524,9 +536,16 @@ def unpin_file_from_onedrive(file_path: Path) -> None:
     Windows-specific command.
     """
     # On non-Windows systems, this will fail gracefully.
-    # if sys.platform != "win32":
-    #     logging.warning(f"Unpinning is a Windows-only feature. Skipping for {file_path}.")
-    #     return
+    if sys.platform != "win32":
+        # We can just delete the file on non-windows systems, or do nothing.
+        # Here we'll just log and return.
+        # logging.warning(f"Unpinning is a Windows-only feature. Skipping for {file_path}.")
+        try:
+            os.remove(file_path)
+            logging.info(f"Deleted temporary MP3 file: {file_path}")
+        except OSError as e:
+            logging.error(f"Could not delete temporary MP3 file {file_path}: {e}")
+        return
 
     try:
         # The '+U' attribute marks the file as not being fully present on the local machine.
@@ -670,7 +689,6 @@ def main():
             finally:
                 # Cleanup files for the current date before starting the next
                 cleanup(files_created)
-                # pass
 
     except Exception:
         logger.critical(

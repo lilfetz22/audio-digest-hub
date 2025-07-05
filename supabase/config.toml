@@ -1,1 +1,13 @@
 project_id = "fpflgstvoztlbmowvpeo"
+
+[functions.audiobooks]
+# This line ensures the 'audiobooks' function does not require a Supabase JWT
+verify_jwt = false
+
+[functions.cleanup]
+# This line ensures the 'cleanup' function does not require a Supabase JWT
+verify_jwt = false
+
+[functions.sources]
+# This line ensures the 'sources' function does not require a Supabase JWT
+verify_jwt = false
