@@ -33,3 +33,4 @@ src/audiobooks/token.json
 # temp audio files
 *.wav
 *.mp3
+src/audiobooks/run_audiobook_generator.bat
