@@ -139,6 +139,38 @@ def fetch_sources(api_url, api_key):
         sys.exit(1)
 
 
+def check_existing_audiobook(api_url, api_key, title):
+    """Check if an audiobook with the same title already exists."""
+    logger.info(f"Checking if audiobook '{title}' already exists...")
+    headers = {"Authorization": f"Bearer {api_key}"}
+    url = f"{api_url}/audiobooks"
+    
+    try:
+        # Get all audiobooks for the user
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            logger.warning(f"API returned status {response.status_code}. Proceeding with generation to avoid blocking.")
+            return False
+            
+        audiobooks = response.json()
+        
+        # Check if any audiobook has the same title
+        for audiobook in audiobooks:
+            if audiobook.get('title') == title:
+                logger.info(f"Audiobook '{title}' already exists. Skipping generation.")
+                return True
+        
+        logger.info(f"No existing audiobook found with title '{title}'. Proceeding with generation.")
+        return False
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error checking for existing audiobook: {e}")
+        # If we can't check, proceed anyway to avoid blocking the process
+        logger.info("Proceeding with generation due to API error.")
+        return False
+
+
 def upload_audiobook(api_url, api_key, filepath, metadata):
     """Uploads a single audio file and its metadata."""
     logger.info(f"Uploading '{filepath}' to the web application...")
@@ -665,6 +697,12 @@ def main():
             files_created = []
 
             try:
+                # Check if audiobook already exists for this date
+                base_title = f"Daily Digest for {date_str}"
+                if check_existing_audiobook(config["api_url"], config["api_key"], base_title):
+                    logger.info(f"Skipping {date_str} - audiobook already exists.")
+                    continue
+
                 full_text, text_blocks = process_emails(
                     gmail_service, sources, date_str
                 )

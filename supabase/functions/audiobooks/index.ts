@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -12,7 +11,7 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
       { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -63,78 +62,103 @@ serve(async (req) => {
       .update({ last_used_at: new Date().toISOString() })
       .eq('key_hash', keyHash)
 
-    // Parse multipart form data
-    const formData = await req.formData()
-    const audioFile = formData.get('audio_file') as File
-    const metadataString = formData.get('metadata') as string
-
-    if (!audioFile || !metadataString) {
-      return new Response(
-        JSON.stringify({ error: 'Missing audio_file or metadata' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Parse metadata
-    let metadata
-    try {
-      metadata = JSON.parse(metadataString)
-    } catch (error) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid metadata JSON' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Generate unique file path
-    const audioBookId = crypto.randomUUID()
-    const filePath = `${apiKeyData.user_id}/${audioBookId}.mp3`
-
-    // Upload file to storage
-    const { error: uploadError } = await supabaseClient.storage
-      .from('audiobooks')
-      .upload(filePath, audioFile, {
-        contentType: 'audio/mpeg',
-        upsert: false
-      })
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to upload audio file' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Insert audiobook record
-    const { error: dbError } = await supabaseClient
-      .from('audiobooks')
-      .insert({
-        id: audioBookId,
-        user_id: apiKeyData.user_id,
-        title: metadata.title,
-        duration_seconds: metadata.duration_seconds,
-        storage_path: filePath,
-        chapters_json: metadata.chapters_json || {}
-      })
-
-    if (dbError) {
-      console.error('Database error:', dbError)
-      // Try to clean up uploaded file
-      await supabaseClient.storage
+    // Handle GET request for checking existing audiobooks
+    if (req.method === 'GET') {
+      const { data: audiobooks, error: fetchError } = await supabaseClient
         .from('audiobooks')
-        .remove([filePath])
-      
+        .select('id, title, created_at')
+        .eq('user_id', apiKeyData.user_id)
+        .order('created_at', { ascending: false })
+
+      if (fetchError) {
+        console.error('Fetch error:', fetchError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch audiobooks' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       return new Response(
-        JSON.stringify({ error: 'Failed to create audiobook record' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify(audiobooks),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    return new Response(
-      JSON.stringify({ status: 'success', message: 'Audiobook created successfully.' }),
-      { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    // Handle POST request for uploading new audiobooks
+    if (req.method === 'POST') {
+      // Parse multipart form data
+      const formData = await req.formData()
+      const audioFile = formData.get('audio_file') as File
+      const metadataString = formData.get('metadata') as string
+
+      if (!audioFile || !metadataString) {
+        return new Response(
+          JSON.stringify({ error: 'Missing audio_file or metadata' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Parse metadata
+      let metadata
+      try {
+        metadata = JSON.parse(metadataString)
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid metadata JSON' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Generate unique file path
+      const audioBookId = crypto.randomUUID()
+      const filePath = `${apiKeyData.user_id}/${audioBookId}.mp3`
+
+      // Upload file to storage
+      const { error: uploadError } = await supabaseClient.storage
+        .from('audiobooks')
+        .upload(filePath, audioFile, {
+          contentType: 'audio/mpeg',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to upload audio file' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Insert audiobook record
+      const { error: dbError } = await supabaseClient
+        .from('audiobooks')
+        .insert({
+          id: audioBookId,
+          user_id: apiKeyData.user_id,
+          title: metadata.title,
+          duration_seconds: metadata.duration_seconds,
+          storage_path: filePath,
+          chapters_json: metadata.chapters_json || {}
+        })
+
+      if (dbError) {
+        console.error('Database error:', dbError)
+        // Try to clean up uploaded file
+        await supabaseClient.storage
+          .from('audiobooks')
+          .remove([filePath])
+        
+        return new Response(
+          JSON.stringify({ error: 'Failed to create audiobook record' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      return new Response(
+        JSON.stringify({ status: 'success', message: 'Audiobook created successfully.' }),
+        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
   } catch (error) {
     console.error('Error:', error)
