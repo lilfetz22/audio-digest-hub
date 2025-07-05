@@ -49,15 +49,18 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     
     const handlePlay = () => {
       setIsPlaying(true);
+      setIsLoading(false);
       setError(null);
     };
     
     const handlePause = () => {
       setIsPlaying(false);
+      setIsLoading(false);
     };
     
     const handleEnded = () => {
       setIsPlaying(false);
+      setIsLoading(false);
     };
 
     const handleLoadStart = () => {
@@ -90,6 +93,11 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       setCurrentTime(audio.currentTime);
     };
 
+    const handlePlaying = () => {
+      setIsLoading(false);
+      setIsPlaying(true);
+    };
+
     // Add all event listeners
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
@@ -103,6 +111,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     audio.addEventListener('waiting', handleWaiting);
     audio.addEventListener('seeking', handleSeeking);
     audio.addEventListener('seeked', handleSeeked);
+    audio.addEventListener('playing', handlePlaying);
 
     // Initial sync
     syncAudioState();
@@ -120,6 +129,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('seeking', handleSeeking);
       audio.removeEventListener('seeked', handleSeeked);
+      audio.removeEventListener('playing', handlePlaying);
     };
   }, [audiobook, syncAudioState, isSeeking]);
 
@@ -165,7 +175,9 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
         audio.pause();
       } else {
         setIsLoading(true);
+        setError(null);
         await audio.play();
+        // Note: The loading state will be cleared by the 'playing' event listener
       }
     } catch (error) {
       console.error('Error toggling play/pause:', error);

@@ -64,13 +64,28 @@ const Player = () => {
 
       if (error) throw error;
       
+      // Parse chapters_json if it's a string
+      let chaptersData: Record<string, number> | null = null;
+      if (data.chapters_json) {
+        try {
+          if (typeof data.chapters_json === 'string') {
+            chaptersData = JSON.parse(data.chapters_json);
+          } else {
+            chaptersData = data.chapters_json as Record<string, number>;
+          }
+        } catch (parseError) {
+          console.error('Error parsing chapters_json:', parseError);
+          chaptersData = null;
+        }
+      }
+      
       const transformedData: Audiobook = {
         id: data.id,
         title: data.title,
         duration_seconds: data.duration_seconds,
         last_playback_position_seconds: data.last_playback_position_seconds || 0,
         storage_path: data.storage_path,
-        chapters_json: data.chapters_json as Record<string, number> | null
+        chapters_json: chaptersData
       };
       
       setAudiobook(transformedData);
@@ -127,6 +142,15 @@ const Player = () => {
 
   const chapters = Object.entries(audiobook.chapters_json || {}).sort(([, a], [, b]) => a - b);
 
+  // Debug logging for chapters
+  console.log('Chapters data:', audiobook.chapters_json);
+  console.log('Parsed chapters:', chapters);
+
+  // Filter out invalid chapters (where startTime is not a valid number)
+  const validChapters = chapters.filter(([, startTime]) => 
+    typeof startTime === 'number' && !isNaN(startTime) && isFinite(startTime)
+  );
+
   return (
     <div className="px-4 py-6 max-w-4xl mx-auto">
       <Button
@@ -173,7 +197,7 @@ const Player = () => {
 
         <div>
           <ChaptersList
-            chapters={chapters}
+            chapters={validChapters}
             currentTime={currentTime}
             onJumpToChapter={seekTo}
             formatTime={formatTime}
