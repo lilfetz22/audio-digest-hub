@@ -30,6 +30,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 TEMP_WAV_FILE = "temp_output.wav"
 UPLOAD_MP3_BASENAME = "temp_output"
+ARCHIVE_FOLDER = "archive_mp3"
 
 TTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
 TTS_CLIENT = None
@@ -350,6 +351,11 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
 
     logger.info(f"Using base filename: '{date_specific_basename}' for this run.")
 
+    # Create archive folder if it doesn't exist
+    if not os.path.exists(ARCHIVE_FOLDER):
+        os.makedirs(ARCHIVE_FOLDER)
+        logger.info(f"Created archive folder: {ARCHIVE_FOLDER}")
+
     logger.info("Starting Coqui-TTS audio generation...")
     # Determine which voice to use: custom file or default speaker
     speaker_wav = (
@@ -407,7 +413,7 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
         base_title = f"Daily Digest for {date_str}"
         if mp3_size_mb <= MAX_UPLOAD_SIZE_MB:
             logger.info("MP3 size is within the limit. Uploading as a single file.")
-            filepath = f"{date_specific_basename}.mp3"
+            filepath = os.path.join(ARCHIVE_FOLDER, f"{date_specific_basename}.mp3")
             full_audio_segment.export(filepath, format="mp3")
             files_to_cleanup.append(filepath)
             metadata = _create_metadata(base_title, full_audio_segment, text_blocks)
@@ -428,8 +434,8 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
                 start_ms = i * chunk_duration_ms
                 end_ms = min((i + 1) * chunk_duration_ms, len(full_audio_segment))
                 audio_chunk = full_audio_segment[start_ms:end_ms]
-                chunk_filepath = (
-                    f"{date_specific_basename}_part_{i+1}_of_{num_chunks}.mp3"
+                chunk_filepath = os.path.join(
+                    ARCHIVE_FOLDER, f"{date_specific_basename}_part_{i+1}_of_{num_chunks}.mp3"
                 )
                 logger.info(
                     f"Exporting chunk {i+1}: {chunk_filepath} ({start_ms}ms to {end_ms}ms)"
@@ -455,7 +461,7 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
         )
         return [
             f
-            for f in [TEMP_WAV_FILE, f"{UPLOAD_MP3_BASENAME}*.mp3"]
+            for f in [TEMP_WAV_FILE, os.path.join(ARCHIVE_FOLDER, f"{UPLOAD_MP3_BASENAME}*.mp3")]
             if os.path.exists(f)
         ]
 
