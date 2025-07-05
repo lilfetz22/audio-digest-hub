@@ -33,11 +33,27 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     setPlaybackRate(audio.playbackRate);
   }, []);
 
+  // Monitor loading state and provide fallback
+  useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        console.log('Loading state timeout - forcing clear');
+        setIsLoading(false);
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
+
+  // Set up audio element event listeners when audio element becomes available
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio) {
+      console.log('Audio setup: No audio element available yet');
+      return;
+    }
 
-    console.log('useAudioPlayer: Setting up event listeners for audio element');
+    console.log('Audio setup: Audio element found, setting up event listeners');
 
     const updateTime = () => {
       if (!isSeeking) {
@@ -125,13 +141,13 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     audio.addEventListener('seeked', handleSeeked);
     audio.addEventListener('playing', handlePlaying);
 
-    console.log('useAudioPlayer: Event listeners attached');
+    console.log('Audio setup: Event listeners attached');
 
     // Initial sync
     syncAudioState();
 
     return () => {
-      console.log('useAudioPlayer: Cleaning up event listeners');
+      console.log('Audio setup: Cleaning up event listeners');
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('loadeddata', updateDuration);
@@ -146,19 +162,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       audio.removeEventListener('seeked', handleSeeked);
       audio.removeEventListener('playing', handlePlaying);
     };
-  }, [audiobook?.id]); // Only recreate when audiobook ID changes
-
-  // Monitor loading state and provide fallback
-  useEffect(() => {
-    if (isLoading) {
-      const timeout = setTimeout(() => {
-        console.log('Loading state timeout - forcing clear');
-        setIsLoading(false);
-      }, 10000); // 10 second timeout
-
-      return () => clearTimeout(timeout);
-    }
-  }, [isLoading]);
+  }, [audioRef.current]); // Only depend on the audio element itself
 
   // Save playback position every 5 seconds when playing
   useEffect(() => {
@@ -210,7 +214,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     });
 
     try {
-      if (isPlaying) {
+      if (!audio.paused) {
         console.log('togglePlayPause: Pausing audio');
         audio.pause();
       } else {
@@ -218,20 +222,17 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
         setIsLoading(true);
         setError(null);
         
-        // Add a timeout fallback to clear loading state
         const loadingTimeout = setTimeout(() => {
           console.log('Loading timeout - clearing loading state');
           setIsLoading(false);
-        }, 5000); // 5 second timeout
+        }, 5000);
         
         console.log('togglePlayPause: Calling audio.play()');
         await audio.play();
         console.log('togglePlayPause: audio.play() completed successfully');
         
-        // Clear the timeout since play was successful
         clearTimeout(loadingTimeout);
         
-        // Clear loading state immediately after successful play
         setIsLoading(false);
         console.log('togglePlayPause: Loading state cleared');
       }
