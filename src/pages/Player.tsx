@@ -173,6 +173,15 @@ const Player = () => {
                 ref={audioRef}
                 src={audioUrl}
                 onLoadedData={handleLoadedData}
+                preload="metadata"
+                controls={false}
+                onPlay={() => console.log('Audio onPlay event')}
+                onPause={() => console.log('Audio onPause event')}
+                onLoadStart={() => console.log('Audio onLoadStart event')}
+                onCanPlay={() => console.log('Audio onCanPlay event')}
+                onError={(e) => console.log('Audio onError event', e)}
+                onWaiting={() => console.log('Audio onWaiting event')}
+                onPlaying={() => console.log('Audio onPlaying event')}
               />
 
               <PlayerControls

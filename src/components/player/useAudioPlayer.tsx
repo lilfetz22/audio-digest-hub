@@ -37,6 +37,8 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    console.log('useAudioPlayer: Setting up event listeners for audio element');
+
     const updateTime = () => {
       if (!isSeeking) {
         setCurrentTime(audio.currentTime);
@@ -123,10 +125,13 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
     audio.addEventListener('seeked', handleSeeked);
     audio.addEventListener('playing', handlePlaying);
 
+    console.log('useAudioPlayer: Event listeners attached');
+
     // Initial sync
     syncAudioState();
 
     return () => {
+      console.log('useAudioPlayer: Cleaning up event listeners');
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('loadeddata', updateDuration);
@@ -141,7 +146,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       audio.removeEventListener('seeked', handleSeeked);
       audio.removeEventListener('playing', handlePlaying);
     };
-  }, [audiobook, syncAudioState, isSeeking]);
+  }, [audiobook?.id]); // Only recreate when audiobook ID changes
 
   // Monitor loading state and provide fallback
   useEffect(() => {
@@ -190,12 +195,26 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
 
   const togglePlayPause = async () => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio) {
+      console.log('togglePlayPause: No audio element found');
+      return;
+    }
+
+    console.log('togglePlayPause: Starting, isPlaying =', isPlaying);
+    console.log('togglePlayPause: Audio element state:', {
+      paused: audio.paused,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+      currentSrc: audio.currentSrc,
+      src: audio.src
+    });
 
     try {
       if (isPlaying) {
+        console.log('togglePlayPause: Pausing audio');
         audio.pause();
       } else {
+        console.log('togglePlayPause: Starting play, setting loading state');
         setIsLoading(true);
         setError(null);
         
@@ -205,13 +224,16 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
           setIsLoading(false);
         }, 5000); // 5 second timeout
         
+        console.log('togglePlayPause: Calling audio.play()');
         await audio.play();
+        console.log('togglePlayPause: audio.play() completed successfully');
         
         // Clear the timeout since play was successful
         clearTimeout(loadingTimeout);
         
         // Clear loading state immediately after successful play
         setIsLoading(false);
+        console.log('togglePlayPause: Loading state cleared');
       }
     } catch (error) {
       console.error('Error toggling play/pause:', error);
