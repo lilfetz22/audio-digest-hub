@@ -481,6 +481,86 @@ class TestAudioAndMetadata:
     @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=True)
     @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    @patch("generate_audiobook.os.makedirs")
+    def test_generate_audio_creates_archive_folder(
+        self, m_makedirs, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
+    ):
+        """Test that the archive folder is created when it doesn't exist."""
+        mock_audio_segment.export.return_value.read.return_value = b"A" * (1024 * 1024)
+        config = {
+            "api_url": "url",
+            "api_key": "key",
+            "reference_voice_file": "path/to/voice.wav",
+        }
+        
+        # Mock that archive folder doesn't exist initially
+        m_exists.side_effect = [False, True]  # First call for folder, second for voice file
+        
+        ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
+        
+        # Should create the archive folder
+        m_makedirs.assert_called_once_with(ga.ARCHIVE_FOLDER)
+
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_audio_uses_archive_folder_for_single_file(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
+    ):
+        """Test that single MP3 files are saved to the archive folder."""
+        mock_audio_segment.export.return_value.read.return_value = b"A" * (1024 * 1024)
+        config = {
+            "api_url": "url",
+            "api_key": "key",
+            "reference_voice_file": "path/to/voice.wav",
+        }
+        
+        files_created = ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
+        
+        # Check that the file path includes the archive folder
+        expected_filepath = os.path.join(ga.ARCHIVE_FOLDER, "digest_d.mp3")
+        assert expected_filepath in files_created
+        
+        # Check that upload was called with the correct filepath
+        m_upload.assert_called_once()
+        call_args = m_upload.call_args
+        assert call_args[0][2] == expected_filepath  # filepath is the third argument
+
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_audio_uses_archive_folder_for_chunked_files(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
+    ):
+        """Test that chunked MP3 files are saved to the archive folder."""
+        mock_audio_segment.__len__.return_value = 300000
+        mock_audio_segment.export.return_value.read.return_value = b"A" * int(
+            ga.MAX_UPLOAD_SIZE_MB * 1.5 * 1024 * 1024
+        )
+        mock_audio_segment.__getitem__.return_value = mock_audio_segment
+        config = {"api_url": "url", "api_key": "key", "reference_voice_file": "v.wav"}
+        date_str = "2023-01-01"
+
+        files_created = ga.generate_and_upload_audio(
+            "text", [{"title": "t", "text": "t"}], config, date_str
+        )
+        
+        # Check that chunk files are in the archive folder
+        expected_part1 = os.path.join(ga.ARCHIVE_FOLDER, "digest_2023-01-01_part_1_of_2.mp3")
+        expected_part2 = os.path.join(ga.ARCHIVE_FOLDER, "digest_2023-01-01_part_2_of_2.mp3")
+        
+        assert expected_part1 in files_created
+        assert expected_part2 in files_created
+        
+        # Check that uploads were called with correct filepaths
+        assert m_upload.call_count == 2
+        upload_calls = m_upload.call_args_list
+        assert upload_calls[0][0][2] == expected_part1  # filepath is the third argument
+        assert upload_calls[1][0][2] == expected_part2
+
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
     def test_generate_audio_uses_reference_voice(
         self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
     ):
@@ -532,8 +612,8 @@ class TestAudioAndMetadata:
             "text", [{"title": "t", "text": "t"}], config, date_str
         )
         base_name = f"digest_{date_str}"
-        part1_name = f"{base_name}_part_1_of_2.mp3"
-        part2_name = f"{base_name}_part_2_of_2.mp3"
+        part1_name = os.path.join(ga.ARCHIVE_FOLDER, f"{base_name}_part_1_of_2.mp3")
+        part2_name = os.path.join(ga.ARCHIVE_FOLDER, f"{base_name}_part_2_of_2.mp3")
 
         assert m_upload.call_count == 2
         # Check call arguments for both chunk uploads
@@ -696,6 +776,21 @@ class TestCleanup:
         )
         m_remove.assert_called_once_with("temp.wav")
         m_unpin.assert_called_once_with(Path("audio.mp3"))
+
+    @patch("generate_audiobook.unpin_file_from_onedrive")
+    @patch("generate_audiobook.os.remove")
+    @patch("generate_audiobook.os.path.exists", return_value=True)
+    def test_cleanup_handles_archive_folder_files(self, m_exists, m_remove, m_unpin):
+        """Test that cleanup handles MP3 files in the archive folder correctly."""
+        archive_mp3_file = os.path.join(ga.ARCHIVE_FOLDER, "digest_2023-01-01.mp3")
+        files_to_clean = [archive_mp3_file, "temp.wav"]
+        ga.cleanup(files_to_clean)
+
+        m_exists.assert_has_calls(
+            [call(archive_mp3_file), call("temp.wav")]
+        )
+        m_remove.assert_called_once_with("temp.wav")
+        m_unpin.assert_called_once_with(Path(archive_mp3_file))
 
     @patch("generate_audiobook.os.remove", side_effect=OSError("Permission denied"))
     @patch("generate_audiobook.os.path.exists", return_value=True)
