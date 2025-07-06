@@ -352,9 +352,8 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
     logger.info(f"Using base filename: '{date_specific_basename}' for this run.")
 
     # Create archive folder if it doesn't exist
-    if not os.path.exists(ARCHIVE_FOLDER):
-        os.makedirs(ARCHIVE_FOLDER)
-        logger.info(f"Created archive folder: {ARCHIVE_FOLDER}")
+    os.makedirs(ARCHIVE_FOLDER, exist_ok=True)
+    logger.info(f"Archive folder ready: {ARCHIVE_FOLDER}")
 
     logger.info("Starting Coqui-TTS audio generation...")
     # Determine which voice to use: custom file or default speaker

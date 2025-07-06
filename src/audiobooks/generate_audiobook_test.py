@@ -493,13 +493,31 @@ class TestAudioAndMetadata:
             "reference_voice_file": "path/to/voice.wav",
         }
         
-        # Mock that archive folder doesn't exist initially
-        m_exists.side_effect = [False, True]  # First call for folder, second for voice file
-        
         ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
         
-        # Should create the archive folder
-        m_makedirs.assert_called_once_with(ga.ARCHIVE_FOLDER)
+        # Should create the archive folder with exist_ok=True
+        m_makedirs.assert_called_once_with(ga.ARCHIVE_FOLDER, exist_ok=True)
+
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    @patch("generate_audiobook.os.makedirs")
+    def test_generate_audio_logs_archive_folder_ready(
+        self, m_makedirs, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment, caplog
+    ):
+        """Test that the function logs when the archive folder is ready."""
+        mock_audio_segment.export.return_value.read.return_value = b"A" * (1024 * 1024)
+        config = {
+            "api_url": "url",
+            "api_key": "key",
+            "reference_voice_file": "path/to/voice.wav",
+        }
+        
+        with caplog.at_level(logging.INFO):
+            ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
+        
+        # Should log that the archive folder is ready
+        assert f"Archive folder ready: {ga.ARCHIVE_FOLDER}" in caplog.text
 
     @patch("generate_audiobook.upload_audiobook", return_value=True)
     @patch("os.path.exists", return_value=True)
