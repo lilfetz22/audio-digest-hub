@@ -1,52 +1,37 @@
 ==================================================== FAILURES =====================================================
-___________________________ TestApiInteractions.test_check_existing_audiobook_api_error ___________________________
+__________________________ TestAudioAndMetadata.test_generate_audio_uses_default_speaker __________________________
 
-self = <generate_audiobook_test.TestApiInteractions object at 0x0000022567F9B080>
-requests_mock = <requests_mock.mocker.Mocker object at 0x0000022567FBEA80>
-caplog = <_pytest.logging.LogCaptureFixture object at 0x0000022568009400>
+self = <generate_audiobook_test.TestAudioAndMetadata object at 0x000002140ECDD850>
+m_open = <MagicMock name='open' id='2285171898944'>, m_exists = <MagicMock name='exists' id='2285171898704'>
+m_upload = <MagicMock name='upload_audiobook' id='2285171447072'>, mock_tts_client = <MagicMock id='2285171706096'>
+mock_audio_segment = <MagicMock name='from_wav()' id='2285171265744'>
 
-    def test_check_existing_audiobook_api_error(self, requests_mock, caplog):
-        """Test that check_existing_audiobook handles API errors gracefully."""
-        requests_mock.get(
-            "https://fake-api.com/audiobooks",
-            status_code=500,
-            text="Internal Server Error"
-        )
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=False)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_audio_uses_default_speaker(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment
+    ):
+        mock_audio_segment.export.return_value.read.return_value = b"A" * (1024 * 1024)
+        config = {
+            "api_url": "url",
+            "api_key": "key",
+            "reference_voice_file": "path/that/does/not/exist.wav",
+        }
+>       ga.generate_and_upload_audio("text", [{"title": "t", "text": "t"}], config, "d")
 
-        with caplog.at_level(logging.ERROR):
-            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
+generate_audiobook_test.py:591:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+generate_audiobook.py:356: in generate_and_upload_audio
+    os.makedirs(ARCHIVE_FOLDER)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-        assert result is False
->       assert "API returned status 500. Proceeding with generation to avoid blocking." in caplog.text
-E       AssertionError: assert 'API returned status 500. Proceeding with generation to avoid blocking.' in ''
-E        +  where '' = <_pytest.logging.LogCaptureFixture object at 0x0000022568009400>.text
+name = 'archive_mp3', mode = 511, exist_ok = False
 
-generate_audiobook_test.py:239: AssertionError
-_________________________ TestApiInteractions.test_check_existing_audiobook_network_error _________________________
+>   ???
+E   FileExistsError: [WinError 183] Cannot create a file when that file already exists: 'archive_mp3'
 
-self = <generate_audiobook_test.TestApiInteractions object at 0x0000022571FA4B00>
-requests_mock = <requests_mock.mocker.Mocker object at 0x000002256800A270>
-caplog = <_pytest.logging.LogCaptureFixture object at 0x000002256800A210>
-
-    def test_check_existing_audiobook_network_error(self, requests_mock, caplog):
-        """Test that check_existing_audiobook handles network errors gracefully."""
-        requests_mock.get(
-            "https://fake-api.com/audiobooks",
-            exc=requests.exceptions.ConnectionError("Connection failed")
-        )
-
-        with caplog.at_level(logging.ERROR):
-            result = ga.check_existing_audiobook("https://fake-api.com", "fake_key", "Daily Digest for 2025-07-04")
-
-        assert result is False
-        assert "Error checking for existing audiobook:" in caplog.text
->       assert "Proceeding with generation due to API error." in caplog.text
-E       AssertionError: assert 'Proceeding with generation due to API error.' in 'ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existing audiobook: Connection failed\n'
-E        +  where 'ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existing audiobook: Connection failed\n' = <_pytest.logging.LogCaptureFixture object at 0x000002256800A210>.text
-
-generate_audiobook_test.py:253: AssertionError
------------------------------------------------- Captured log call ------------------------------------------------
-ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existing audiobook: Connection failed
+<frozen os>:225: FileExistsError
 ================================================ warnings summary =================================================
 ..\..\audiogeneratorenv\Lib\site-packages\pydub\utils.py:14
   C:\Users\WilliamFetzner\OneDrive - Q-Centrix, LLC\audio-digest-hub\audiogeneratorenv\Lib\site-packages\pydub\utils.py:14: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
@@ -58,6 +43,4 @@ ERROR    generate_audiobook:generate_audiobook.py:168 Error checking for existin
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ============================================= short test summary info =============================================
-FAILED generate_audiobook_test.py::TestApiInteractions::test_check_existing_audiobook_api_error - AssertionError: assert 'API returned status 500. Proceeding with generation to avoid blocking.' in ''
-FAILED generate_audiobook_test.py::TestApiInteractions::test_check_existing_audiobook_network_error - AssertionError: assert 'Proceeding with generation due to API error.' in 'ERROR    generate_audiobook:generate_...
-==================================== 2 failed, 40 passed, 2 warnings in 18.02s ====================================
+FAILED generate_audiobook_test.py::TestAudioAndMetadata::test_generate_audio_uses_default_speaker - FileExistsError: [WinError 183] Cannot create a file when that file already exists: 'archive_mp3'
