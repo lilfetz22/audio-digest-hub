@@ -11,6 +11,7 @@ import re
 import logging
 import math
 import subprocess
+import time
 from pathlib import Path
 
 # 3rd Party Libraries
@@ -145,26 +146,30 @@ def check_existing_audiobook(api_url, api_key, title):
     logger.info(f"Checking if audiobook '{title}' already exists...")
     headers = {"Authorization": f"Bearer {api_key}"}
     url = f"{api_url}/audiobooks"
-    
+
     try:
         # Get all audiobooks for the user
         response = requests.get(url, headers=headers, timeout=30)
-        
+
         if response.status_code != 200:
-            logger.warning(f"API returned status {response.status_code}. Proceeding with generation to avoid blocking.")
+            logger.warning(
+                f"API returned status {response.status_code}. Proceeding with generation to avoid blocking."
+            )
             return False
-            
+
         audiobooks = response.json()
-        
+
         # Check if any audiobook has the same title
         for audiobook in audiobooks:
-            if audiobook.get('title') == title:
+            if audiobook.get("title") == title:
                 logger.info(f"Audiobook '{title}' already exists. Skipping generation.")
                 return True
-        
-        logger.info(f"No existing audiobook found with title '{title}'. Proceeding with generation.")
+
+        logger.info(
+            f"No existing audiobook found with title '{title}'. Proceeding with generation."
+        )
         return False
-        
+
     except requests.exceptions.RequestException as e:
         logger.error(f"Error checking for existing audiobook: {e}")
         # If we can't check, proceed anyway to avoid blocking the process
@@ -173,29 +178,78 @@ def check_existing_audiobook(api_url, api_key, title):
 
 
 def upload_audiobook(api_url, api_key, filepath, metadata):
-    """Uploads a single audio file and its metadata."""
-    logger.info(f"Uploading '{filepath}' to the web application...")
+    """
+    Uploads a single audio file and its metadata with a retry mechanism for server errors.
+    """
+    logger.info(f"Preparing to upload '{filepath}' to the web application...")
     headers = {"Authorization": f"Bearer {api_key}"}
     url = f"{api_url}/audiobooks"
-    try:
-        with open(filepath, "rb") as audio_file:
-            files = {
-                "audio_file": (os.path.basename(filepath), audio_file, "audio/mpeg"),
-                "metadata": (None, json.dumps(metadata), "application/json"),
-            }
-            response = requests.post(url, headers=headers, files=files, timeout=300)
-            response.raise_for_status()
-            logger.info(f"Upload successful. Server response: {response.json()}")
-            return True
-    except FileNotFoundError:
-        logger.error(f"Upload failed: The file '{filepath}' was not found.")
-        return False
-    except requests.exceptions.RequestException as e:
-        logger.error(
-            f"A network/HTTP error occurred while uploading '{filepath}' to {url}",
-            exc_info=True,
-        )
-        return False
+
+    max_retries = 5
+    # The initial delay between retries, in seconds. This will double after each failed attempt.
+    base_delay_seconds = 10
+
+    for attempt in range(max_retries):
+        try:
+            with open(filepath, "rb") as audio_file:
+                files = {
+                    "audio_file": (
+                        os.path.basename(filepath),
+                        audio_file,
+                        "audio/mpeg",
+                    ),
+                    "metadata": (None, json.dumps(metadata), "application/json"),
+                }
+
+                logger.info(f"Attempt {attempt + 1} of {max_retries}: Uploading...")
+                response = requests.post(url, headers=headers, files=files, timeout=300)
+
+                # This line will raise an HTTPError for any 4xx or 5xx status codes.
+                response.raise_for_status()
+
+                logger.info(f"Upload successful. Server response: {response.json()}")
+                return True  # If successful, exit the function.
+
+        except requests.exceptions.HTTPError as e:
+            # Check if the error is a 5xx server error, which is potentially temporary.
+            if 500 <= e.response.status_code < 600:
+                logger.warning(
+                    f"Server error ({e.response.status_code}) on attempt {attempt + 1}. Retrying..."
+                )
+                # If this was the last attempt, don't wait, just let it fail.
+                if attempt < max_retries - 1:
+                    delay = base_delay_seconds * (2**attempt)  # Exponential backoff
+                    logger.info(f"Waiting for {delay} seconds before the next attempt.")
+                    time.sleep(delay)
+                # Continue to the next iteration of the loop to retry.
+                continue
+            else:
+                # It's a client error (4xx) or other non-5xx HTTP error. Do not retry.
+                logger.error(
+                    f"A non-retriable HTTP error occurred: {e}",
+                    exc_info=True,
+                )
+                return False  # Fail immediately.
+
+        except requests.exceptions.RequestException as e:
+            # Catches other network errors like timeouts or connection problems.
+            logger.warning(
+                f"A network error occurred on attempt {attempt + 1}: {e}. Retrying..."
+            )
+            if attempt < max_retries - 1:
+                delay = base_delay_seconds * (2**attempt)
+                logger.info(f"Waiting for {delay} seconds before the next attempt.")
+                time.sleep(delay)
+            # Continue to retry.
+            continue
+
+        except FileNotFoundError:
+            logger.error(f"Upload failed: The file '{filepath}' was not found.")
+            return False
+
+    # If the loop completes without a successful upload, all retries have failed.
+    logger.error(f"Failed to upload '{filepath}' after {max_retries} attempts.")
+    return False
 
 
 def initialize_tts_model():
@@ -434,7 +488,8 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
                 end_ms = min((i + 1) * chunk_duration_ms, len(full_audio_segment))
                 audio_chunk = full_audio_segment[start_ms:end_ms]
                 chunk_filepath = os.path.join(
-                    ARCHIVE_FOLDER, f"{date_specific_basename}_part_{i+1}_of_{num_chunks}.mp3"
+                    ARCHIVE_FOLDER,
+                    f"{date_specific_basename}_part_{i+1}_of_{num_chunks}.mp3",
                 )
                 logger.info(
                     f"Exporting chunk {i+1}: {chunk_filepath} ({start_ms}ms to {end_ms}ms)"
@@ -460,7 +515,10 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
         )
         return [
             f
-            for f in [TEMP_WAV_FILE, os.path.join(ARCHIVE_FOLDER, f"{UPLOAD_MP3_BASENAME}*.mp3")]
+            for f in [
+                TEMP_WAV_FILE,
+                os.path.join(ARCHIVE_FOLDER, f"{UPLOAD_MP3_BASENAME}*.mp3"),
+            ]
             if os.path.exists(f)
         ]
 
@@ -704,7 +762,9 @@ def main():
             try:
                 # Check if audiobook already exists for this date
                 base_title = f"Daily Digest for {date_str}"
-                if check_existing_audiobook(config["api_url"], config["api_key"], base_title):
+                if check_existing_audiobook(
+                    config["api_url"], config["api_key"], base_title
+                ):
                     logger.info(f"Skipping {date_str} - audiobook already exists.")
                     continue
 
