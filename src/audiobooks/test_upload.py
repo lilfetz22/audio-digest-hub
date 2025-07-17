@@ -1,20 +1,19 @@
-# test_upload.py
+# test_manual_upload.py
 import os
 import sys
 import json
 import configparser
 import requests
+import argparse
+import time
 from pydub import AudioSegment
 
 # --- Configuration & Constants ---
-INPUT_WAV_FILE = "temp_output.wav"
-UPLOAD_MP3_FILE = "temp_output.mp3"  # We will create and upload this
 CONFIG_FILE = "config.ini"
-
-# --- Replicated Functions from your original script ---
 
 
 def load_config(config_path=CONFIG_FILE):
+    """Reads configuration from the INI file."""
     if not os.path.exists(config_path):
         print(f"ERROR: Configuration file '{config_path}' not found.")
         sys.exit(1)
@@ -30,79 +29,119 @@ def load_config(config_path=CONFIG_FILE):
         sys.exit(1)
 
 
-def upload_audiobook(api_url, api_key, metadata):
-    print(f"Uploading '{UPLOAD_MP3_FILE}' to the web application...")
+def upload_audiobook(api_url, api_key, filepath, metadata):
+    """
+    Uploads a single audio file and its metadata with a retry mechanism for server errors.
+    (This function is a direct copy from the main script for accurate testing)
+    """
+    print(f"Preparing to upload '{filepath}' to the web application...")
     headers = {"Authorization": f"Bearer {api_key}"}
     url = f"{api_url}/audiobooks"
-    try:
-        # IMPORTANT: Open and upload the MP3 file
-        with open(UPLOAD_MP3_FILE, "rb") as audio_file:
-            files = {
-                # Ensure the filename and MIME type match the MP3 format
-                "audio_file": (UPLOAD_MP3_FILE, audio_file, "audio/mpeg"),
-                "metadata": (None, json.dumps(metadata), "application/json"),
-            }
-            response = requests.post(url, headers=headers, files=files, timeout=300)
-            response.raise_for_status()
-            print(f"Upload successful. Server response: {response.json()}")
-            return True
-    except Exception as e:
-        print(f"An unexpected error occurred during upload: {e}")
-        return False
 
+    max_retries = 5
+    base_delay_seconds = 10  # The initial delay, doubles after each failure
 
-# --- Main Test Logic ---
+    for attempt in range(max_retries):
+        try:
+            with open(filepath, "rb") as audio_file:
+                files = {
+                    "audio_file": (
+                        os.path.basename(filepath),
+                        audio_file,
+                        "audio/mpeg",
+                    ),
+                    "metadata": (None, json.dumps(metadata), "application/json"),
+                }
+
+                print(f"Attempt {attempt + 1} of {max_retries}: Uploading...")
+                response = requests.post(url, headers=headers, files=files, timeout=300)
+                response.raise_for_status()
+
+                print(f"Upload successful. Server response: {response.json()}")
+                return True  # Success, so we exit the function
+
+        except requests.exceptions.HTTPError as e:
+            if 500 <= e.response.status_code < 600:
+                print(
+                    f"WARNING: Server error ({e.response.status_code}) on attempt {attempt + 1}."
+                )
+                if attempt < max_retries - 1:
+                    delay = base_delay_seconds * (2**attempt)
+                    print(f"Waiting for {delay} seconds before retrying.")
+                    time.sleep(delay)
+                continue  # Go to the next attempt
+            else:
+                print(f"ERROR: A non-retriable HTTP error occurred: {e}")
+                return False  # Fail immediately for client errors
+
+        except requests.exceptions.RequestException as e:
+            print(f"WARNING: A network error occurred on attempt {attempt + 1}: {e}.")
+            if attempt < max_retries - 1:
+                delay = base_delay_seconds * (2**attempt)
+                print(f"Waiting for {delay} seconds before retrying.")
+                time.sleep(delay)
+            continue  # Go to the next attempt
+
+        except FileNotFoundError:
+            print(f"ERROR: Upload failed: The file '{filepath}' was not found.")
+            return False
+
+    print(f"ERROR: Failed to upload '{filepath}' after {max_retries} attempts.")
+    return False
 
 
 def main():
-    print("--- Starting Audiobook Upload Test (with MP3 conversion) ---")
+    """Main execution function to upload a specific MP3 file."""
+    parser = argparse.ArgumentParser(
+        description="Manually upload an audiobook MP3 file with retry logic.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "mp3_filepath",
+        help="The full path to the MP3 file you want to upload.",
+    )
+    args = parser.parse_args()
 
-    # 1. Verify the source WAV file exists
-    if not os.path.exists(INPUT_WAV_FILE):
-        print(f"ERROR: The source audio file '{INPUT_WAV_FILE}' was not found.")
+    mp3_file = args.mp3_filepath
+    print(f"--- Starting Manual Audiobook Upload for: {mp3_file} ---")
+
+    # 1. Verify the source MP3 file exists
+    if not os.path.exists(mp3_file):
+        print(f"ERROR: The source audio file '{mp3_file}' was not found.")
         sys.exit(1)
 
-    print(f"Found source audio file: {INPUT_WAV_FILE}")
-
-    # 2. Convert WAV to MP3
-    try:
-        print("Converting WAV to MP3... (This requires ffmpeg)")
-        audio = AudioSegment.from_wav(INPUT_WAV_FILE)
-        audio.export(UPLOAD_MP3_FILE, format="mp3")
-        mp3_size = os.path.getsize(UPLOAD_MP3_FILE) / (1024 * 1024)
-        print(f"Successfully created '{UPLOAD_MP3_FILE}' (Size: {mp3_size:.2f} MB)")
-    except Exception as e:
-        print(f"ERROR: Failed to convert WAV to MP3. Is ffmpeg installed correctly?")
-        print(f"Details: {e}")
-        sys.exit(1)
-
-    # 3. Load API configuration
+    # 2. Load API configuration
     config = load_config()
     print("Configuration loaded successfully.")
 
-    # 4. Create the mock metadata object
-    print("Creating mock metadata for the upload...")
-    total_duration_s = len(audio) / 1000.0
-    chapters = [
-        {"title": "Test Chapter 1: Introduction", "start_time": 0},
-        {"title": "Test Chapter 2: Main Content", "start_time": 60},
-    ]
-    test_metadata = {
-        "title": f"Manual MP3 Test - {os.path.basename(UPLOAD_MP3_FILE)}",
-        "duration_seconds": int(total_duration_s),
-        "chapters_json": json.dumps(chapters),
-    }
-    print("Generated metadata:")
-    print(json.dumps(test_metadata, indent=2))
+    # 3. Get audio duration and create metadata
+    try:
+        print("Reading audio file to generate metadata...")
+        audio = AudioSegment.from_mp3(mp3_file)
+        duration_s = len(audio) / 1000.0
 
-    # 5. Attempt the upload
-    success = upload_audiobook(config["api_url"], config["api_key"], test_metadata)
+        # Create metadata similar to the main script's format
+        # The chapter format is a JSON string of a dictionary: {"Title": startTimeInSeconds}
+        chapters_dict = {
+            "Part Start": 0,
+        }
 
-    # 6. Cleanup the temporary MP3
-    if os.path.exists(UPLOAD_MP3_FILE):
-        os.remove(UPLOAD_MP3_FILE)
-        print(f"Cleaned up temporary file: {UPLOAD_MP3_FILE}")
+        metadata = {
+            "title": f"Manual Re-upload: {os.path.basename(mp3_file)}",
+            "duration_seconds": int(duration_s),
+            "chapters_json": json.dumps(chapters_dict),
+        }
+        print("Generated metadata for upload:")
+        print(json.dumps(metadata, indent=2))
 
+    except Exception as e:
+        print(f"ERROR: Failed to read MP3 file and create metadata. Details: {e}")
+        sys.exit(1)
+
+    # 4. Attempt the upload using the resilient function
+    success = upload_audiobook(config["api_url"], config["api_key"], mp3_file, metadata)
+
+    # 5. Report final status
     if success:
         print("\n--- Test finished successfully! ---")
     else:
