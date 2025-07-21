@@ -141,6 +141,55 @@ def fetch_sources(api_url, api_key):
         sys.exit(1)
 
 
+def find_last_upload_date(api_url, api_key):
+    """Finds the last date when an audiobook was uploaded by querying the API."""
+    logger.info("Finding the last upload date from existing audiobooks...")
+    headers = {"Authorization": f"Bearer {api_key}"}
+    url = f"{api_url}/audiobooks"
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            logger.warning(f"API returned status {response.status_code}. Using yesterday as default start date.")
+            return None
+
+        audiobooks = response.json()
+        
+        if not audiobooks:
+            logger.info("No existing audiobooks found. Using yesterday as default start date.")
+            return None
+
+        # Extract dates from audiobook titles that match the "Daily Digest for YYYY-MM-DD" pattern
+        last_date = None
+        date_pattern = re.compile(r"Daily Digest for (\d{4}-\d{2}-\d{2})")
+        
+        for audiobook in audiobooks:
+            title = audiobook.get("title", "")
+            match = date_pattern.search(title)
+            if match:
+                try:
+                    date_str = match.group(1)
+                    audiobook_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if last_date is None or audiobook_date > last_date:
+                        last_date = audiobook_date
+                except ValueError:
+                    logger.warning(f"Could not parse date from title: {title}")
+                    continue
+
+        if last_date:
+            logger.info(f"Found last upload date: {last_date}")
+            return last_date
+        else:
+            logger.info("No valid dates found in existing audiobooks. Using yesterday as default start date.")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching audiobooks to find last upload date: {e}")
+        logger.info("Using yesterday as default start date due to API error.")
+        return None
+
+
 def check_existing_audiobook(api_url, api_key, title):
     """Check if an audiobook with the same title already exists."""
     logger.info(f"Checking if audiobook '{title}' already exists...")
@@ -691,6 +740,15 @@ def main():
         help="The end of the date range (YYYY-MM-DD). Defaults to yesterday if --start-date is used.",
     )
 
+    # Add a note about the default behavior
+    parser.epilog = """
+Default behavior (when no dates are specified):
+- The script will query the audiobooks API to find the last upload date
+- Start date will be the day after the last upload
+- End date will be yesterday
+- If no previous uploads exist, only yesterday will be processed
+"""
+
     args = parser.parse_args()
 
     dates_to_process = []
@@ -707,22 +765,31 @@ def main():
                 if args.end_date
                 else yesterday
             )
-            start_date = (
-                datetime.datetime.strptime(args.start_date, "%Y-%m-%d").date()
-                if args.start_date
-                else end_date
-            )
+            
+            if args.start_date:
+                # User provided a start date
+                start_date = datetime.datetime.strptime(args.start_date, "%Y-%m-%d").date()
+            else:
+                # No start date provided - need to find the last upload date
+                # We'll handle this after loading the config
+                start_date = None
 
-            if start_date > end_date:
+            if start_date and start_date > end_date:
                 logger.error(
                     f"Error: Start date ({start_date}) cannot be after end date ({end_date})."
                 )
                 sys.exit(1)
 
-            current_date = start_date
-            while current_date <= end_date:
-                dates_to_process.append(current_date)
-                current_date += datetime.timedelta(days=1)
+            if start_date:
+                # User provided start date, use it
+                current_date = start_date
+                while current_date <= end_date:
+                    dates_to_process.append(current_date)
+                    current_date += datetime.timedelta(days=1)
+            else:
+                # No start date provided - we'll determine it after loading config
+                # For now, just set the end date
+                dates_to_process = [end_date]
 
     except ValueError as e:
         logger.error(f"Error: Invalid date format. Please use YYYY-MM-DD. Details: {e}")
@@ -741,6 +808,31 @@ def main():
 
         if not verify_authentication(config["api_url"], config["api_key"]):
             sys.exit(1)
+
+        # If no start date was provided, find the last upload date and adjust the date range
+        if not args.start_date and not args.date:
+            last_upload_date = find_last_upload_date(config["api_url"], config["api_key"])
+            if last_upload_date:
+                # Start from the day after the last upload
+                start_date = last_upload_date + datetime.timedelta(days=1)
+                end_date = dates_to_process[0]  # This is yesterday from the previous logic
+                
+                if start_date > end_date:
+                    logger.info(f"Last upload date ({last_upload_date}) is recent. No new dates to process.")
+                    return
+                
+                # Recalculate the date range
+                dates_to_process = []
+                current_date = start_date
+                while current_date <= end_date:
+                    dates_to_process.append(current_date)
+                    current_date += datetime.timedelta(days=1)
+                
+                logger.info(f"Adjusted date range based on last upload: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}")
+            else:
+                # No last upload date found, keep the original logic (just yesterday)
+                logger.info("No previous uploads found. Processing yesterday only.")
+                # dates_to_process already contains yesterday, so no change needed
 
         initialize_tts_model()
         sources = fetch_sources(config["api_url"], config["api_key"])
