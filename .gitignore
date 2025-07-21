@@ -35,3 +35,9 @@ src/audiobooks/token.json
 *.mp3
 src/audiobooks/run_audiobook_generator.bat
 src/audiobooks/error from running task.txt
+
+# pycache files
+__pycache__/
+*.py[cod]
+*$py.class
+
