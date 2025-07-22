@@ -265,7 +265,7 @@ class TestApiInteractions:
             )
 
         assert result is True
-        assert f"Uploading '{filepath}'" in caplog.text
+        assert f"Preparing to upload '{filepath}'" in caplog.text
         assert "Upload successful. Server response:" in caplog.text
 
     def test_upload_audiobook_http_error(self, requests_mock, tmp_path, caplog):
@@ -282,7 +282,8 @@ class TestApiInteractions:
 
         assert result is False
         assert (
-            f"A network/HTTP error occurred while uploading '{filepath}'" in caplog.text
+            f"A non-retriable HTTP error occurred:"
+            in caplog.text
         )
 
 
@@ -650,6 +651,56 @@ class TestAudioAndMetadata:
             files = ga.generate_and_upload_audio("   ", [], {}, "d")
         assert "No text content to synthesize" in caplog.text
         assert files == []
+
+    @patch("generate_audiobook.upload_audiobook", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data=b"dummy_wav_data")
+    def test_generate_audio_skips_chunks_exceeding_token_limit(
+        self, m_open, m_exists, m_upload, mock_tts_client, mock_audio_segment, caplog
+    ):
+        """
+        Tests that chunks exceeding the XTTS token limit are skipped and a warning is logged.
+        """
+        # This chunk is valid and should be processed
+        valid_chunk = "This is a perfectly fine sentence."
+        # This chunk is deliberately long and will exceed the token limit
+        long_chunk = "s=88570519&lid=7618&elqTrackId=a761f708238e42158dbf78a26dc7fb52&elq=9fbf84b5718945219f0937c3adab8d8d&elqaid=4566&elqat=1" * 10
+
+        # Mock the sentence splitter to return our specific chunks
+        mock_tts_client.synthesizer.split_into_sentences.return_value = [valid_chunk, long_chunk]
+
+        # Mock the tokenizer's encode method to return token lists of different lengths
+        # The first call (for valid_chunk) returns a short list.
+        # The second call (for long_chunk) returns a list longer than the limit.
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.encode.side_effect = [
+            [1, 2, 3],          # Represents tokens for valid_chunk
+            [0] * 500,          # Represents tokens for long_chunk (over the limit)
+        ]
+        mock_tts_client.synthesizer.tts_model.tokenizer = mock_tokenizer
+
+        config = {
+            "api_url": "url",
+            "api_key": "key",
+            "reference_voice_file": "v.wav",
+        }
+
+        with caplog.at_level(logging.WARNING):
+            ga.generate_and_upload_audio(
+                f"{valid_chunk}\n{long_chunk}", [{"title": "t", "text": "t"}], config, "d"
+            )
+
+        # 1. Assert that the TTS synthesis function was only called ONCE (for the valid chunk)
+        mock_tts_client.tts.assert_called_once()
+
+        # 2. Assert that the call was made with the correct, valid text
+        mock_tts_client.tts.assert_called_with(
+            text=valid_chunk, language="en", speaker_wav="v.wav"
+        )
+
+        # 3. Assert that the warning for skipping the long chunk was logged
+        assert "SKIPPING CHUNK: Text is too long for TTS model" in caplog.text
+        assert f"({500} tokens > {390})" in caplog.text
 
 
 class TestMainExecution:

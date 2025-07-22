@@ -489,13 +489,41 @@ def generate_and_upload_audio(text_content, text_blocks, config, date_str):
             sc for chunk in initial_chunks for sc in validate_and_process_chunk(chunk)
         ]
         audio_chunks = []
+        # XTTS has a hard limit of ~400 tokens. We set a safe limit below that to be robust.
+        XTTS_TOKEN_LIMIT = 390
+        tokenizer = TTS_CLIENT.synthesizer.tts_model.tokenizer
+
         for i, sentence in enumerate(final_chunks):
+            # --- Start of Hard Token Limit Enforcement ---
+            # Use the model's own tokenizer to check the length before synthesis.
+            # This is the most reliable way to prevent errors from chunks that are too long.
+            try:
+                tokens = tokenizer.encode(sentence, lang="en")
+                if len(tokens) > XTTS_TOKEN_LIMIT:
+                    logger.warning(
+                        f"SKIPPING CHUNK: Text is too long for TTS model ({len(tokens)} tokens > {XTTS_TOKEN_LIMIT}). "
+                        f"Content: '{sentence[:80]}...'"
+                    )
+                    continue  # Skip this chunk.
+            except Exception as e:
+                logger.error(
+                    f"Could not tokenize chunk, skipping. Error: {e}. Content: '{sentence[:80]}...'"
+                )
+                continue
+            # --- End of Hard Token Limit Enforcement ---
+
             logger.info(
                 f"Synthesizing chunk {i + 1}/{len(final_chunks)}: '{sentence[:80]}...'"
             )
-            # Use the determined TTS arguments
-            wav_chunk = TTS_CLIENT.tts(text=sentence, language="en", **tts_kwargs)
-            audio_chunks.append(np.array(wav_chunk))
+            try:
+                wav_chunk = TTS_CLIENT.tts(text=sentence, language="en", **tts_kwargs)
+                audio_chunks.append(np.array(wav_chunk))
+            except Exception as e:
+                # This is a fallback safeguard. The token check above should prevent this.
+                logger.error(
+                    f"Unexpected error during TTS synthesis, skipping chunk. Error: {e}"
+                )
+                continue
 
         if not audio_chunks:
             logger.warning("No audio generated, content may be empty after cleaning.")
