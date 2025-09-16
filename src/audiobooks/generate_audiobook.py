@@ -29,7 +29,11 @@ from TTS.api import TTS
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
-TEMP_WAV_FILE = "temp_output.wav"
+# Use a temporary directory outside of OneDrive to avoid sync issues
+TEMP_DIR = os.path.join(os.path.expanduser("~"), "Documents", "audio_digest_temp")
+os.makedirs(TEMP_DIR, exist_ok=True)
+TEMP_WAV_FILE = os.path.join(TEMP_DIR, "temp_output.wav")
+
 UPLOAD_MP3_BASENAME = "temp_output"
 ARCHIVE_FOLDER = "archive_mp3"
 
