@@ -12,6 +12,7 @@ import logging
 import math
 import subprocess
 import time
+import glob
 from pathlib import Path
 
 # 3rd Party Libraries
@@ -43,6 +44,9 @@ MAX_UPLOAD_SIZE_MB = 15.0
 
 # NEW: Define a default speaker to use if no reference voice file is provided.
 DEFAULT_SPEAKER = "Claribel Dervla"
+
+# Raw content folder path
+RAW_CONTENT_FOLDER = "raw_content"
 
 
 # --- Core Functions (No changes in this section) ---
@@ -340,6 +344,100 @@ def authenticate_gmail(token_file, credentials_file):
 
 def remove_markdown_links(text):
     return re.sub(r"\[([^\]]+)\]\(.*?\)", r"\1", text)
+
+
+def process_raw_content_files(target_date):
+    """
+    Processes .txt files in the raw_content folder that were created on the target date.
+    Returns text blocks in the same format as email processing.
+    """
+    logger.info(f"Processing raw content files for date: {target_date.strftime('%Y-%m-%d')}")
+    
+    if not os.path.exists(RAW_CONTENT_FOLDER):
+        logger.info(f"Raw content folder '{RAW_CONTENT_FOLDER}' does not exist. Creating it.")
+        os.makedirs(RAW_CONTENT_FOLDER, exist_ok=True)
+        return "", []
+    
+    # Find all .txt files in the raw_content folder
+    txt_files = glob.glob(os.path.join(RAW_CONTENT_FOLDER, "*.txt"))
+    
+    if not txt_files:
+        logger.info(f"No .txt files found in '{RAW_CONTENT_FOLDER}' folder.")
+        return "", []
+    
+    raw_text_blocks = []
+    all_raw_text = ""
+    
+    for file_path in txt_files:
+        try:
+            # Get file creation time
+            file_stat = os.path.getctime(file_path)
+            file_creation_date = datetime.datetime.fromtimestamp(file_stat).date()
+            
+            # Check if file was created on the target date
+            if file_creation_date == target_date:
+                logger.info(f"Processing raw content file: {os.path.basename(file_path)} (created: {file_creation_date})")
+                
+                # Read file content
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.read().strip()
+                    
+                    if content:
+                        # Use filename (without extension) as the title
+                        filename = os.path.splitext(os.path.basename(file_path))[0]
+                        title = f"Raw Content: {filename}"
+                        
+                        text_block = f"\n\nRaw Content from: {filename}.\n\n{content}"
+                        raw_text_blocks.append({"text": text_block, "title": title})
+                        all_raw_text += text_block
+                        
+                        logger.info(f"Successfully processed raw content file: {filename} ({len(content)} characters)")
+                    else:
+                        logger.warning(f"Raw content file is empty: {os.path.basename(file_path)}")
+                        
+                except UnicodeDecodeError as e:
+                    logger.error(f"Could not read file {file_path} due to encoding issues: {e}")
+                except IOError as e:
+                    logger.error(f"Could not read file {file_path}: {e}")
+            else:
+                logger.debug(f"Skipping file {os.path.basename(file_path)} - created on {file_creation_date}, not target date {target_date}")
+                
+        except OSError as e:
+            logger.error(f"Could not get creation time for file {file_path}: {e}")
+    
+    if raw_text_blocks:
+        logger.info(f"Found {len(raw_text_blocks)} raw content file(s) for {target_date.strftime('%Y-%m-%d')}")
+    else:
+        logger.info(f"No raw content files found for {target_date.strftime('%Y-%m-%d')}")
+    
+    return all_raw_text, raw_text_blocks
+
+
+def process_emails_and_raw_content(service, sources, target_date_str):
+    logger.info(f"Processing emails and raw content for date: {target_date_str}")
+    target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    
+    # Process emails
+    email_text, email_blocks = process_emails(service, sources, target_date_str)
+    
+    # Process raw content files
+    raw_text, raw_blocks = process_raw_content_files(target_date)
+    
+    # Combine email and raw content
+    combined_text = email_text + raw_text
+    combined_blocks = email_blocks + raw_blocks
+    
+    if email_blocks and raw_blocks:
+        logger.info(f"Combined {len(email_blocks)} email source(s) and {len(raw_blocks)} raw content file(s)")
+    elif email_blocks:
+        logger.info(f"Found {len(email_blocks)} email source(s), no raw content files")
+    elif raw_blocks:
+        logger.info(f"Found {len(raw_blocks)} raw content file(s), no email sources")
+    else:
+        logger.info("No email sources or raw content files found")
+    
+    return combined_text, combined_blocks
 
 
 def process_emails(service, sources, target_date_str):
@@ -892,11 +990,11 @@ Default behavior (when no dates are specified):
                     logger.info(f"Skipping {date_str} - audiobook already exists.")
                     continue
 
-                full_text, text_blocks = process_emails(
+                full_text, text_blocks = process_emails_and_raw_content(
                     gmail_service, sources, date_str
                 )
                 if not full_text.strip():
-                    logger.info(f"No email content found for {date_str}. Skipping.")
+                    logger.info(f"No email content or raw content found for {date_str}. Skipping.")
                     continue
 
                 cleaned_full_text = remove_markdown_links(full_text)
