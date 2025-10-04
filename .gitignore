@@ -41,3 +41,5 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# raw content files
+src/audiobooks/raw_content/*
