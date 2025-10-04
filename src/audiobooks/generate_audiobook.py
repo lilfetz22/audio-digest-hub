@@ -26,6 +26,9 @@ from googleapiclient.errors import HttpError
 from pydub import AudioSegment
 from TTS.api import TTS
 
+# Import upload functionality from upload_mp3.py
+from upload_mp3 import upload_audiobook, create_metadata
+
 # --- Configuration & Constants ---
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
@@ -47,6 +50,9 @@ DEFAULT_SPEAKER = "Claribel Dervla"
 
 # Raw content folder path
 RAW_CONTENT_FOLDER = "raw_content"
+
+# Hybrid workflow folder paths
+CLEANED_TEXT_FOLDER = r"C:\Users\WilliamFetzner\OneDrive - Q-Centrix, LLC\audio-digest-hub\src\audiobooks\cleaned_full_texts"
 
 
 # --- Core Functions (No changes in this section) ---
@@ -157,28 +163,34 @@ def find_last_upload_date(api_url, api_key):
 
     try:
         response = requests.get(url, headers=headers, timeout=30)
-        
+
         if response.status_code != 200:
-            logger.warning(f"API returned status {response.status_code}. Using yesterday as default start date.")
+            logger.warning(
+                f"API returned status {response.status_code}. Using yesterday as default start date."
+            )
             return None
 
         audiobooks = response.json()
-        
+
         if not audiobooks:
-            logger.info("No existing audiobooks found. Using yesterday as default start date.")
+            logger.info(
+                "No existing audiobooks found. Using yesterday as default start date."
+            )
             return None
 
         # Extract dates from audiobook titles that match the "Daily Digest for YYYY-MM-DD" pattern
         last_date = None
         date_pattern = re.compile(r"Daily Digest for (\d{4}-\d{2}-\d{2})")
-        
+
         for audiobook in audiobooks:
             title = audiobook.get("title", "")
             match = date_pattern.search(title)
             if match:
                 try:
                     date_str = match.group(1)
-                    audiobook_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                    audiobook_date = datetime.datetime.strptime(
+                        date_str, "%Y-%m-%d"
+                    ).date()
                     if last_date is None or audiobook_date > last_date:
                         last_date = audiobook_date
                 except ValueError:
@@ -189,7 +201,9 @@ def find_last_upload_date(api_url, api_key):
             logger.info(f"Found last upload date: {last_date}")
             return last_date
         else:
-            logger.info("No valid dates found in existing audiobooks. Using yesterday as default start date.")
+            logger.info(
+                "No valid dates found in existing audiobooks. Using yesterday as default start date."
+            )
             return None
 
     except requests.exceptions.RequestException as e:
@@ -351,92 +365,112 @@ def process_raw_content_files(target_date):
     Processes .txt files in the raw_content folder that were created on the target date.
     Returns text blocks in the same format as email processing.
     """
-    logger.info(f"Processing raw content files for date: {target_date.strftime('%Y-%m-%d')}")
-    
+    logger.info(
+        f"Processing raw content files for date: {target_date.strftime('%Y-%m-%d')}"
+    )
+
     if not os.path.exists(RAW_CONTENT_FOLDER):
-        logger.info(f"Raw content folder '{RAW_CONTENT_FOLDER}' does not exist. Creating it.")
+        logger.info(
+            f"Raw content folder '{RAW_CONTENT_FOLDER}' does not exist. Creating it."
+        )
         os.makedirs(RAW_CONTENT_FOLDER, exist_ok=True)
         return "", []
-    
+
     # Find all .txt files in the raw_content folder
     txt_files = glob.glob(os.path.join(RAW_CONTENT_FOLDER, "*.txt"))
-    
+
     if not txt_files:
         logger.info(f"No .txt files found in '{RAW_CONTENT_FOLDER}' folder.")
         return "", []
-    
+
     raw_text_blocks = []
     all_raw_text = ""
-    
+
     for file_path in txt_files:
         try:
             # Get file creation time
             file_stat = os.path.getctime(file_path)
             file_creation_date = datetime.datetime.fromtimestamp(file_stat).date()
-            
+
             # Check if file was created on the target date
             if file_creation_date == target_date:
-                logger.info(f"Processing raw content file: {os.path.basename(file_path)} (created: {file_creation_date})")
-                
+                logger.info(
+                    f"Processing raw content file: {os.path.basename(file_path)} (created: {file_creation_date})"
+                )
+
                 # Read file content
                 try:
-                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read().strip()
-                    
+
                     if content:
                         # Use filename (without extension) as the title
                         filename = os.path.splitext(os.path.basename(file_path))[0]
                         title = f"Raw Content: {filename}"
-                        
+
                         text_block = f"\n\nRaw Content from: {filename}.\n\n{content}"
                         raw_text_blocks.append({"text": text_block, "title": title})
                         all_raw_text += text_block
-                        
-                        logger.info(f"Successfully processed raw content file: {filename} ({len(content)} characters)")
+
+                        logger.info(
+                            f"Successfully processed raw content file: {filename} ({len(content)} characters)"
+                        )
                     else:
-                        logger.warning(f"Raw content file is empty: {os.path.basename(file_path)}")
-                        
+                        logger.warning(
+                            f"Raw content file is empty: {os.path.basename(file_path)}"
+                        )
+
                 except UnicodeDecodeError as e:
-                    logger.error(f"Could not read file {file_path} due to encoding issues: {e}")
+                    logger.error(
+                        f"Could not read file {file_path} due to encoding issues: {e}"
+                    )
                 except IOError as e:
                     logger.error(f"Could not read file {file_path}: {e}")
             else:
-                logger.debug(f"Skipping file {os.path.basename(file_path)} - created on {file_creation_date}, not target date {target_date}")
-                
+                logger.debug(
+                    f"Skipping file {os.path.basename(file_path)} - created on {file_creation_date}, not target date {target_date}"
+                )
+
         except OSError as e:
             logger.error(f"Could not get creation time for file {file_path}: {e}")
-    
+
     if raw_text_blocks:
-        logger.info(f"Found {len(raw_text_blocks)} raw content file(s) for {target_date.strftime('%Y-%m-%d')}")
+        logger.info(
+            f"Found {len(raw_text_blocks)} raw content file(s) for {target_date.strftime('%Y-%m-%d')}"
+        )
     else:
-        logger.info(f"No raw content files found for {target_date.strftime('%Y-%m-%d')}")
-    
+        logger.info(
+            f"No raw content files found for {target_date.strftime('%Y-%m-%d')}"
+        )
+
     return all_raw_text, raw_text_blocks
 
 
 def process_emails_and_raw_content(service, sources, target_date_str):
     logger.info(f"Processing emails and raw content for date: {target_date_str}")
     target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
-    
+
     # Process emails
     email_text, email_blocks = process_emails(service, sources, target_date_str)
-    
+
     # Process raw content files
     raw_text, raw_blocks = process_raw_content_files(target_date)
-    
+
     # Combine email and raw content
     combined_text = email_text + raw_text
     combined_blocks = email_blocks + raw_blocks
-    
+
     if email_blocks and raw_blocks:
-        logger.info(f"Combined {len(email_blocks)} email source(s) and {len(raw_blocks)} raw content file(s)")
+        logger.info(
+            f"Combined {len(email_blocks)} email source(s) and {len(raw_blocks)} raw content file(s)"
+        )
     elif email_blocks:
         logger.info(f"Found {len(email_blocks)} email source(s), no raw content files")
     elif raw_blocks:
         logger.info(f"Found {len(raw_blocks)} raw content file(s), no email sources")
     else:
         logger.info("No email sources or raw content files found")
-    
+
     return combined_text, combined_blocks
 
 
@@ -525,6 +559,145 @@ def process_emails(service, sources, target_date_str):
                 }
             )
     return "".join([b["text"] for b in all_text_blocks]), all_text_blocks
+
+
+def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
+    """
+    Saves cleaned text to file and notifies user to upload to Google Drive.
+    Returns the path to the saved text file.
+    """
+    # Create the folder if it doesn't exist
+    os.makedirs(CLEANED_TEXT_FOLDER, exist_ok=True)
+
+    # Save the cleaned text
+    text_filename = f"digest_{date_str}_cleaned.txt"
+    text_filepath = os.path.join(CLEANED_TEXT_FOLDER, text_filename)
+
+    with open(text_filepath, "w", encoding="utf-8") as f:
+        f.write(text_content)
+
+    logger.info(f"✅ Cleaned text saved to: {text_filepath}")
+    logger.info("📁 Opening File Explorer to cleaned_full_texts folder...")
+    logger.info("🔄 Next steps:")
+    logger.info("   1. Drag the text file to your Google Drive TTS_Input folder")
+    logger.info("   2. Run the TTS Colab notebook")
+    logger.info("   3. Download the generated MP3 to archive_mp3 folder")
+
+    # Open File Explorer to the folder
+    try:
+        subprocess.run(["explorer", CLEANED_TEXT_FOLDER], check=True)
+        logger.info("📂 File Explorer opened successfully")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Could not open File Explorer: {e}")
+    except FileNotFoundError:
+        logger.warning("File Explorer not found (not running on Windows?)")
+
+    return text_filepath
+
+
+def request_user_feedback() -> str:
+    """
+    Waits for user confirmation that TTS processing is complete.
+    Returns the path to the MP3 file when found.
+    """
+    logger.info("⏳ Waiting for TTS processing to complete...")
+    logger.info(f"📂 Expected MP3 location: {ARCHIVE_FOLDER}")
+
+    while True:
+        user_input = (
+            input("\n✅ Has the MP3 been generated and saved to archive_mp3? (y/n): ")
+            .strip()
+            .lower()
+        )
+        if user_input in ["y", "yes"]:
+            break
+        elif user_input in ["n", "no"]:
+            logger.info("⏳ Please complete TTS processing and try again.")
+        else:
+            logger.info("Please enter 'y' or 'n'")
+
+    # Find the most recent MP3 file in archive folder
+    archive_path = Path(ARCHIVE_FOLDER)
+    if not archive_path.exists():
+        logger.error(f"❌ Archive folder not found: {ARCHIVE_FOLDER}")
+        return None
+
+    mp3_files = list(archive_path.glob("*.mp3"))
+    if not mp3_files:
+        logger.error(f"❌ No MP3 files found in {ARCHIVE_FOLDER}")
+        return None
+
+    # Get the most recent MP3 file
+    latest_mp3 = max(mp3_files, key=lambda f: f.stat().st_mtime)
+    logger.info(f"🎵 Found MP3 file: {latest_mp3}")
+
+    return str(latest_mp3)
+
+
+def upload_audio(mp3_filepath: str, config: dict, date_str: str) -> bool:
+    """
+    Uploads the generated MP3 using the tried and true upload_mp3.py functionality.
+    Returns True if successful, False otherwise.
+    """
+    logger.info(f"🚀 Starting upload of: {mp3_filepath}")
+
+    try:
+        # Load the audio to create metadata using upload_mp3's method
+        audio = AudioSegment.from_mp3(mp3_filepath)
+        title = f"Daily Digest for {date_str}"
+
+        # Use the existing create_metadata function from upload_mp3.py
+        metadata = create_metadata(title, audio)
+
+        # Upload using the existing tried and true upload_audiobook function
+        success = upload_audiobook(
+            config["api_url"], config["api_key"], mp3_filepath, metadata
+        )
+
+        if success:
+            logger.info("✅ Upload completed successfully!")
+            return True
+        else:
+            logger.error("❌ Upload failed!")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Upload error: {e}")
+        return False
+
+
+def generate_and_upload_audio_hybrid(
+    text_content: str, text_blocks: list, config: dict, date_str: str
+) -> list:
+    """
+    Hybrid workflow: Save text locally, wait for Colab TTS, then upload.
+    Returns a list of file paths created for cleanup.
+    """
+    if not text_content.strip():
+        logger.warning("No text content to process.")
+        return []
+
+    logger.info("🔄 Starting hybrid TTS workflow...")
+
+    # Step 1: Save cleaned text and notify user
+    text_filepath = notify_user_of_full_text_readiness(text_content, date_str)
+
+    # Step 2: Wait for user to complete TTS in Colab
+    mp3_filepath = request_user_feedback()
+
+    if not mp3_filepath:
+        logger.error("❌ No MP3 file found. Workflow aborted.")
+        return []
+
+    # Step 3: Upload the generated MP3
+    success = upload_audio(mp3_filepath, config, date_str)
+
+    if success:
+        logger.info("🎉 Hybrid workflow completed successfully!")
+        return [mp3_filepath]  # Return for cleanup if needed
+    else:
+        logger.error("❌ Hybrid workflow failed during upload.")
+        return []
 
 
 def validate_and_process_chunk(chunk, max_len=250):
@@ -895,10 +1068,12 @@ Default behavior (when no dates are specified):
                 if args.end_date
                 else yesterday
             )
-            
+
             if args.start_date:
                 # User provided a start date
-                start_date = datetime.datetime.strptime(args.start_date, "%Y-%m-%d").date()
+                start_date = datetime.datetime.strptime(
+                    args.start_date, "%Y-%m-%d"
+                ).date()
             else:
                 # No start date provided - need to find the last upload date
                 # We'll handle this after loading the config
@@ -941,24 +1116,32 @@ Default behavior (when no dates are specified):
 
         # If no start date was provided, find the last upload date and adjust the date range
         if not args.start_date and not args.date:
-            last_upload_date = find_last_upload_date(config["api_url"], config["api_key"])
+            last_upload_date = find_last_upload_date(
+                config["api_url"], config["api_key"]
+            )
             if last_upload_date:
                 # Start from the day after the last upload
                 start_date = last_upload_date + datetime.timedelta(days=1)
-                end_date = dates_to_process[0]  # This is yesterday from the previous logic
-                
+                end_date = dates_to_process[
+                    0
+                ]  # This is yesterday from the previous logic
+
                 if start_date > end_date:
-                    logger.info(f"Last upload date ({last_upload_date}) is recent. No new dates to process.")
+                    logger.info(
+                        f"Last upload date ({last_upload_date}) is recent. No new dates to process."
+                    )
                     return
-                
+
                 # Recalculate the date range
                 dates_to_process = []
                 current_date = start_date
                 while current_date <= end_date:
                     dates_to_process.append(current_date)
                     current_date += datetime.timedelta(days=1)
-                
-                logger.info(f"Adjusted date range based on last upload: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}")
+
+                logger.info(
+                    f"Adjusted date range based on last upload: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
+                )
             else:
                 # No last upload date found, keep the original logic (just yesterday)
                 logger.info("No previous uploads found. Processing yesterday only.")
@@ -994,14 +1177,16 @@ Default behavior (when no dates are specified):
                     gmail_service, sources, date_str
                 )
                 if not full_text.strip():
-                    logger.info(f"No email content or raw content found for {date_str}. Skipping.")
+                    logger.info(
+                        f"No email content or raw content found for {date_str}. Skipping."
+                    )
                     continue
 
                 cleaned_full_text = remove_markdown_links(full_text)
                 for block in text_blocks:
                     block["text"] = remove_markdown_links(block["text"])
 
-                files_created = generate_and_upload_audio(
+                files_created = generate_and_upload_audio_hybrid(
                     cleaned_full_text, text_blocks, config, date_str
                 )
                 logger.info(f"Successfully completed process for {date_str}.")
