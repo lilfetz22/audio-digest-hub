@@ -42,8 +42,8 @@ def load_config(config_path=CONFIG_FILE):
         sys.exit(1)
 
 
-def upload_audiobook(api_url, api_key, filepath, metadata):
-    """Upload helper with retry/backoff (copied & simplified from project).
+def upload_single_file(api_url, api_key, filepath, metadata):
+    """Upload a single file with retry/backoff (copied & simplified from project).
     Returns True on success.
     """
     print(f"Preparing to upload '{filepath}' to the web application...")
@@ -106,6 +106,91 @@ def upload_audiobook(api_url, api_key, filepath, metadata):
     return False
 
 
+def upload_audiobook(api_url, api_key, mp3_path, base_title=None):
+    """Upload an audiobook, automatically handling chunking if file is too large.
+
+    Args:
+        api_url (str): The API URL for uploads
+        api_key (str): The API key for authentication
+        mp3_path (str or Path): Path to the MP3 file to upload
+        base_title (str, optional): Title for the audiobook. If None, uses filename.
+
+    Returns:
+        bool: True if upload(s) successful, False otherwise
+    """
+    mp3_path = Path(mp3_path)
+    if not mp3_path.exists():
+        print(f"ERROR: File not found: {mp3_path}")
+        return False
+
+    # Prepare archive folder
+    os.makedirs(ARCHIVE_FOLDER, exist_ok=True)
+
+    try:
+        # Use file size on disk as quick heuristic
+        file_size_mb = mp3_path.stat().st_size / (1024 * 1024)
+        print(f"Detected MP3 size: {file_size_mb:.2f} MB")
+
+        audio = AudioSegment.from_mp3(mp3_path)
+
+        if base_title is None:
+            base_title = f"Manual Upload: {mp3_path.name}"
+
+        if file_size_mb <= MAX_UPLOAD_SIZE_MB:
+            # Upload single file
+            print("File size is within the upload limit; uploading directly.")
+            metadata = create_metadata(base_title, audio)
+            success = upload_single_file(api_url, api_key, str(mp3_path), metadata)
+            if not success:
+                print("ERROR: Upload failed.")
+                return False
+            print("Done.")
+            return True
+        else:
+            # Split and upload chunks
+            return split_and_upload_chunks(
+                api_url, api_key, mp3_path, audio, base_title, file_size_mb
+            )
+
+    except Exception as e:
+        print(f"ERROR: Unexpected error while processing file: {e}")
+        return False
+
+
+def split_and_upload_chunks(
+    api_url, api_key, mp3_path, audio, base_title, file_size_mb
+):
+    """Split audio into chunks and upload each chunk separately.
+    Returns True if all chunks uploaded successfully, False otherwise.
+    """
+    num_chunks = math.ceil(file_size_mb / MAX_UPLOAD_SIZE_MB)
+    print(
+        f"File exceeds {MAX_UPLOAD_SIZE_MB:.1f} MB. Splitting into {num_chunks} parts."
+    )
+    chunk_duration_ms = math.ceil(len(audio) / num_chunks)
+
+    for i in range(num_chunks):
+        start_ms = i * chunk_duration_ms
+        end_ms = min((i + 1) * chunk_duration_ms, len(audio))
+        chunk = audio[start_ms:end_ms]
+        chunk_filename = os.path.join(
+            ARCHIVE_FOLDER, f"{mp3_path.stem}_part_{i+1}_of_{num_chunks}.mp3"
+        )
+        print(f"Exporting chunk {i+1}: {chunk_filename} ({start_ms}ms to {end_ms}ms)")
+        chunk.export(chunk_filename, format="mp3")
+
+        chunk_title = f"{base_title} (Part {i+1} of {num_chunks})"
+        metadata = create_metadata(chunk_title, chunk)
+
+        success = upload_single_file(api_url, api_key, chunk_filename, metadata)
+        if not success:
+            print(f"ERROR: Upload failed for chunk {i+1}. Stopping further uploads.")
+            return False
+
+    print("All parts uploaded successfully.")
+    return True
+
+
 def create_metadata(title, audio_segment):
     duration_s = len(audio_segment) / 1000.0
     # Simple single-chapter metadata to make it playable in the web UI
@@ -135,66 +220,10 @@ def main():
     # Load config
     config = load_config()
 
-    # Prepare archive folder
-    os.makedirs(ARCHIVE_FOLDER, exist_ok=True)
+    # Upload the audiobook (handles chunking automatically)
+    success = upload_audiobook(config["api_url"], config["api_key"], mp3_path)
 
-    try:
-        # Use file size on disk as quick heuristic
-        file_size_mb = mp3_path.stat().st_size / (1024 * 1024)
-        print(f"Detected MP3 size: {file_size_mb:.2f} MB")
-
-        audio = AudioSegment.from_mp3(mp3_path)
-
-        base_title = f"Manual Upload: {mp3_path.name}"
-
-        if file_size_mb <= MAX_UPLOAD_SIZE_MB:
-            # Upload single file
-            print("File size is within the upload limit; uploading directly.")
-            metadata = create_metadata(base_title, audio)
-            success = upload_audiobook(
-                config["api_url"], config["api_key"], str(mp3_path), metadata
-            )
-            if not success:
-                print("ERROR: Upload failed.")
-                sys.exit(1)
-            print("Done.")
-            return
-
-        # Need to split into chunks
-        num_chunks = math.ceil(file_size_mb / MAX_UPLOAD_SIZE_MB)
-        print(
-            f"File exceeds {MAX_UPLOAD_SIZE_MB:.1f} MB. Splitting into {num_chunks} parts."
-        )
-        chunk_duration_ms = math.ceil(len(audio) / num_chunks)
-
-        for i in range(num_chunks):
-            start_ms = i * chunk_duration_ms
-            end_ms = min((i + 1) * chunk_duration_ms, len(audio))
-            chunk = audio[start_ms:end_ms]
-            chunk_filename = os.path.join(
-                ARCHIVE_FOLDER, f"{mp3_path.stem}_part_{i+1}_of_{num_chunks}.mp3"
-            )
-            print(
-                f"Exporting chunk {i+1}: {chunk_filename} ({start_ms}ms to {end_ms}ms)"
-            )
-            chunk.export(chunk_filename, format="mp3")
-
-            chunk_title = f"{base_title} (Part {i+1} of {num_chunks})"
-            metadata = create_metadata(chunk_title, chunk)
-
-            success = upload_audiobook(
-                config["api_url"], config["api_key"], chunk_filename, metadata
-            )
-            if not success:
-                print(
-                    f"ERROR: Upload failed for chunk {i+1}. Stopping further uploads."
-                )
-                sys.exit(1)
-
-        print("All parts uploaded successfully.")
-
-    except Exception as e:
-        print(f"ERROR: Unexpected error while processing file: {e}")
+    if not success:
         sys.exit(1)
 
 
