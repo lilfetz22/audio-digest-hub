@@ -27,7 +27,7 @@ from pydub import AudioSegment
 from TTS.api import TTS
 
 # Import upload functionality from upload_mp3.py
-from upload_mp3 import upload_audiobook, create_metadata
+from upload_mp3 import upload_audiobook
 
 # --- Configuration & Constants ---
 logger = logging.getLogger(__name__)
@@ -634,7 +634,9 @@ def request_user_feedback() -> str:
     return str(latest_mp3)
 
 
-def upload_audio(mp3_filepath: str, config: dict, date_str: str) -> bool:
+def upload_audio(
+    mp3_filepath: str, config: dict, date_str: str, text_blocks: list
+) -> bool:
     """
     Uploads the generated MP3 using the tried and true upload_mp3.py functionality.
     Returns True if successful, False otherwise.
@@ -642,12 +644,12 @@ def upload_audio(mp3_filepath: str, config: dict, date_str: str) -> bool:
     logger.info(f"🚀 Starting upload of: {mp3_filepath}")
 
     try:
-        # Load the audio to create metadata using upload_mp3's method
+        # Load the audio to create metadata using proper chapter creation
         audio = AudioSegment.from_mp3(mp3_filepath)
         title = f"Daily Digest for {date_str}"
 
-        # Use the existing create_metadata function from upload_mp3.py
-        metadata = create_metadata(title, audio)
+        # Use the existing _create_metadata function from this file to include proper chapters
+        metadata = _create_metadata(title, audio, text_blocks)
 
         # Upload using the existing tried and true upload_audiobook function
         success = upload_audiobook(
@@ -690,7 +692,7 @@ def generate_and_upload_audio_hybrid(
         return []
 
     # Step 3: Upload the generated MP3
-    success = upload_audio(mp3_filepath, config, date_str)
+    success = upload_audio(mp3_filepath, config, date_str, text_blocks)
 
     if success:
         logger.info("🎉 Hybrid workflow completed successfully!")
