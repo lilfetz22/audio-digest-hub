@@ -53,6 +53,10 @@ The `.github/workflows/cleanup.yml` file will automatically run every Friday at 
 4. The workflow will run automatically every Friday
 
 ### Option B: Windows Task Scheduler
+**If you already have `run_audiobook_generator.bat` scheduled:**
+The batch file has been updated to automatically run cleanup on Fridays. No additional setup needed!
+
+**For standalone cleanup scheduling:**
 1. Open Task Scheduler
 2. Create Basic Task
 3. Name: "Audiobook Cleanup"
