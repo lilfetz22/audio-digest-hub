@@ -1,0 +1,36 @@
+name: Weekly Audiobook Cleanup
+
+on:
+  schedule:
+    # Run every Friday at 6:00 PM UTC
+    - cron: '0 18 * * 5'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Call Cleanup Function
+        run: |
+          response=$(curl -X POST \
+            -H "Content-Type: application/json" \
+            -w "%{http_code}" \
+            -s \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/cleanup")
+          
+          http_code=$(echo "$response" | tail -c 4)
+          body=$(echo "$response" | head -c -4)
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" != "200" ]; then
+            echo "Cleanup failed with status $http_code"
+            exit 1
+          fi
+          
+          echo "Cleanup completed successfully"
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
