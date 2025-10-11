@@ -9,32 +9,34 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Calculate the previous Friday
+    // Calculate the cutoff Friday (at least 7 days ago)
+    // This ensures all audiobooks get at least a full week to be enjoyed
     const now = new Date()
     const currentDay = now.getDay() // 0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday
     
-    // Calculate days to subtract to get to the previous Friday
+    // Calculate days to subtract to get to a Friday that's at least 7 days ago
     let daysToSubtract
     if (currentDay === 5) { // If today is Friday
       daysToSubtract = 7 // Get last Friday (a week ago)
     } else if (currentDay === 6) { // If today is Saturday
-      daysToSubtract = 1 // Get yesterday (Friday)
+      daysToSubtract = 8 // Get Friday from a week ago (not yesterday)
     } else { // Sunday (0) through Thursday (4)
-      daysToSubtract = currentDay + 2 // Sunday=2, Monday=3, Tuesday=4, Wednesday=5, Thursday=6
+      // For Sunday through Thursday, go back to the Friday before last
+      daysToSubtract = currentDay + 9 // Sunday=9, Monday=10, Tuesday=11, Wednesday=12, Thursday=13
     }
     
-    const previousFriday = new Date(now)
-    previousFriday.setDate(now.getDate() - daysToSubtract)
-    previousFriday.setHours(23, 59, 59, 999) // End of that Friday
+    const cutoffFriday = new Date(now)
+    cutoffFriday.setDate(now.getDate() - daysToSubtract)
+    cutoffFriday.setHours(23, 59, 59, 999) // End of that Friday
     
     console.log(`Current date: ${now.toISOString()}`)
-    console.log(`Deleting audiobooks older than: ${previousFriday.toISOString()}`)
+    console.log(`Deleting audiobooks older than: ${cutoffFriday.toISOString()}`)
 
-    // Find audiobooks older than the previous Friday
+    // Find audiobooks older than the cutoff Friday
     const { data: oldAudiobooks, error: fetchError } = await supabaseClient
       .from('audiobooks')
       .select('id, storage_path, created_at, title')
-      .lt('created_at', previousFriday.toISOString())
+      .lt('created_at', cutoffFriday.toISOString())
 
     if (fetchError) {
       throw fetchError
@@ -43,9 +45,9 @@ serve(async (req) => {
     if (!oldAudiobooks || oldAudiobooks.length === 0) {
       return new Response(
         JSON.stringify({ 
-          message: `No audiobooks to cleanup (checked for audiobooks older than ${previousFriday.toISOString()})`, 
+          message: `No audiobooks to cleanup (checked for audiobooks older than ${cutoffFriday.toISOString()})`, 
           cleaned: 0,
-          cutoffDate: previousFriday.toISOString()
+          cutoffDate: cutoffFriday.toISOString()
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
@@ -101,7 +103,7 @@ serve(async (req) => {
       JSON.stringify({ 
         message: `Cleanup completed. ${cleanedCount} audiobooks removed.`,
         cleaned: cleanedCount,
-        cutoffDate: previousFriday.toISOString(),
+        cutoffDate: cutoffFriday.toISOString(),
         deletedAudiobooks: deletedAudiobooks,
         errors: errors.length > 0 ? errors : undefined
       }),
