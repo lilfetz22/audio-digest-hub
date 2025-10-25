@@ -1,5 +1,4 @@
 # generate_audiobook.py
-import numpy as np
 import os
 import sys
 import argparse
@@ -9,7 +8,6 @@ import json
 import base64
 import re
 import logging
-import math
 import subprocess
 import time
 import glob
@@ -17,14 +15,12 @@ from pathlib import Path
 
 # 3rd Party Libraries
 import requests
-import torch
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from pydub import AudioSegment
-from TTS.api import TTS
 
 # Import upload functionality from upload_mp3.py
 from upload_mp3 import upload_audiobook
@@ -33,20 +29,10 @@ from upload_mp3 import upload_audiobook
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
-# Use a temporary directory outside of OneDrive to avoid sync issues
-TEMP_DIR = os.path.join(os.path.expanduser("~"), "Documents", "audio_digest_temp")
-os.makedirs(TEMP_DIR, exist_ok=True)
-TEMP_WAV_FILE = os.path.join(TEMP_DIR, "temp_output.wav")
-
 UPLOAD_MP3_BASENAME = "temp_output"
 ARCHIVE_FOLDER = "archive_mp3"
 
-TTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
-TTS_CLIENT = None
 MAX_UPLOAD_SIZE_MB = 15.0
-
-# NEW: Define a default speaker to use if no reference voice file is provided.
-DEFAULT_SPEAKER = "Claribel Dervla"
 
 # Raw content folder path
 RAW_CONTENT_FOLDER = "raw_content"
@@ -321,21 +307,6 @@ def upload_audiobook(api_url, api_key, filepath, metadata):
     # If the loop completes without a successful upload, all retries have failed.
     logger.error(f"Failed to upload '{filepath}' after {max_retries} attempts.")
     return False
-
-
-def initialize_tts_model():
-    """Loads the Coqui-TTS model into memory."""
-    global TTS_CLIENT
-    if TTS_CLIENT is None:
-        logger.info(f"Loading Coqui-TTS model: {TTS_MODEL}")
-        try:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            logger.info(f"Using device: {device}")
-            TTS_CLIENT = TTS(TTS_MODEL).to(device)
-            logger.info("Coqui-TTS model loaded successfully.")
-        except Exception:
-            logger.error("Failed to load the TTS model.", exc_info=True)
-            sys.exit(1)
 
 
 def authenticate_gmail(token_file, credentials_file):
@@ -719,165 +690,8 @@ def validate_and_process_chunk(chunk, max_len=250):
     return sub_chunks
 
 
-def generate_and_upload_audio(text_content, text_blocks, config, date_str):
-    """
-    Generates audio, converts to MP3, and handles chunking/uploading.
-    Returns a list of file paths created for cleanup.
-    """
-    if not text_content.strip():
-        logger.info("No text content to synthesize. Skipping audio generation.")
-        return []
-    date_specific_basename = f"digest_{date_str}"
-
-    logger.info(f"Using base filename: '{date_specific_basename}' for this run.")
-
-    # Create archive folder if it doesn't exist
-    os.makedirs(ARCHIVE_FOLDER, exist_ok=True)
-    logger.info(f"Archive folder ready: {ARCHIVE_FOLDER}")
-
-    logger.info("Starting Coqui-TTS audio generation...")
-    # Determine which voice to use: custom file or default speaker
-    speaker_wav = (
-        config.get("reference_voice_file")
-        if config.get("reference_voice_file")
-        and os.path.exists(config["reference_voice_file"])
-        else None
-    )
-
-    tts_kwargs = {}
-    if speaker_wav:
-        logger.info(f"Using reference voice file for TTS: {speaker_wav}")
-        tts_kwargs["speaker_wav"] = speaker_wav
-    else:
-        logger.info(
-            f"Reference voice file not found or specified. Using default speaker: '{DEFAULT_SPEAKER}'"
-        )
-        tts_kwargs["speaker"] = DEFAULT_SPEAKER
-
-    try:
-        paragraphs = text_content.split("\n")
-        initial_chunks = [
-            c
-            for p in paragraphs
-            if p.strip()
-            for c in TTS_CLIENT.synthesizer.split_into_sentences(p)
-        ]
-        final_chunks = [
-            sc for chunk in initial_chunks for sc in validate_and_process_chunk(chunk)
-        ]
-        audio_chunks = []
-        # XTTS has a hard limit of ~400 tokens. We set a safe limit below that to be robust.
-        XTTS_TOKEN_LIMIT = 390
-        tokenizer = TTS_CLIENT.synthesizer.tts_model.tokenizer
-
-        for i, sentence in enumerate(final_chunks):
-            # --- Start of Hard Token Limit Enforcement ---
-            # Use the model's own tokenizer to check the length before synthesis.
-            # This is the most reliable way to prevent errors from chunks that are too long.
-            try:
-                tokens = tokenizer.encode(sentence, lang="en")
-                if len(tokens) > XTTS_TOKEN_LIMIT:
-                    logger.warning(
-                        f"SKIPPING CHUNK: Text is too long for TTS model ({len(tokens)} tokens > {XTTS_TOKEN_LIMIT}). "
-                        f"Content: '{sentence[:80]}...'"
-                    )
-                    continue  # Skip this chunk.
-            except Exception as e:
-                logger.error(
-                    f"Could not tokenize chunk, skipping. Error: {e}. Content: '{sentence[:80]}...'"
-                )
-                continue
-            # --- End of Hard Token Limit Enforcement ---
-
-            logger.info(
-                f"Synthesizing chunk {i + 1}/{len(final_chunks)}: '{sentence[:80]}...'"
-            )
-            try:
-                wav_chunk = TTS_CLIENT.tts(text=sentence, language="en", **tts_kwargs)
-                audio_chunks.append(np.array(wav_chunk))
-            except Exception as e:
-                # This is a fallback safeguard. The token check above should prevent this.
-                logger.error(
-                    f"Unexpected error during TTS synthesis, skipping chunk. Error: {e}"
-                )
-                continue
-
-        if not audio_chunks:
-            logger.warning("No audio generated, content may be empty after cleaning.")
-            return []
-
-        full_audio_np = np.concatenate(audio_chunks)
-        TTS_CLIENT.synthesizer.save_wav(wav=full_audio_np, path=TEMP_WAV_FILE)
-        logger.info(f"Full audio saved to temporary WAV: {TEMP_WAV_FILE}")
-
-        full_audio_segment = AudioSegment.from_wav(TEMP_WAV_FILE)
-        with open(TEMP_WAV_FILE, "rb") as f:
-            mp3_data_size = len(AudioSegment.from_wav(f).export(format="mp3").read())
-        mp3_size_mb = mp3_data_size / (1024 * 1024)
-        logger.info(f"Estimated full MP3 size is {mp3_size_mb:.2f} MB.")
-
-        files_to_cleanup = [TEMP_WAV_FILE]
-        base_title = f"Daily Digest for {date_str}"
-        if mp3_size_mb <= MAX_UPLOAD_SIZE_MB:
-            logger.info("MP3 size is within the limit. Uploading as a single file.")
-            filepath = os.path.join(ARCHIVE_FOLDER, f"{date_specific_basename}.mp3")
-            full_audio_segment.export(filepath, format="mp3")
-            files_to_cleanup.append(filepath)
-            metadata = _create_metadata(base_title, full_audio_segment, text_blocks)
-            if not upload_audiobook(
-                config["api_url"], config["api_key"], filepath, metadata
-            ):
-                logger.error("Single file upload failed.")
-        else:
-            num_chunks = math.ceil(mp3_size_mb / MAX_UPLOAD_SIZE_MB)
-            logger.warning(
-                f"MP3 size exceeds {MAX_UPLOAD_SIZE_MB:.1f} MB. Splitting into {num_chunks} chunks."
-            )
-            chunk_duration_ms = math.ceil(len(full_audio_segment) / num_chunks)
-            original_chapters = _create_chapter_list(
-                len(full_audio_segment), text_blocks
-            )
-            for i in range(num_chunks):
-                start_ms = i * chunk_duration_ms
-                end_ms = min((i + 1) * chunk_duration_ms, len(full_audio_segment))
-                audio_chunk = full_audio_segment[start_ms:end_ms]
-                chunk_filepath = os.path.join(
-                    ARCHIVE_FOLDER,
-                    f"{date_specific_basename}_part_{i+1}_of_{num_chunks}.mp3",
-                )
-                logger.info(
-                    f"Exporting chunk {i+1}: {chunk_filepath} ({start_ms}ms to {end_ms}ms)"
-                )
-                audio_chunk.export(chunk_filepath, format="mp3")
-                files_to_cleanup.append(chunk_filepath)
-                chunk_title = f"{base_title} (Part {i+1} of {num_chunks})"
-                chunk_metadata = _create_metadata_for_chunk(
-                    chunk_title, audio_chunk, original_chapters, start_ms
-                )
-                if not upload_audiobook(
-                    config["api_url"], config["api_key"], chunk_filepath, chunk_metadata
-                ):
-                    logger.error(
-                        f"Upload failed for chunk {i+1}. Stopping further uploads."
-                    )
-                    break
-
-        return files_to_cleanup
-    except Exception:
-        logger.error(
-            "An error occurred during audio generation or uploading.", exc_info=True
-        )
-        return [
-            f
-            for f in [
-                TEMP_WAV_FILE,
-                os.path.join(ARCHIVE_FOLDER, f"{UPLOAD_MP3_BASENAME}*.mp3"),
-            ]
-            if os.path.exists(f)
-        ]
-
-
 def _create_chapter_list(total_duration_ms, text_blocks):
+    """Create a list of chapters with start times based on text length proportions."""
     total_chars = sum(len(block["text"]) for block in text_blocks)
     chapters = []
     cumulative_chars = 0
@@ -893,57 +707,18 @@ def _create_chapter_list(total_duration_ms, text_blocks):
 
 
 def _create_metadata(title, audio_segment, text_blocks):
+    """Create metadata for an audiobook with chapters."""
     duration_s = len(audio_segment) / 1000.0
     chapters = _create_chapter_list(len(audio_segment), text_blocks)
 
-    # --- CHANGED: Create a dictionary {title: start_time} instead of a list of objects ---
-    # This creates the format {"Chapter Title": 123, "Another Title": 456}
+    # Create a dictionary {title: start_time} format
     chapters_dict = {c["title"]: int(c["start_time_ms"] / 1000) for c in chapters}
 
     return {
         "title": title,
         "duration_seconds": int(duration_s),
-        # --- CHANGED: Dump the new dictionary to JSON ---
         "chapters_json": json.dumps(chapters_dict),
     }
-
-
-def _create_metadata_for_chunk(
-    title, audio_chunk_segment, original_chapters, chunk_start_ms
-):
-    chunk_duration_s = len(audio_chunk_segment) / 1000.0
-    chunk_end_ms = chunk_start_ms + len(audio_chunk_segment)
-    chunk_chapters = []
-    for chapter in original_chapters:
-        if chunk_start_ms <= chapter["start_time_ms"] < chunk_end_ms:
-            relative_start_time_s = int(
-                (chapter["start_time_ms"] - chunk_start_ms) / 1000
-            )
-            # This part still creates a list of dicts temporarily, which is fine
-            chunk_chapters.append(
-                {"title": chapter["title"], "start_time": relative_start_time_s}
-            )
-
-    # This logic to ensure a chapter at time 0 is correct
-    if chunk_chapters and chunk_chapters[0]["start_time"] != 0:
-        first_title = chunk_chapters[0]["title"]
-        if not any(c["start_time"] == 0 for c in chunk_chapters):
-            chunk_chapters.insert(0, {"title": first_title, "start_time": 0})
-
-    # --- CHANGED: Convert the list of chapter dicts to the required {title: start_time} format ---
-    chapters_dict = {
-        chapter["title"]: chapter["start_time"] for chapter in chunk_chapters
-    }
-
-    return {
-        "title": title,
-        "duration_seconds": int(chunk_duration_s),
-        # --- CHANGED: Dump the final dictionary to JSON ---
-        "chapters_json": json.dumps(chapters_dict),
-    }
-
-
-# In generate_audiobook.py
 
 
 def cleanup(files_to_remove):
@@ -1149,7 +924,6 @@ Default behavior (when no dates are specified):
                 logger.info("No previous uploads found. Processing yesterday only.")
                 # dates_to_process already contains yesterday, so no change needed
 
-        initialize_tts_model()
         sources = fetch_sources(config["api_url"], config["api_key"])
 
         if not sources:
