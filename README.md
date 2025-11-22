@@ -8,7 +8,7 @@ Audio Digest Hub transforms your daily email newsletters into high-quality audio
 
 1. **Email Processing**: Automatically fetches newsletters from your Gmail inbox
 2. **Content Extraction**: Intelligently extracts and cleans newsletter content
-3. **AI Voice Synthesis**: Converts text to natural-sounding speech using Coqui TTS
+3. **AI Voice Synthesis**: Converts text to natural-sounding speech using Kokoro TTS (formerly Coqui)
 4. **Smart Organization**: Creates structured audiobooks with chapters for each newsletter
 5. **Web Player**: Provides a modern web interface to listen to your audiobooks with progress tracking
 
@@ -27,8 +27,8 @@ Audio Digest Hub transforms your daily email newsletters into high-quality audio
 - **Edge Functions**: TypeScript serverless functions for API endpoints
 - **Authentication**: Row-level security and API key management
 
-### Audio Processing (Python)
-- **TTS Engine**: Coqui TTS with XTTS v2 model
+- ### Audio Processing (Python)
+- **TTS Engine**: Kokoro TTS (82M parameters) — a compact, fast, and high-quality open-source TTS model
 - **Email Integration**: Gmail API for newsletter fetching
 - **Audio Processing**: PyDub for MP3 conversion and chunking
 - **Smart Scheduling**: Automatic processing with duplicate detection
@@ -85,7 +85,10 @@ Audio Digest Hub transforms your daily email newsletters into high-quality audio
    - Configure Supabase API URL and service role key
    - Optionally add a reference voice file for custom TTS voice
 
-5. **Run the audio processor**:
+5. **Run the audio processor or Colab notebook**:
+- **Colab (recommended for GPU)**: Open `src/audiobooks/TTS_Generation_Colab.ipynb` in Google Colab and run the notebook for a GPU-accelerated Kokoro TTS workflow.
+
+- **Local**: Use the Python script (CPU/GPU) to process audio locally:
    ```bash
    python generate_audiobook.py
    ```
@@ -124,11 +127,16 @@ python generate_audiobook.py
 - **Row Level Security** - Database-level authorization
 
 ### AI & Audio Processing
-- **Coqui TTS** - Open-source text-to-speech engine
-- **XTTS v2** - Multilingual voice cloning model
+- **Kokoro TTS** - Open-source, small-footprint TTS engine with high quality (24kHz native)
 - **PyTorch** - Machine learning framework
-- **PyDub** - Audio manipulation library
+- **PyDub / soundfile** - Audio manipulation and I/O utilities
 - **Gmail API** - Email integration
+
+### TTS Migration: Coqui → Kokoro
+This project migrated its TTS engine from Coqui (XTTS v2) to Kokoro TTS.
+- Kokoro provides a smaller, faster, and actively maintained model (approx. 82M parameters).
+- Kokoro's native sample rate is 24 kHz; the notebook and pipeline use this by default.
+- For GPU-accelerated generation, use the `TTS_Generation_Colab.ipynb` notebook in `src/audiobooks`.
 
 ## 📁 Project Structure
 
@@ -228,7 +236,8 @@ If you encounter any issues or have questions:
 
 ## 🎉 Acknowledgments
 
-- **Coqui TTS** for the excellent open-source text-to-speech engine
+- **Kokoro TTS** for providing a compact, fast, and high-quality open-source text-to-speech engine (recommended replacement for Coqui)
+- **Coqui TTS** (historical) — originally used in this project
 - **Supabase** for the powerful backend-as-a-service platform
 - **shadcn/ui** for the beautiful component library
 - **Gmail API** for reliable email integration
