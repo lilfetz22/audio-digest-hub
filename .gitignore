@@ -44,3 +44,4 @@ __pycache__/
 # raw content files
 src/audiobooks/raw_content/*
 src/audiobooks/cleaned_full_texts/*
+next_task_instructions.md
