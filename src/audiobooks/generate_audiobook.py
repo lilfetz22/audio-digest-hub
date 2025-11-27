@@ -566,17 +566,21 @@ def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
     return text_filepath
 
 
-def request_user_feedback() -> str:
+def request_user_feedback(date_str: str) -> str:
     """
     Waits for user confirmation that TTS processing is complete.
+    Checks Downloads folder for the specific MP3 file and moves it to archive_mp3.
     Returns the path to the MP3 file when found.
     """
     logger.info("⏳ Waiting for TTS processing to complete...")
-    logger.info(f"📂 Expected MP3 location: {ARCHIVE_FOLDER}")
+    
+    downloads_folder = Path.home() / "Downloads"
+    expected_filename = f"digest_{date_str}_cleaned_generated_audio.mp3"
+    logger.info(f"📂 Looking for: {expected_filename} in Downloads folder")
 
     while True:
         user_input = (
-            input("\n✅ Has the MP3 been generated and saved to archive_mp3? (y/n): ")
+            input(f"\n✅ Has the MP3 been generated and saved to Downloads folder as '{expected_filename}'? (y/n): ")
             .strip()
             .lower()
         )
@@ -587,22 +591,27 @@ def request_user_feedback() -> str:
         else:
             logger.info("Please enter 'y' or 'n'")
 
-    # Find the most recent MP3 file in archive folder
+    # Check Downloads folder for the specific file
+    source_mp3_path = downloads_folder / expected_filename
+    if not source_mp3_path.exists():
+        logger.error(f"❌ MP3 file not found: {source_mp3_path}")
+        return None
+
+    # Ensure archive folder exists
     archive_path = Path(ARCHIVE_FOLDER)
-    if not archive_path.exists():
-        logger.error(f"❌ Archive folder not found: {ARCHIVE_FOLDER}")
+    archive_path.mkdir(parents=True, exist_ok=True)
+
+    # Move the file to archive folder
+    destination_mp3_path = archive_path / expected_filename
+    try:
+        import shutil
+        shutil.move(str(source_mp3_path), str(destination_mp3_path))
+        logger.info(f"✅ Moved MP3 from Downloads to: {destination_mp3_path}")
+    except Exception as e:
+        logger.error(f"❌ Failed to move MP3 file: {e}")
         return None
 
-    mp3_files = list(archive_path.glob("*.mp3"))
-    if not mp3_files:
-        logger.error(f"❌ No MP3 files found in {ARCHIVE_FOLDER}")
-        return None
-
-    # Get the most recent MP3 file
-    latest_mp3 = max(mp3_files, key=lambda f: f.stat().st_mtime)
-    logger.info(f"🎵 Found MP3 file: {latest_mp3}")
-
-    return str(latest_mp3)
+    return str(destination_mp3_path)
 
 
 def upload_audio(
@@ -655,8 +664,8 @@ def generate_and_upload_audio_hybrid(
     # Step 1: Save cleaned text and notify user
     text_filepath = notify_user_of_full_text_readiness(text_content, date_str)
 
-    # Step 2: Wait for user to complete TTS in Colab
-    mp3_filepath = request_user_feedback()
+    # Step 2: Wait for user to complete TTS in Colab and move file from Downloads
+    mp3_filepath = request_user_feedback(date_str)
 
     if not mp3_filepath:
         logger.error("❌ No MP3 file found. Workflow aborted.")
