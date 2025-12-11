@@ -568,34 +568,28 @@ def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
 
 def request_user_feedback(date_str: str) -> str:
     """
-    Waits for user confirmation that TTS processing is complete.
+    Waits for TTS processing to complete by polling the Downloads folder every 5 minutes.
     Checks Downloads folder for the specific MP3 file and moves it to archive_mp3.
     Returns the path to the MP3 file when found.
     """
     logger.info("⏳ Waiting for TTS processing to complete...")
-    
+
     downloads_folder = Path.home() / "Downloads"
     expected_filename = f"digest_{date_str}_cleaned_generated_audio.mp3"
     logger.info(f"📂 Looking for: {expected_filename} in Downloads folder")
+    logger.info("🔄 Will check every 5 minutes...")
+
+    poll_interval_seconds = 300  # 5 minutes
 
     while True:
-        user_input = (
-            input(f"\n✅ Has the MP3 been generated and saved to Downloads folder as '{expected_filename}'? (y/n): ")
-            .strip()
-            .lower()
-        )
-        if user_input in ["y", "yes"]:
-            break
-        elif user_input in ["n", "no"]:
-            logger.info("⏳ Please complete TTS processing and try again.")
-        else:
-            logger.info("Please enter 'y' or 'n'")
+        source_mp3_path = downloads_folder / expected_filename
 
-    # Check Downloads folder for the specific file
-    source_mp3_path = downloads_folder / expected_filename
-    if not source_mp3_path.exists():
-        logger.error(f"❌ MP3 file not found: {source_mp3_path}")
-        return None
+        if source_mp3_path.exists():
+            logger.info(f"✅ Found MP3 file: {expected_filename}")
+            break
+
+        logger.info(f"⏳ File not found yet. Checking again in 5 minutes...")
+        time.sleep(poll_interval_seconds)
 
     # Ensure archive folder exists
     archive_path = Path(ARCHIVE_FOLDER)
@@ -605,6 +599,7 @@ def request_user_feedback(date_str: str) -> str:
     destination_mp3_path = archive_path / expected_filename
     try:
         import shutil
+
         shutil.move(str(source_mp3_path), str(destination_mp3_path))
         logger.info(f"✅ Moved MP3 from Downloads to: {destination_mp3_path}")
     except Exception as e:
