@@ -23,7 +23,7 @@ from googleapiclient.errors import HttpError
 from pydub import AudioSegment
 
 # Import upload functionality from upload_mp3.py
-from upload_mp3 import upload_audiobook
+from upload_mp3 import upload_audiobook, _create_chapter_list, _create_metadata
 
 # --- Configuration & Constants ---
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 UPLOAD_MP3_BASENAME = "temp_output"
 ARCHIVE_FOLDER = "archive_mp3"
 
-MAX_UPLOAD_SIZE_MB = 15.0
+MAX_UPLOAD_SIZE_MB = 35.0
 
 # Raw content folder path
 RAW_CONTENT_FOLDER = "raw_content"
@@ -166,7 +166,7 @@ def find_last_upload_date(api_url, api_key):
 
         # Extract dates from audiobook titles that match the "Daily Digest for YYYY-MM-DD" pattern
         last_date = None
-        date_pattern = re.compile(r"Daily Digest for (\d{4}-\d{2}-\d{2})")
+        date_pattern = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
         for audiobook in audiobooks:
             title = audiobook.get("title", "")
@@ -232,81 +232,6 @@ def check_existing_audiobook(api_url, api_key, title):
         # If we can't check, proceed anyway to avoid blocking the process
         logger.info("Proceeding with generation due to API error.")
         return False
-
-
-def upload_audiobook(api_url, api_key, filepath, metadata):
-    """
-    Uploads a single audio file and its metadata with a retry mechanism for server errors.
-    """
-    logger.info(f"Preparing to upload '{filepath}' to the web application...")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    url = f"{api_url}/audiobooks"
-
-    max_retries = 5
-    # The initial delay between retries, in seconds. This will double after each failed attempt.
-    base_delay_seconds = 10
-
-    for attempt in range(max_retries):
-        try:
-            with open(filepath, "rb") as audio_file:
-                files = {
-                    "audio_file": (
-                        os.path.basename(filepath),
-                        audio_file,
-                        "audio/mpeg",
-                    ),
-                    "metadata": (None, json.dumps(metadata), "application/json"),
-                }
-
-                logger.info(f"Attempt {attempt + 1} of {max_retries}: Uploading...")
-                response = requests.post(url, headers=headers, files=files, timeout=300)
-
-                # This line will raise an HTTPError for any 4xx or 5xx status codes.
-                response.raise_for_status()
-
-                logger.info(f"Upload successful. Server response: {response.json()}")
-                return True  # If successful, exit the function.
-
-        except requests.exceptions.HTTPError as e:
-            # Check if the error is a 5xx server error, which is potentially temporary.
-            if 500 <= e.response.status_code < 600:
-                logger.warning(
-                    f"Server error ({e.response.status_code}) on attempt {attempt + 1}. Retrying..."
-                )
-                # If this was the last attempt, don't wait, just let it fail.
-                if attempt < max_retries - 1:
-                    delay = base_delay_seconds * (2**attempt)  # Exponential backoff
-                    logger.info(f"Waiting for {delay} seconds before the next attempt.")
-                    time.sleep(delay)
-                # Continue to the next iteration of the loop to retry.
-                continue
-            else:
-                # It's a client error (4xx) or other non-5xx HTTP error. Do not retry.
-                logger.error(
-                    f"A non-retriable HTTP error occurred: {e}",
-                    exc_info=True,
-                )
-                return False  # Fail immediately.
-
-        except requests.exceptions.RequestException as e:
-            # Catches other network errors like timeouts or connection problems.
-            logger.warning(
-                f"A network error occurred on attempt {attempt + 1}: {e}. Retrying..."
-            )
-            if attempt < max_retries - 1:
-                delay = base_delay_seconds * (2**attempt)
-                logger.info(f"Waiting for {delay} seconds before the next attempt.")
-                time.sleep(delay)
-            # Continue to retry.
-            continue
-
-        except FileNotFoundError:
-            logger.error(f"Upload failed: The file '{filepath}' was not found.")
-            return False
-
-    # If the loop completes without a successful upload, all retries have failed.
-    logger.error(f"Failed to upload '{filepath}' after {max_retries} attempts.")
-    return False
 
 
 def authenticate_gmail(token_file, credentials_file):
@@ -619,16 +544,15 @@ def upload_audio(
     logger.info(f"🚀 Starting upload of: {mp3_filepath}")
 
     try:
-        # Load the audio to create metadata using proper chapter creation
-        audio = AudioSegment.from_mp3(mp3_filepath)
         title = f"Daily Digest for {date_str}"
 
-        # Use the existing _create_metadata function from this file to include proper chapters
-        metadata = _create_metadata(title, audio, text_blocks)
-
-        # Upload using the existing tried and true upload_audiobook function
+        # Upload using the shared upload_mp3.py functionality with chapter-aware metadata
         success = upload_audiobook(
-            config["api_url"], config["api_key"], mp3_filepath, metadata
+            config["api_url"],
+            config["api_key"],
+            mp3_filepath,
+            title,
+            text_blocks,
         )
 
         if success:
@@ -692,37 +616,6 @@ def validate_and_process_chunk(chunk, max_len=250):
         cleaned_chunk = cleaned_chunk[split_pos:].lstrip()
     sub_chunks.append(cleaned_chunk)
     return sub_chunks
-
-
-def _create_chapter_list(total_duration_ms, text_blocks):
-    """Create a list of chapters with start times based on text length proportions."""
-    total_chars = sum(len(block["text"]) for block in text_blocks)
-    chapters = []
-    cumulative_chars = 0
-    for block in text_blocks:
-        start_time_ms = (
-            (cumulative_chars / total_chars) * total_duration_ms
-            if total_chars > 0
-            else 0
-        )
-        chapters.append({"title": block["title"], "start_time_ms": start_time_ms})
-        cumulative_chars += len(block["text"])
-    return chapters
-
-
-def _create_metadata(title, audio_segment, text_blocks):
-    """Create metadata for an audiobook with chapters."""
-    duration_s = len(audio_segment) / 1000.0
-    chapters = _create_chapter_list(len(audio_segment), text_blocks)
-
-    # Create a dictionary {title: start_time} format
-    chapters_dict = {c["title"]: int(c["start_time_ms"] / 1000) for c in chapters}
-
-    return {
-        "title": title,
-        "duration_seconds": int(duration_s),
-        "chapters_json": json.dumps(chapters_dict),
-    }
 
 
 def cleanup(files_to_remove):
