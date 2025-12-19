@@ -255,14 +255,18 @@ class TestApiInteractions:
     def test_upload_audiobook_success(self, requests_mock, tmp_path, caplog):
         filepath = tmp_path / "test.mp3"
         filepath.write_text("mp3_data")
-        metadata = {"title": "test"}
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=200, json={"status": "ok"}
         )
-        with caplog.at_level(logging.INFO):
-            result = ga.upload_audiobook(
-                "https://fake-api.com", "fake_key", str(filepath), metadata
-            )
+        with patch("upload_mp3.AudioSegment.from_mp3") as mock_from_mp3:
+            mock_audio = MagicMock()
+            mock_audio.__len__.return_value = 1000
+            mock_from_mp3.return_value = mock_audio
+
+            with caplog.at_level(logging.INFO):
+                result = ga.upload_audiobook(
+                    "https://fake-api.com", "fake_key", str(filepath), "Test Title", []
+                )
 
         assert result is True
         assert f"Preparing to upload '{filepath}'" in caplog.text
@@ -271,14 +275,18 @@ class TestApiInteractions:
     def test_upload_audiobook_http_error(self, requests_mock, tmp_path, caplog):
         filepath = tmp_path / "test.mp3"
         filepath.write_text("mp3_data")
-        metadata = {"title": "test"}
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=400, text="Bad Request"
         )
-        with caplog.at_level(logging.ERROR):
-            result = ga.upload_audiobook(
-                "https://fake-api.com", "fake_key", str(filepath), metadata
-            )
+        with patch("upload_mp3.AudioSegment.from_mp3") as mock_from_mp3:
+            mock_audio = MagicMock()
+            mock_audio.__len__.return_value = 1000
+            mock_from_mp3.return_value = mock_audio
+
+            with caplog.at_level(logging.ERROR):
+                result = ga.upload_audiobook(
+                    "https://fake-api.com", "fake_key", str(filepath), "Test Title", []
+                )
 
         assert result is False
         assert (
