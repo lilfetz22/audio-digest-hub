@@ -38,7 +38,7 @@ MAX_UPLOAD_SIZE_MB = 35.0
 RAW_CONTENT_FOLDER = "raw_content"
 
 # Hybrid workflow folder paths
-CLEANED_TEXT_FOLDER = r"C:\Users\WilliamFetzner\OneDrive - Q-Centrix, LLC\audio-digest-hub\src\audiobooks\cleaned_full_texts"
+CLEANED_TEXT_FOLDER = r"C:\Users\19194\Documents\audio-digest-hub\src\audiobooks\cleaned_full_texts"
 
 
 # --- Core Functions (No changes in this section) ---
