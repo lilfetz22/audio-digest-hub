@@ -41,6 +41,10 @@ Audio Digest Hub transforms your daily email newsletters into high-quality audio
 - **Python** (3.8 or higher) with pip
 - **Gmail Account** with API access enabled
 - **Supabase Account** for backend services
+- **FFmpeg** (for audio processing) - automatically installed via `imageio-ffmpeg` package, or install system-wide:
+  - Windows: `winget install ffmpeg` or `choco install ffmpeg`
+  - macOS: `brew install ffmpeg`
+  - Linux: `sudo apt install ffmpeg` (Debian/Ubuntu) or `sudo yum install ffmpeg` (RHEL/CentOS)
 
 ### Frontend Setup
 
