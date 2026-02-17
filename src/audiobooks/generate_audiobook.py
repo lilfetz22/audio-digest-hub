@@ -20,7 +20,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from pydub import AudioSegment
 
 # Import upload functionality from upload_mp3.py
 from upload_mp3 import upload_audiobook, _create_chapter_list, _create_metadata
@@ -418,9 +417,9 @@ def process_emails(service, sources, target_date_str):
         headers = msg["payload"]["headers"]
         sender_email = next(
             (
-                re.search(r"<(.+?)>", h["value"]).group(1).lower()
+                match.group(1).lower()
                 for h in headers
-                if h["name"] == "From" and re.search(r"<(.+?)>", h["value"])
+                if h["name"] == "From" and (match := re.search(r"<(.+?)>", h["value"]))
             ),
             "",
         )
@@ -491,11 +490,11 @@ def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
     return text_filepath
 
 
-def request_user_feedback(date_str: str) -> str:
+def request_user_feedback(date_str: str) -> str | None:
     """
     Waits for TTS processing to complete by polling the Downloads folder every 5 minutes.
     Checks Downloads folder for the specific MP3 file and moves it to archive_mp3.
-    Returns the path to the MP3 file when found.
+    Returns the path to the MP3 file when found, or None if the move fails.
     """
     logger.info("⏳ Waiting for TTS processing to complete...")
 
