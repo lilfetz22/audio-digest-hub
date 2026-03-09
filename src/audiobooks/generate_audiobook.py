@@ -472,20 +472,10 @@ def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
         f.write(text_content)
 
     logger.info(f"✅ Cleaned text saved to: {text_filepath}")
-    logger.info("📁 Opening File Explorer to cleaned_full_texts folder...")
-    logger.info("🔄 Next steps:")
+    logger.info("� Next steps:")
     logger.info("   1. Drag the text file to your Google Drive TTS_Input folder")
     logger.info("   2. Run the TTS Colab notebook")
     logger.info("   3. Download the generated MP3 to archive_mp3 folder")
-
-    # Open File Explorer to the folder
-    try:
-        subprocess.run(["explorer", CLEANED_TEXT_FOLDER], check=True)
-        logger.info("📂 File Explorer opened successfully")
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Could not open File Explorer: {e}")
-    except FileNotFoundError:
-        logger.warning("File Explorer not found (not running on Windows?)")
 
     return text_filepath
 
