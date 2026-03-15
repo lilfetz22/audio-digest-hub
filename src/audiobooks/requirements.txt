@@ -6,6 +6,9 @@ imageio-ffmpeg
 coqui-tts
 torch
 torchaudio
+google-genai
+pymupdf
+beautifulsoup4
 pytest
 pytest-mock
 requests-mock
