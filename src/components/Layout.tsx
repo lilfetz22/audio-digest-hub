@@ -3,7 +3,7 @@ import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Settings, Music } from 'lucide-react';
+import { LogOut, Settings, Music, FlaskConical } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -39,6 +39,13 @@ export const Layout = ({ children }: LayoutProps) => {
                 onClick={() => navigate('/dashboard')}
               >
                 Library
+              </Button>
+              <Button
+                variant={location.pathname === '/research-review' ? 'default' : 'ghost'}
+                onClick={() => navigate('/research-review')}
+              >
+                <FlaskConical className="h-4 w-4 mr-2" />
+                Research Review
               </Button>
               <Button
                 variant={location.pathname === '/settings' ? 'default' : 'ghost'}
