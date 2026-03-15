@@ -11,3 +11,6 @@ verify_jwt = false
 [functions.sources]
 # This line ensures the 'sources' function does not require a Supabase JWT
 verify_jwt = false
+
+[functions.research-papers]
+verify_jwt = false
