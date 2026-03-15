@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import Player from "./pages/Player";
+import ResearchReview from "./pages/ResearchReview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Player />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/research-review" 
+                element={
+                  <ProtectedRoute>
+                    <ResearchReview />
                   </ProtectedRoute>
                 } 
               />
