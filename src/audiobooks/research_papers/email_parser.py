@@ -204,23 +204,112 @@ class ArxivHFEmailParser(PaperSource):
 
             blocks[arxiv_id] = {"title": title, "abstract": abstract}
 
-        # Strategy 2: Regex fallback on raw HTML text
-        if not blocks:
-            # Try to find blocks with "arXiv:XXXX.XXXXX" followed by title/abstract
-            raw_text = soup.get_text()
-            pattern = re.compile(
-                r"arXiv:(\d+\.\d+).*?"
-                r"(?:Title:\s*)?([^\n]+?)(?:\n|Authors:)"
-                r".*?Abstract:\s*(.+?)(?=arXiv:\d+\.\d+|$)",
-                re.DOTALL,
-            )
-            for match in pattern.finditer(raw_text):
-                arxiv_id = match.group(1)
-                title = match.group(2).strip()
-                abstract = match.group(3).strip()
-                blocks[arxiv_id] = {"title": title, "abstract": abstract}
+        if blocks:
+            return blocks
+
+        # Strategy 2: Line-by-line parser for plain-text Arxiv digest format.
+        # Format per paper:
+        #   \\
+        #   arXiv:XXXX.XXXXX
+        #   Date: ...
+        #
+        #   Title: ... (may wrap across lines, continuation indented with spaces)
+        #   Authors: ...
+        #   Categories: ...
+        #   \\
+        #     Abstract text here...
+        #   \\ ( https://arxiv.org/abs/XXXX.XXXXX , NNkb)
+        #   ----...----
+        raw_text = soup.get_text()
+        current_id = None
+        title_lines: list = []
+        abstract_lines: list = []
+        in_title = False
+        in_abstract = False
+        metadata_labels = re.compile(
+            r"^(Authors?|Categories|Comments|Journal-ref|DOI|Report-no|License|Related|Proxy):",
+            re.IGNORECASE,
+        )
+
+        for line in raw_text.splitlines():
+            stripped = line.strip()
+
+            # New paper block starts with "arXiv:XXXX.XXXXX"
+            id_match = re.match(r"arXiv:(\d+\.\d+)", stripped)
+            if id_match:
+                # Save the previous block
+                if current_id:
+                    blocks[current_id] = {
+                        "title": " ".join(title_lines).strip(),
+                        "abstract": " ".join(abstract_lines).strip(),
+                    }
+                current_id = id_match.group(1)
+                title_lines = []
+                abstract_lines = []
+                in_title = False
+                in_abstract = False
+                continue
+
+            if current_id is None:
+                continue
+
+            # "Title:" starts the title section
+            title_match = re.match(r"Title:\s*(.*)", stripped)
+            if title_match:
+                in_title = True
+                in_abstract = False
+                first = title_match.group(1).strip()
+                if first:
+                    title_lines = [first]
+                else:
+                    title_lines = []
+                continue
+
+            # Metadata labels end the title, don't start abstract
+            if metadata_labels.match(stripped):
+                in_title = False
+                in_abstract = False
+                continue
+
+            # A standalone "\\" after we have a title signals start of abstract
+            if stripped == "\\\\":
+                if title_lines and not in_abstract:
+                    in_abstract = True
+                    in_title = False
+                elif in_abstract:
+                    # Second "\\" closes the abstract
+                    in_abstract = False
+                continue
+
+            # "\\ ( URL )" line closes the abstract
+            if re.match(r"\\\\.*https?://", stripped):
+                in_abstract = False
+                continue
+
+            # Lines of dashes are separators — reset state
+            if re.match(r"-{10,}", stripped):
+                in_title = False
+                in_abstract = False
+                continue
+
+            # Continuation of the title (indented line before Authors:)
+            if in_title and line.startswith("  ") and stripped:
+                title_lines.append(stripped)
+                continue
+
+            # Abstract body lines (indented with spaces in the original email)
+            if in_abstract and stripped:
+                abstract_lines.append(stripped)
+
+        # Save the last block
+        if current_id:
+            blocks[current_id] = {
+                "title": " ".join(title_lines).strip(),
+                "abstract": " ".join(abstract_lines).strip(),
+            }
 
         return blocks
+
 
     def _parse_huggingface_email(self, html: str) -> List[PaperReference]:
         """Parse a HuggingFace email to extract paper references."""
