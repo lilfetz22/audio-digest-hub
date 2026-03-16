@@ -144,7 +144,7 @@ def main():
     config = load_config()
 
     # Authenticate Gmail
-    creds = authenticate_gmail(config["credentials_file"], config["token_file"])
+    creds = authenticate_gmail(config["token_file"], config["credentials_file"])
     gmail_service = build("gmail", "v1", credentials=creds)
 
     # Wire up components
