@@ -118,34 +118,27 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         """
         client = genai.Client(api_key=self.api_key)
 
-        # Create batch request
-        batch_request = types.CreateBatchJobConfig(
+        logger.info("Creating batch job for transcript generation...")
+        batch_job = client.batches.create(
             model=self.model_name,
             src=types.BatchJobSource(
-                inline_data=types.InlineData(
-                    requests=[
-                        types.BatchRequest(
-                            request=types.GenerateContentRequest(
-                                model=self.model_name,
-                                contents=[
-                                    types.Content(
-                                        parts=[types.Part(text=user_prompt)],
-                                        role="user",
-                                    )
-                                ],
-                                config=types.GenerateContentConfig(
-                                    system_instruction=system_prompt,
-                                    temperature=0.7,
-                                ),
+                inlined_requests=[
+                    types.InlinedRequest(
+                        model=self.model_name,
+                        contents=[
+                            types.Content(
+                                parts=[types.Part(text=user_prompt)],
+                                role="user",
                             )
-                        )
-                    ]
-                )
+                        ],
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            temperature=0.7,
+                        ),
+                    )
+                ]
             ),
         )
-
-        logger.info("Creating batch job for transcript generation...")
-        batch_job = client.batches.create(config=batch_request)
         logger.info(f"Batch job created: {batch_job.name}")
 
         # Poll for completion
@@ -153,20 +146,22 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
             batch_job = client.batches.get(name=batch_job.name)
             status = batch_job.state
 
-            if status == "JOB_STATE_SUCCEEDED":
+            if status in types.JOB_STATES_SUCCEEDED:
                 logger.info("Batch job completed successfully")
                 break
-            elif status in ("JOB_STATE_FAILED", "JOB_STATE_CANCELLED"):
+            elif status in types.JOB_STATES_ENDED:
                 raise RuntimeError(f"Batch job failed with state: {status}")
 
             logger.info(f"Batch job status: {status}. Polling again in {self.batch_poll_interval}s...")
             time.sleep(self.batch_poll_interval)
 
-        # Retrieve results
+        # Retrieve results from inlined_responses
         result = client.batches.get(name=batch_job.name)
-        if hasattr(result, "dest") and result.dest:
-            responses = result.dest.inline_data.responses
-            if responses:
-                return responses[0].response.candidates[0].content.parts[0].text
+        if result.dest and result.dest.inlined_responses:
+            first = result.dest.inlined_responses[0]
+            if first.error:
+                raise RuntimeError(f"Batch request error: {first.error}")
+            if first.response and first.response.candidates:
+                return first.response.candidates[0].content.parts[0].text
 
         raise RuntimeError("No results in batch job response")
