@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import List
 
@@ -87,27 +88,39 @@ class GeminiPaperScorer(PaperScorer):
     def _call_gemini(
         self, papers: List[PaperReference], preference_profile: str
     ) -> dict:
-        """Call Gemini Flash to score papers.
+        """Call Gemini Flash to score papers in batches to avoid output truncation.
 
         Returns:
             Dict mapping paper URL to {"score": int, "reasoning": str}.
         """
         system_prompt = self._build_system_prompt(preference_profile)
-        user_prompt = self._build_user_prompt(papers)
-
         client = genai.Client(api_key=self.api_key)
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.1,
-                response_mime_type="application/json",
-            ),
-        )
 
-        # Parse response
-        return self._parse_response(response.text, papers)
+        # Score in batches of 50 to avoid hitting output token limits
+        BATCH_SIZE = 50
+        scores_map: dict = {}
+        for batch_start in range(0, len(papers), BATCH_SIZE):
+            batch = papers[batch_start : batch_start + BATCH_SIZE]
+            user_prompt = self._build_user_prompt(batch)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                ),
+            )
+            batch_scores = self._parse_response(response.text or "", batch)
+            scores_map.update(batch_scores)
+            logger.info(
+                f"Scored batch {batch_start // BATCH_SIZE + 1}"
+                f"/{(len(papers) + BATCH_SIZE - 1) // BATCH_SIZE}"
+                f" ({len(batch_scores)}/{len(batch)} scored)"
+            )
+
+        return scores_map
+
 
     def _build_system_prompt(self, preference_profile: str) -> str:
         """Load scorer system prompt and inject preference profile."""
@@ -150,7 +163,15 @@ class GeminiPaperScorer(PaperScorer):
                     text = text[:-3]
                 text = text.strip()
 
-            data = json.loads(text)
+            # Try to parse; if backslash escape errors occur (e.g. LaTeX in
+            # reasoning strings), sanitize invalid \X sequences and retry.
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                # Replace \X where X is not a valid JSON escape character
+                sanitized = re.sub(r'\\(?!["\\/bfnrtu0-9])', r'\\\\', text)
+                data = json.loads(sanitized)
+
             if not isinstance(data, list):
                 raise ValueError("Expected a JSON array")
 
