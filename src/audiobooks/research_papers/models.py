@@ -12,6 +12,7 @@ class PaperReference:
     title: str
     abstract: str
     source: Literal["arxiv", "huggingface"]
+    category: str = ""  # e.g. "cs", "stat", "math"; empty for HuggingFace
 
 
 @dataclass
