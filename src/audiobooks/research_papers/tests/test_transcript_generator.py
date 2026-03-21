@@ -246,6 +246,166 @@ class TestBatchMode:
         assert len(src.inlined_requests) == len(deep_dive_papers)
 
 
+class TestBatchErrorHandling:
+    """Tests for batch mode error handling."""
+
+    @patch("research_papers.transcript_generator.genai")
+    def test_batch_handles_error_response(self, mock_genai, deep_dive_papers, summary_papers):
+        """Should handle individual batch request errors gracefully."""
+        gen = GeminiTranscriptGenerator(
+            api_key="test-key",
+            model_name="gemini-3.1-pro-preview",
+            use_batch=True,
+        )
+
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_batch_job = MagicMock()
+        mock_batch_job.name = "batch-err"
+        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
+        mock_client.batches.create.return_value = mock_batch_job
+
+        mock_result = MagicMock()
+        mock_result.state = "JOB_STATE_SUCCEEDED"
+
+        # First response has error, second is OK
+        resp1 = MagicMock()
+        resp1.error = "Some error"
+        resp2 = MagicMock()
+        resp2.error = None
+        resp2.response.candidates = [
+            MagicMock(content=MagicMock(parts=[MagicMock(text="Transcript 2")]))
+        ]
+        mock_result.dest.inlined_responses = [resp1, resp2]
+        mock_client.batches.get.return_value = mock_result
+
+        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
+             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
+            result = gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+
+        # First paper's transcript should be empty, second should work
+        assert "Transcript 2" in result
+
+    @patch("research_papers.transcript_generator.genai")
+    def test_batch_handles_empty_response(self, mock_genai, deep_dive_papers, summary_papers):
+        """Should handle batch response with no candidates."""
+        gen = GeminiTranscriptGenerator(
+            api_key="test-key",
+            model_name="gemini-3.1-pro-preview",
+            use_batch=True,
+        )
+
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_batch_job = MagicMock()
+        mock_batch_job.name = "batch-empty"
+        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
+        mock_client.batches.create.return_value = mock_batch_job
+
+        mock_result = MagicMock()
+        mock_result.state = "JOB_STATE_SUCCEEDED"
+
+        # Response with no candidates
+        resp1 = MagicMock()
+        resp1.error = None
+        resp1.response = None
+        resp2 = MagicMock()
+        resp2.error = None
+        resp2.response.candidates = []
+        mock_result.dest.inlined_responses = [resp1, resp2]
+        mock_client.batches.get.return_value = mock_result
+
+        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
+             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
+            result = gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+
+        assert isinstance(result, str)
+
+    @patch("research_papers.transcript_generator.genai")
+    def test_batch_no_results_raises(self, mock_genai, deep_dive_papers, summary_papers):
+        """Should raise RuntimeError when batch returns no results at all."""
+        gen = GeminiTranscriptGenerator(
+            api_key="test-key",
+            model_name="gemini-3.1-pro-preview",
+            use_batch=True,
+        )
+
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_batch_job = MagicMock()
+        mock_batch_job.name = "batch-no-results"
+        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
+        mock_client.batches.create.return_value = mock_batch_job
+
+        mock_result = MagicMock()
+        mock_result.state = "JOB_STATE_SUCCEEDED"
+        mock_result.dest = None  # No dest at all
+        mock_client.batches.get.return_value = mock_result
+
+        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
+             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
+            with pytest.raises(RuntimeError, match="No results"):
+                gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+
+    @patch("research_papers.transcript_generator.genai")
+    def test_batch_job_failure_raises(self, mock_genai, deep_dive_papers, summary_papers):
+        """Should raise RuntimeError when batch job fails."""
+        gen = GeminiTranscriptGenerator(
+            api_key="test-key",
+            model_name="gemini-3.1-pro-preview",
+            use_batch=True,
+        )
+
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_batch_job = MagicMock()
+        mock_batch_job.name = "batch-fail"
+        mock_batch_job.state = "JOB_STATE_FAILED"
+        mock_client.batches.create.return_value = mock_batch_job
+        mock_client.batches.get.return_value = mock_batch_job
+
+        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
+             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
+            with pytest.raises(RuntimeError, match="Batch job failed"):
+                gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+
+
+class TestSummaryUnknownCategory:
+    """Tests for summary text with unknown categories."""
+
+    def test_summary_text_with_unknown_category_uses_title_case(self, generator):
+        """Categories not in the display name map should use title case."""
+        papers = [
+            PaperReference(
+                url="https://arxiv.org/abs/2603.12345",
+                title="Some Paper",
+                abstract="Some abstract",
+                source="arxiv",
+                category="econ",
+            ),
+        ]
+        text = generator._build_summary_text(papers)
+        assert "Econ" in text
+
+    def test_summary_text_with_paper_without_abstract(self, generator):
+        """Papers without abstracts should still be included."""
+        papers = [
+            PaperReference(
+                url="https://arxiv.org/abs/2603.12345",
+                title="No Abstract Paper",
+                abstract="",
+                source="arxiv",
+                category="cs",
+            ),
+        ]
+        text = generator._build_summary_text(papers)
+        assert "No Abstract Paper" in text
+
+
 class TestOutputFormatting:
     """Tests for output formatting."""
 
