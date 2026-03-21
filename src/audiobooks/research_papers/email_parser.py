@@ -116,7 +116,7 @@ class ArxivHFEmailParser(PaperSource):
         """Extract the Arxiv category (e.g. 'cs', 'stat', 'math') from the email subject.
 
         Arxiv daily digest subjects typically look like:
-            '[cs] daily ...' or '[stat] daily ...' or '[math] daily ...'
+            'cs daily Subj-class mailing for ...' or '[cs] daily ...'
 
         Returns:
             Lowercase category string, or 'arxiv' as fallback.
@@ -128,9 +128,18 @@ class ArxivHFEmailParser(PaperSource):
                 subject = h["value"]
                 break
 
+        logger.debug(f"Extracting category from subject: {subject!r}")
+
+        # Try bracket format first: [cs] or [cs.AI]
         match = re.search(r"\[([a-zA-Z.-]+)\]", subject)
         if match:
             return match.group(1).lower()
+
+        # Try unbracketed format: "cs daily" or "cs.AI daily" at start of subject
+        match = re.match(r"^([a-zA-Z]+(?:\.[a-zA-Z]+)?)\s+daily", subject, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+
         return "arxiv"
 
     def _extract_html_body(self, msg: dict) -> Optional[str]:
