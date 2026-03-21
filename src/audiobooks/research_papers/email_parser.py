@@ -64,7 +64,8 @@ class ArxivHFEmailParser(PaperSource):
                 continue
 
             if sender_email in self.arxiv_senders:
-                extracted = self._parse_arxiv_email(html_body)
+                category = self._extract_category_from_subject(msg)
+                extracted = self._parse_arxiv_email(html_body, category=category)
             elif sender_email in self.huggingface_senders:
                 extracted = self._parse_huggingface_email(html_body)
             else:
@@ -111,6 +112,27 @@ class ArxivHFEmailParser(PaperSource):
                 return h["value"].lower()
         return ""
 
+    def _extract_category_from_subject(self, msg: dict) -> str:
+        """Extract the Arxiv category (e.g. 'cs', 'stat', 'math') from the email subject.
+
+        Arxiv daily digest subjects typically look like:
+            '[cs] daily ...' or '[stat] daily ...' or '[math] daily ...'
+
+        Returns:
+            Lowercase category string, or 'arxiv' as fallback.
+        """
+        headers = msg.get("payload", {}).get("headers", [])
+        subject = ""
+        for h in headers:
+            if h["name"].lower() == "subject":
+                subject = h["value"]
+                break
+
+        match = re.search(r"\[([a-zA-Z.-]+)\]", subject)
+        if match:
+            return match.group(1).lower()
+        return "arxiv"
+
     def _extract_html_body(self, msg: dict) -> Optional[str]:
         """Extract the HTML body from a Gmail message."""
         payload = msg.get("payload", {})
@@ -127,8 +149,13 @@ class ArxivHFEmailParser(PaperSource):
             logger.error(f"Failed to extract email body: {e}", exc_info=True)
         return None
 
-    def _parse_arxiv_email(self, html: str) -> List[PaperReference]:
-        """Parse an Arxiv daily digest email to extract papers with titles and abstracts."""
+    def _parse_arxiv_email(self, html: str, category: str = "arxiv") -> List[PaperReference]:
+        """Parse an Arxiv daily digest email to extract papers with titles and abstracts.
+
+        Args:
+            html: Raw HTML body of the email.
+            category: Arxiv category extracted from the email subject (e.g. 'cs', 'stat').
+        """
         papers = []
         soup = BeautifulSoup(html, "html.parser")
 
@@ -167,6 +194,7 @@ class ArxivHFEmailParser(PaperSource):
                     title=title or f"Arxiv Paper {aid}",
                     abstract=abstract,
                     source="arxiv",
+                    category=category,
                 )
             )
 
@@ -184,23 +212,25 @@ class ArxivHFEmailParser(PaperSource):
                 continue
             arxiv_id = id_match.group(1)
 
-            # Collect sibling text until next h3
-            title = ""
-            abstract = ""
+            # Collect all sibling text until next h3, then extract Title/Abstract
+            combined_text = []
             for sibling in h3.next_siblings:
                 if sibling.name == "h3":
                     break
                 text = sibling.get_text() if hasattr(sibling, "get_text") else str(sibling)
+                combined_text.append(text)
 
-                # Check for Title: pattern
-                title_match = re.search(r"Title:\s*(.+)", text)
-                if title_match:
-                    title = title_match.group(1).strip()
+            full_text = " ".join(combined_text)
+            title = ""
+            abstract = ""
 
-                # Check for Abstract: pattern
-                abs_match = re.search(r"Abstract:\s*(.+)", text, re.DOTALL)
-                if abs_match:
-                    abstract = abs_match.group(1).strip()
+            title_match = re.search(r"Title:\s*(.+?)(?:\s*Authors?:|$)", full_text, re.DOTALL)
+            if title_match:
+                title = re.sub(r"\s+", " ", title_match.group(1)).strip()
+
+            abs_match = re.search(r"Abstract:\s*(.+?)(?:\s*$)", full_text, re.DOTALL)
+            if abs_match:
+                abstract = re.sub(r"\s+", " ", abs_match.group(1)).strip()
 
             blocks[arxiv_id] = {"title": title, "abstract": abstract}
 
