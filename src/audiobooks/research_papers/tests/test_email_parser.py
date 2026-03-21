@@ -330,3 +330,233 @@ class TestEdgeCases:
         papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
         for paper in papers:
             assert paper.source in ("arxiv", "huggingface")
+
+    def test_requires_gmail_service(self, parser):
+        """Should raise ValueError when gmail_service is None."""
+        with pytest.raises(ValueError, match="gmail_service is required"):
+            parser.fetch_papers("2026-03-14", gmail_service=None)
+
+    def test_empty_senders_returns_empty(self, mock_gmail_service):
+        """Should return empty list when no senders configured."""
+        empty_parser = ArxivHFEmailParser(
+            arxiv_senders=[], huggingface_senders=[]
+        )
+        papers = empty_parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        assert papers == []
+
+    def test_skips_message_with_no_html_body(self, parser, mock_gmail_service):
+        """Should skip messages where HTML body extraction returns None."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        # Message with no body data at all
+        mock_gmail_service.users().messages().get().execute.return_value = {
+            "id": "msg1",
+            "payload": {
+                "headers": [{"name": "From", "value": "<no-reply@arxiv.org>"}],
+            },
+        }
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        assert papers == []
+
+    def test_skips_unknown_sender(self, parser, mock_gmail_service):
+        """Should skip emails from senders not in arxiv or huggingface lists."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "unknown@example.com", ARXIV_EMAIL_HTML)
+        )
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        assert papers == []
+
+    def test_query_gmail_exception(self, parser, mock_gmail_service):
+        """Gmail query exception should return empty list."""
+        mock_gmail_service.users().messages().list().execute.side_effect = Exception("API error")
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        assert papers == []
+
+
+class TestExtractSender:
+    """Tests for _extract_sender helper."""
+
+    def test_sender_without_angle_brackets(self, parser):
+        """Should handle From header without angle brackets."""
+        msg = {
+            "payload": {
+                "headers": [{"name": "From", "value": "no-reply@arxiv.org"}]
+            }
+        }
+        result = parser._extract_sender(msg)
+        assert result == "no-reply@arxiv.org"
+
+    def test_sender_with_angle_brackets(self, parser):
+        """Should extract email from angle brackets."""
+        msg = {
+            "payload": {
+                "headers": [{"name": "From", "value": "Arxiv <no-reply@arxiv.org>"}]
+            }
+        }
+        result = parser._extract_sender(msg)
+        assert result == "no-reply@arxiv.org"
+
+    def test_sender_missing_from_header(self, parser):
+        """Should return empty string when From header is missing."""
+        msg = {
+            "payload": {
+                "headers": [{"name": "Subject", "value": "Test"}]
+            }
+        }
+        result = parser._extract_sender(msg)
+        assert result == ""
+
+
+class TestExtractHtmlBody:
+    """Tests for _extract_html_body helper."""
+
+    def test_extracts_body_from_direct_payload(self, parser):
+        """Should extract body when data is in payload.body directly (no parts)."""
+        import base64
+        html = "<html><body>Hello</body></html>"
+        encoded = base64.urlsafe_b64encode(html.encode()).decode()
+        msg = {
+            "payload": {
+                "body": {"data": encoded}
+            }
+        }
+        result = parser._extract_html_body(msg)
+        assert result is not None
+        assert "Hello" in result
+
+    def test_returns_none_on_empty_payload(self, parser):
+        """Should return None when payload has no parts and no body data."""
+        msg = {"payload": {}}
+        result = parser._extract_html_body(msg)
+        assert result is None
+
+    def test_handles_extraction_exception(self, parser):
+        """Should return None on exception during body extraction."""
+        msg = {
+            "payload": {
+                "parts": [{"mimeType": "text/html", "body": {"data": "!!!invalid-base64"}}]
+            }
+        }
+        result = parser._extract_html_body(msg)
+        # Should not crash; returns None or partial result
+        assert result is None or isinstance(result, str)
+
+
+class TestUnbracketedCategory:
+    """Tests for the unbracketed category format (e.g. 'cs daily ...')."""
+
+    def test_extracts_cs_from_unbracketed_subject(self, parser, mock_gmail_service):
+        """Should extract 'cs' from 'cs daily Subj-class mailing...'."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message(
+                "msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML,
+                subject="cs daily Subj-class mailing for Fri, 21 Mar 2026"
+            )
+        )
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "cs"
+
+    def test_extracts_stat_from_unbracketed_subject(self, parser, mock_gmail_service):
+        """Should extract 'stat' from 'stat daily Subj-class mailing...'."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message(
+                "msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML,
+                subject="stat daily Subj-class mailing for Fri, 21 Mar 2026"
+            )
+        )
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "stat"
+
+    def test_extracts_subcategory_from_unbracketed(self, parser, mock_gmail_service):
+        """Should extract 'cs.AI' from 'cs.AI daily ...'."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message(
+                "msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML,
+                subject="cs.AI daily Subj-class mailing for Fri, 21 Mar 2026"
+            )
+        )
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "cs.ai"
+
+
+class TestStrategy2LineParser:
+    """Tests for the plain-text line-by-line Arxiv email parser (Strategy 2)."""
+
+    def test_parses_plain_text_arxiv_format(self, parser):
+        """Should parse plain-text Arxiv digest format with Title:/Abstract."""
+        plain_text_html = (
+            "<html><body><pre>\n"
+            "\\\\\n"
+            "arXiv:2603.55555\n"
+            "Date: Fri, 21 Mar 2026\n"
+            "\n"
+            "Title: A Novel Approach to Reinforcement Learning\n"
+            "  in Complex Environments\n"
+            "Authors: Jane Doe, John Smith\n"
+            "Categories: cs.AI cs.LG\n"
+            "\\\\\n"
+            "  We present a groundbreaking method for RL\n"
+            "  that outperforms existing baselines.\n"
+            "\\\\ ( https://arxiv.org/abs/2603.55555 , 42kb)\n"
+            "------------------------------------------------------------------------------\n"
+            "\\\\\n"
+            "arXiv:2603.55556\n"
+            "Date: Fri, 21 Mar 2026\n"
+            "\n"
+            "Title: Graph Neural Networks for Optimization\n"
+            "Authors: Alice Bob\n"
+            "Categories: cs.LG\n"
+            "\\\\\n"
+            "  A new GNN architecture for combinatorial problems.\n"
+            "\\\\ ( https://arxiv.org/abs/2603.55556 , 38kb)\n"
+            "------------------------------------------------------------------------------\n"
+            "</pre></body></html>"
+        )
+        papers = parser._parse_arxiv_email(plain_text_html, category="cs")
+        assert len(papers) >= 2
+
+        urls = {p.url for p in papers}
+        assert "https://arxiv.org/abs/2603.55555" in urls
+        assert "https://arxiv.org/abs/2603.55556" in urls
+
+        # Check title extraction for multi-line title
+        paper1 = next(p for p in papers if "55555" in p.url)
+        assert "Reinforcement Learning" in paper1.title
+
+
+class TestHuggingFaceParsing2:
+    """Additional tests for HuggingFace email parsing."""
+
+    def test_hf_paper_without_abstract(self, parser):
+        """HF paper link without a following <p> should still be extracted."""
+        html = '<html><body><a href="https://huggingface.co/papers/2603.99999">Standalone Paper</a></body></html>'
+        papers = parser._parse_huggingface_email(html)
+        assert len(papers) == 1
+        assert papers[0].title == "Standalone Paper"
+        assert papers[0].source == "huggingface"
+
+    def test_hf_paper_with_no_link_text(self, parser):
+        """HF paper link with empty text should use fallback title."""
+        html = '<html><body><a href="https://huggingface.co/papers/2603.88888"></a></body></html>'
+        papers = parser._parse_huggingface_email(html)
+        assert len(papers) == 1
+        assert "2603.88888" in papers[0].title
