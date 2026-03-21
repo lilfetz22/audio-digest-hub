@@ -312,3 +312,170 @@ class TestErrorHandling:
 
         # Should log error but not crash
         pipeline.run("2026-03-14")
+
+    def test_download_returns_none_moves_to_summary(self, pipeline, mock_deps, sample_papers, tmp_path):
+        """When download returns None, paper should be moved to summary."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=6, tier="deep_dive", reasoning="ok"),
+        ]
+        # Download returns None for all papers — they should move to summary
+        mock_deps["paper_downloader"].extract.return_value = None
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        pipeline.run("2026-03-14")
+
+        gen_call = mock_deps["transcript_generator"].generate.call_args
+        deep_dive_content = gen_call[0][0]
+        summary_refs = gen_call[0][1]
+        # All downloads failed, so deep_dive_content is empty
+        assert len(deep_dive_content) == 0
+        # Failed downloads moved to summary
+        assert len(summary_refs) > 0
+
+    def test_download_exception_moves_to_summary(self, pipeline, mock_deps, sample_papers, tmp_path):
+        """When download raises exception, paper should be moved to summary."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=6, tier="deep_dive", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.side_effect = Exception("Download error")
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        pipeline.run("2026-03-14")
+
+        gen_call = mock_deps["transcript_generator"].generate.call_args
+        deep_dive_content = gen_call[0][0]
+        assert len(deep_dive_content) == 0
+
+    def test_no_papers_after_download_failure(self, pipeline, mock_deps, tmp_path):
+        """Should return early when no papers are available after download failures."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        papers = [
+            PaperReference(
+                url="https://arxiv.org/abs/2603.12345", title="P1",
+                abstract="A1", source="arxiv", category="cs"
+            ),
+        ]
+        mock_deps["email_parser"].fetch_papers.return_value = papers
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=papers[0], score=9, tier="deep_dive", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.return_value = None
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        pipeline.run("2026-03-14")
+        # Download failed → paper moves to summary → transcript still called
+
+    @patch("research_papers.pipeline.requests")
+    def test_push_metadata_success(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
+        """Should push metadata to Supabase on successful pipeline run."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = "preference"
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
+        )
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests.post.return_value = mock_response
+
+        pipeline.run("2026-03-14")
+
+        # Should have pushed metadata
+        mock_requests.post.assert_called_once()
+
+    @patch("research_papers.pipeline.requests")
+    def test_push_metadata_failure(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
+        """Should handle metadata push failure gracefully."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
+        )
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+        mock_requests.post.side_effect = Exception("Network error")
+
+        # Should not crash
+        pipeline.run("2026-03-14")
+
+    @patch("research_papers.pipeline.requests")
+    def test_push_metadata_non_200(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
+        """Should handle non-200 metadata push response."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
+        )
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_requests.post.return_value = mock_response
+
+        # Should log warning but not crash
+        pipeline.run("2026-03-14")
+
+    def test_feedback_update_failure(self, pipeline, mock_deps, sample_papers, tmp_path):
+        """Should handle feedback update failure gracefully."""
+        mock_deps["feedback_client"].fetch_clicked_papers.side_effect = Exception("Feedback error")
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
+        )
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        # Should not crash — feedback failure is non-fatal
+        pipeline.run("2026-03-14")
