@@ -52,7 +52,7 @@ EMPTY_EMAIL_HTML = "<html><body><p>No papers today.</p></body></html>"
 MALFORMED_EMAIL_HTML = "<html><body><div>Broken"
 
 
-def _make_gmail_message(msg_id, sender, html_body):
+def _make_gmail_message(msg_id, sender, html_body, subject="Daily Digest"):
     """Helper to create a mock Gmail API message dict."""
     import base64
 
@@ -62,7 +62,7 @@ def _make_gmail_message(msg_id, sender, html_body):
         "payload": {
             "headers": [
                 {"name": "From", "value": f"Papers <{sender}>"},
-                {"name": "Subject", "value": "Daily Digest"},
+                {"name": "Subject", "value": subject},
             ],
             "parts": [{"mimeType": "text/html", "body": {"data": encoded}}],
         },
@@ -95,7 +95,7 @@ class TestArxivParsing:
             "messages": [{"id": "msg1"}]
         }
         mock_gmail_service.users().messages().get().execute.return_value = (
-            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML)
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
         )
 
         papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
@@ -112,7 +112,7 @@ class TestArxivParsing:
             "messages": [{"id": "msg1"}]
         }
         mock_gmail_service.users().messages().get().execute.return_value = (
-            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML)
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
         )
 
         papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
@@ -131,12 +131,86 @@ class TestArxivParsing:
             "messages": [{"id": "msg1"}]
         }
         mock_gmail_service.users().messages().get().execute.return_value = (
-            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML)
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
         )
 
         papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
         arxiv_papers = [p for p in papers if p.source == "arxiv"]
         assert len(arxiv_papers) == 3
+
+
+class TestCategoryExtraction:
+    """Tests for extracting category from Arxiv email subject line."""
+
+    def test_extracts_cs_category(self, parser, mock_gmail_service):
+        """Should extract 'cs' from subject '[cs] daily digest'."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
+        )
+
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "cs"
+
+    def test_extracts_stat_category(self, parser, mock_gmail_service):
+        """Should extract 'stat' from subject '[stat] daily listings'."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[stat] daily listings")
+        )
+
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "stat"
+
+    def test_extracts_math_category(self, parser, mock_gmail_service):
+        """Should extract 'math' from subject '[math] daily digest'."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[math] daily digest")
+        )
+
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "math"
+
+    def test_fallback_category_on_missing_brackets(self, parser, mock_gmail_service):
+        """Should default to 'arxiv' when subject has no [category] brackets."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="Daily paper digest")
+        )
+
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        arxiv_papers = [p for p in papers if p.source == "arxiv"]
+        for p in arxiv_papers:
+            assert p.category == "arxiv"
+
+    def test_hf_papers_have_empty_category(self, parser, mock_gmail_service):
+        """HuggingFace papers should have empty category."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg2"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg2", "no-reply@huggingface.co", HUGGINGFACE_EMAIL_HTML)
+        )
+
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        hf_papers = [p for p in papers if p.source == "huggingface"]
+        for p in hf_papers:
+            assert p.category == ""
 
 
 class TestHuggingFaceParsing:
@@ -250,7 +324,7 @@ class TestEdgeCases:
             "messages": [{"id": "msg1"}]
         }
         mock_gmail_service.users().messages().get().execute.return_value = (
-            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML)
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
         )
 
         papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
