@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from collections import defaultdict
 from typing import List, Optional
 
 import requests
@@ -35,6 +36,8 @@ class ResearchPaperPipeline:
         api_url: str,
         api_key: str,
         output_dir: str = "raw_content",
+        deep_dive_per_category: int = 5,
+        summary_per_category: int = 10,
     ):
         self.email_parser = email_parser
         self.paper_downloader = paper_downloader
@@ -46,6 +49,8 @@ class ResearchPaperPipeline:
         self.api_url = api_url
         self.api_key = api_key
         self.output_dir = output_dir
+        self.deep_dive_per_category = deep_dive_per_category
+        self.summary_per_category = summary_per_category
 
     def run(self, date_str: str) -> None:
         """Run the full pipeline for a given date.
@@ -102,14 +107,25 @@ class ResearchPaperPipeline:
         if arxiv_papers:
             try:
                 scored = self.paper_scorer.score(arxiv_papers, preference_profile)
+                # Group scored papers by category, select top N per category
+                by_category: dict[str, List[ScoredPaper]] = defaultdict(list)
                 for sp in scored:
-                    if sp.tier == "deep_dive":
-                        deep_dive_refs.append(sp.paper)
-                    else:
-                        summary_refs.append(sp.paper)
+                    by_category[sp.paper.category or "arxiv"].append(sp)
+
+                for cat, cat_scored in by_category.items():
+                    # Already sorted by score descending from scorer
+                    cat_scored.sort(key=lambda s: s.score, reverse=True)
+                    for i, sp in enumerate(cat_scored):
+                        if i < self.deep_dive_per_category:
+                            deep_dive_refs.append(sp.paper)
+                        elif i < self.deep_dive_per_category + self.summary_per_category:
+                            summary_refs.append(sp.paper)
+                        # Papers beyond deep_dive + summary counts are discarded
+
                 logger.info(
-                    f"Arxiv scoring: {len(deep_dive_refs)} deep-dive, "
-                    f"{len(summary_refs)} summary"
+                    f"Arxiv per-category selection: {len(deep_dive_refs)} deep-dive, "
+                    f"{len(summary_refs)} summary "
+                    f"(categories: {list(by_category.keys())})"
                 )
             except Exception as e:
                 logger.error(f"Scoring failed, all Arxiv papers become summary: {e}")
