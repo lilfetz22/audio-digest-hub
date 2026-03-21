@@ -194,3 +194,106 @@ class TestFeedbackClient:
 
         clicked = client.fetch_clicked_papers(days=30)
         assert clicked == []
+
+    @patch("research_papers.feedback.requests")
+    def test_handles_non_200_status(self, mock_requests):
+        """Should return empty list on non-200 status code."""
+        client = FeedbackClient(
+            api_url="https://example.supabase.co/functions/v1",
+            api_key="test-key",
+        )
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_requests.get.return_value = mock_response
+
+        clicked = client.fetch_clicked_papers(days=30)
+        assert clicked == []
+
+
+class TestProfileEdgeCases:
+    """Additional edge case tests for PreferenceProfileManager."""
+
+    def test_empty_profile_with_no_interests_or_examples(self, tmp_profile):
+        """Should return empty string for profile with empty interests and examples."""
+        manager = PreferenceProfileManager(profile_path=tmp_profile)
+        profile = {
+            "interests_learned": [],
+            "example_papers": [],
+            "updated_at": "2026-03-12T10:00:00Z",
+        }
+        with open(tmp_profile, "w") as f:
+            json.dump(profile, f)
+
+        result = manager.load_profile()
+        assert result == ""
+
+    def test_update_with_empty_clicked_papers(self, manager, tmp_profile):
+        """Should return early when clicked_papers is empty."""
+        manager.update_profile([])
+        import os
+        assert not os.path.exists(tmp_profile)
+
+    def test_extract_interests_without_api_key(self, tmp_profile):
+        """Should return empty list when no API key is configured."""
+        manager = PreferenceProfileManager(
+            profile_path=tmp_profile,
+            api_key="",
+        )
+        result = manager._extract_interests([{"title": "Test", "abstract": "Test"}])
+        assert result == []
+
+    def test_extract_interests_with_placeholder_key(self, tmp_profile):
+        """Should return empty list when API key is the placeholder."""
+        manager = PreferenceProfileManager(
+            profile_path=tmp_profile,
+            api_key="your-gemini-api-key",
+        )
+        result = manager._extract_interests([{"title": "Test", "abstract": "Test"}])
+        assert result == []
+
+    @patch("research_papers.feedback.genai")
+    def test_extract_interests_with_code_fenced_response(self, mock_genai, tmp_profile):
+        """Should handle response wrapped in markdown code fences."""
+        manager = PreferenceProfileManager(
+            profile_path=tmp_profile,
+            api_key="real-key",
+        )
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.text = '```json\n["interest1", "interest2"]\n```'
+        mock_client.models.generate_content.return_value = mock_response
+
+        result = manager._extract_interests([{"title": "Test", "abstract": "Test"}])
+        assert result == ["interest1", "interest2"]
+
+    @patch("research_papers.feedback.genai")
+    def test_extract_interests_handles_exception(self, mock_genai, tmp_profile):
+        """Should return empty list on Gemini API exception."""
+        manager = PreferenceProfileManager(
+            profile_path=tmp_profile,
+            api_key="real-key",
+        )
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.models.generate_content.side_effect = Exception("API error")
+
+        result = manager._extract_interests([{"title": "Test", "abstract": "Test"}])
+        assert result == []
+
+    def test_read_profile_handles_corrupt_json(self, tmp_profile):
+        """Should return None when profile JSON is corrupt."""
+        manager = PreferenceProfileManager(profile_path=tmp_profile)
+        with open(tmp_profile, "w") as f:
+            f.write("not valid json {{{")
+
+        result = manager._read_profile()
+        assert result is None
+
+    def test_write_profile_handles_error(self, tmp_profile):
+        """Should not crash on write error."""
+        manager = PreferenceProfileManager(
+            profile_path="/nonexistent/path/profile.json"
+        )
+        # Should not raise
+        manager._write_profile({"test": "data"})
