@@ -144,6 +144,40 @@ class TestPreferenceProfile:
             system_instruction = getattr(config, "system_instruction", "")
             assert "retrieval-augmented generation" in str(system_instruction)
 
+class TestEmptyInput:
+    """Tests for empty input."""
+
+    def test_empty_papers_returns_empty(self, scorer):
+        """Should return empty list when no papers are provided."""
+        result = scorer.score([], preference_profile="")
+        assert result == []
+
+
+class TestResponseParsing:
+    """Tests for response parsing edge cases."""
+
+    def test_parse_code_fenced_response(self, scorer, sample_arxiv_papers):
+        """Should handle response wrapped in markdown code fences."""
+        response_text = '```json\n[{"url": "https://arxiv.org/abs/2603.12345", "score": 8, "reasoning": "Good"}]\n```'
+        result = scorer._parse_response(response_text, sample_arxiv_papers)
+        assert "https://arxiv.org/abs/2603.12345" in result
+        assert result["https://arxiv.org/abs/2603.12345"]["score"] == 8
+
+    def test_parse_invalid_json_returns_empty(self, scorer, sample_arxiv_papers):
+        """Should return empty dict on completely unparseable JSON."""
+        result = scorer._parse_response("not json at all", sample_arxiv_papers)
+        assert result == {}
+
+    def test_parse_non_array_returns_empty(self, scorer, sample_arxiv_papers):
+        """Should return empty dict when response is valid JSON but not an array."""
+        result = scorer._parse_response('{"key": "value"}', sample_arxiv_papers)
+        assert result == {}
+
+    def test_parse_latex_backslash_in_reasoning(self, scorer, sample_arxiv_papers):
+        """Should handle LaTeX backslashes in reasoning strings."""
+        response_text = '[{"url": "https://arxiv.org/abs/2603.12345", "score": 7, "reasoning": "Uses \\alpha and \\beta"}]'
+        result = scorer._parse_response(response_text, sample_arxiv_papers)
+        assert "https://arxiv.org/abs/2603.12345" in result
 
 class TestErrorHandling:
     """Tests for API error handling."""
