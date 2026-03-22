@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Supabase CLI ephemeral state (env-specific URLs, versions — must not be committed)
+supabase/.temp/
+
 # virtual environment
 audiogeneratorenv/
 src/audiobooks/config.ini
