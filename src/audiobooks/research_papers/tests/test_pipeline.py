@@ -411,6 +411,44 @@ class TestErrorHandling:
         mock_requests.post.assert_called_once()
 
     @patch("research_papers.pipeline.requests")
+    def test_push_metadata_preserves_actual_scores(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
+        """Actual Gemini scores should be preserved in pushed metadata, not hardcoded 10/0."""
+        pipeline.output_dir = str(tmp_path)
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = "preference"
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=arxiv_papers[0], score=9.2, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[1], score=7.5, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[2], score=3.1, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[3], score=8.0, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=arxiv_papers[4], score=4.8, tier="summary", reasoning="ok"),
+        ]
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
+        )
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests.post.return_value = mock_response
+
+        pipeline.run("2026-03-14")
+
+        mock_requests.post.assert_called_once()
+        call_kwargs = mock_requests.post.call_args
+        pushed_papers = call_kwargs[1]["json"]["papers"]
+        score_by_url = {p["url"]: p["score"] for p in pushed_papers}
+
+        # Deep-dive Arxiv papers must carry their real scores, not hardcoded 10
+        assert score_by_url[arxiv_papers[0].url] == 9.2
+        assert score_by_url[arxiv_papers[1].url] == 7.5
+        # Summary Arxiv papers must carry their real scores, not hardcoded 0
+        assert score_by_url[arxiv_papers[2].url] == 3.1
+        assert score_by_url[arxiv_papers[4].url] == 4.8
+
+    @patch("research_papers.pipeline.requests")
     def test_push_metadata_failure(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
         """Should handle metadata push failure gracefully."""
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []

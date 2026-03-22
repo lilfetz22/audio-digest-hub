@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from collections import defaultdict
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import requests
 
@@ -103,6 +103,7 @@ class ResearchPaperPipeline:
         # Step 5: Score Arxiv papers only
         deep_dive_refs: List[PaperReference] = []
         summary_refs: List[PaperReference] = []
+        url_to_score: Dict[str, float] = {}
 
         if arxiv_papers:
             try:
@@ -111,6 +112,7 @@ class ResearchPaperPipeline:
                 by_category: dict[str, List[ScoredPaper]] = defaultdict(list)
                 for sp in scored:
                     by_category[sp.paper.category or "arxiv"].append(sp)
+                    url_to_score[sp.paper.url] = sp.score
 
                 for cat, cat_scored in by_category.items():
                     # Already sorted by score descending from scorer
@@ -179,7 +181,7 @@ class ResearchPaperPipeline:
         logger.info(f"Saved transcript to {output_path}")
 
         # Step 10: Push metadata to Supabase
-        self._push_metadata(date_str, deep_dive_content, summary_refs)
+        self._push_metadata(date_str, deep_dive_content, summary_refs, url_to_score)
 
         logger.info(f"=== Pipeline completed for {date_str} ===")
 
@@ -198,8 +200,10 @@ class ResearchPaperPipeline:
         date_str: str,
         deep_dive: List[PaperContent],
         summary: List[PaperReference],
+        url_to_score: Optional[Dict[str, float]] = None,
     ) -> None:
         """Push paper metadata to Supabase edge function."""
+        score_map = url_to_score or {}
         papers_data = []
 
         for paper in deep_dive:
@@ -208,7 +212,7 @@ class ResearchPaperPipeline:
                     "url": paper.url,
                     "title": paper.title,
                     "abstract": paper.abstract,
-                    "score": 10,  # Deep-dive papers are top scored
+                    "score": score_map.get(paper.url, 10.0),
                     "tier": "deep_dive",
                     "source": paper.source,
                     "clicked": False,
@@ -221,7 +225,7 @@ class ResearchPaperPipeline:
                     "url": paper.url,
                     "title": paper.title,
                     "abstract": paper.abstract,
-                    "score": 0,
+                    "score": score_map.get(paper.url, 0.0),
                     "tier": "summary",
                     "source": paper.source,
                     "clicked": False,

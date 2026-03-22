@@ -4,7 +4,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
 }
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -66,8 +69,15 @@ serve(async (req) => {
         )
       }
 
+      if (!DATE_PATTERN.test(date)) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid date format, expected YYYY-MM-DD' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const filePath = `${userId}/${date}.json`
-      const fileContent = JSON.stringify({ date, papers })
+      const fileContent = new Blob([JSON.stringify({ date, papers })], { type: 'application/json' })
 
       const { error: uploadError } = await supabaseClient.storage
         .from('research-papers')
@@ -136,6 +146,13 @@ serve(async (req) => {
         )
       }
 
+      if (!DATE_PATTERN.test(date)) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid date format, expected YYYY-MM-DD' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const filePath = `${userId}/${date}.json`
       const { data: fileData, error: downloadError } = await supabaseClient.storage
         .from('research-papers')
@@ -165,6 +182,13 @@ serve(async (req) => {
       if (!date || !paper_url) {
         return new Response(
           JSON.stringify({ error: 'Missing date or paper_url' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (!DATE_PATTERN.test(date)) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid date format, expected YYYY-MM-DD' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -204,7 +228,7 @@ serve(async (req) => {
       }
 
       // Re-upload the updated data
-      const updatedContent = JSON.stringify(parsed)
+      const updatedContent = new Blob([JSON.stringify(parsed)], { type: 'application/json' })
       const { error: uploadError } = await supabaseClient.storage
         .from('research-papers')
         .upload(filePath, updatedContent, {
