@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExternalLink, Check, ChevronLeft, ChevronRight, FlaskConical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { SUPABASE_URL } from '@/integrations/supabase/client';
 
 interface Paper {
   url: string;
@@ -22,7 +23,7 @@ interface DayData {
   papers: Paper[];
 }
 
-const API_URL = 'https://fpflgstvoztlbmowvpeo.supabase.co/functions/v1';
+const API_URL = `${SUPABASE_URL}/functions/v1`;
 
 const ResearchReview = () => {
   const { user } = useAuth();
