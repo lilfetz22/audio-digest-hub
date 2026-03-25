@@ -20,7 +20,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Authenticate via API key (same pattern as other edge functions)
+    // Authenticate via Supabase JWT (browser login) or API key (pipeline)
     const authHeader = req.headers.get('Authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
@@ -29,32 +29,41 @@ serve(async (req) => {
       )
     }
 
-    const apiKey = authHeader.substring(7)
-    const encoder = new TextEncoder()
-    const data = encoder.encode(apiKey)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    const token = authHeader.substring(7)
 
-    const { data: apiKeyData, error: apiKeyError } = await supabaseClient
-      .from('api_keys')
-      .select('user_id')
-      .eq('key_hash', keyHash)
-      .single()
+    // Try Supabase JWT first (browser users)
+    let userId: string | null = null
+    const { data: { user: jwtUser } } = await supabaseClient.auth.getUser(token)
+    if (jwtUser) {
+      userId = jwtUser.id
+    } else {
+      // Fall back to API key lookup (backend pipeline)
+      const encoder = new TextEncoder()
+      const data = encoder.encode(token)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
-    if (apiKeyError || !apiKeyData) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid API key' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      const { data: apiKeyData, error: apiKeyError } = await supabaseClient
+        .from('api_keys')
+        .select('user_id')
+        .eq('key_hash', keyHash)
+        .single()
+
+      if (apiKeyError || !apiKeyData) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid credentials' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      await supabaseClient
+        .from('api_keys')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('key_hash', keyHash)
+
+      userId = apiKeyData.user_id
     }
-
-    await supabaseClient
-      .from('api_keys')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('key_hash', keyHash)
-
-    const userId = apiKeyData.user_id
     const url = new URL(req.url)
 
     // POST: Pipeline pushes daily paper list

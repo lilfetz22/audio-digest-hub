@@ -26,7 +26,7 @@ interface DayData {
 const API_URL = `${SUPABASE_URL}/functions/v1`;
 
 const ResearchReview = () => {
-  const { user } = useAuth();
+  const { session } = useAuth();
   const { toast } = useToast();
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,10 +35,10 @@ const ResearchReview = () => {
     yesterday.setDate(yesterday.getDate() - 1);
     return yesterday.toISOString().split('T')[0];
   });
-  const [apiKey, setApiKey] = useState('');
 
   const fetchPapers = useCallback(async () => {
-    if (!apiKey) {
+    const token = session?.access_token;
+    if (!token) {
       setLoading(false);
       return;
     }
@@ -49,7 +49,7 @@ const ResearchReview = () => {
         `${API_URL}/research-papers?date=${selectedDate}`,
         {
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         }
@@ -67,36 +67,24 @@ const ResearchReview = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, apiKey]);
+  }, [selectedDate, session]);
 
   useEffect(() => {
     fetchPapers();
   }, [fetchPapers]);
-
-  // Load API key from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem('research_api_key');
-    if (stored) {
-      setApiKey(stored);
-    }
-  }, []);
-
-  const saveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('research_api_key', key);
-  };
 
   const handlePaperClick = async (paper: Paper) => {
     // Open paper in new tab
     window.open(paper.url, '_blank', 'noopener,noreferrer');
 
     // Mark as clicked via PATCH
-    if (apiKey) {
+    const token = session?.access_token;
+    if (token) {
       try {
         await fetch(`${API_URL}/research-papers`, {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -132,7 +120,7 @@ const ResearchReview = () => {
     return 'outline';
   };
 
-  if (!apiKey) {
+  if (!session) {
     return (
       <div className="px-4 py-8 max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
@@ -140,30 +128,8 @@ const ResearchReview = () => {
           <h1 className="text-2xl font-bold text-gray-900">Research Review</h1>
         </div>
         <Card>
-          <CardHeader>
-            <CardTitle>Enter API Key</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Enter your API key to access research paper data.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                type="password"
-                placeholder="Your API key"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    saveApiKey((e.target as HTMLInputElement).value);
-                  }
-                }}
-              />
-              <Button onClick={(e) => {
-                const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                if (input?.value) saveApiKey(input.value);
-              }}>
-                Connect
-              </Button>
-            </div>
+          <CardContent className="py-12 text-center text-gray-500">
+            Please sign in to view research papers.
           </CardContent>
         </Card>
       </div>
