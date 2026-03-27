@@ -76,6 +76,8 @@ class ArxivHFEmailParser(PaperSource):
                     seen_urls.add(paper.url)
                     papers.append(paper)
 
+            self._mark_as_read(gmail_service, msg_info["id"])
+
         logger.info(
             f"Extracted {len(papers)} unique papers from {len(messages)} email(s)"
         )
@@ -100,6 +102,18 @@ class ArxivHFEmailParser(PaperSource):
         except Exception as e:
             logger.error(f"Gmail query failed: {e}", exc_info=True)
             return []
+
+    def _mark_as_read(self, service, message_id: str) -> None:
+        """Remove the UNREAD label from a Gmail message."""
+        try:
+            service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"removeLabelIds": ["UNREAD"]},
+            ).execute()
+            logger.debug(f"Marked message {message_id} as read")
+        except Exception as e:
+            logger.warning(f"Failed to mark message {message_id} as read: {e}")
 
     def _extract_sender(self, msg: dict) -> str:
         """Extract the sender email address from a Gmail message."""
