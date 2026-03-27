@@ -255,9 +255,27 @@ def remove_markdown_links(text):
     return re.sub(r"\[([^\]]+)\]\(.*?\)", r"\1", text)
 
 
+def _extract_date_from_filename(file_path):
+    """
+    Extracts a YYYY-MM-DD date from the filename.
+    Returns a datetime.date if found, None otherwise.
+    """
+    filename = os.path.basename(file_path)
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
+    if match:
+        try:
+            return datetime.datetime.strptime(match.group(1), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
 def process_raw_content_files(target_date):
     """
-    Processes .txt files in the raw_content folder that were created on the target date.
+    Processes .txt files in the raw_content folder matching the target date.
+    Date matching uses the date embedded in the filename (e.g. research_digest_2026-03-25.txt)
+    so that the correct day's content is always matched regardless of when the file was created.
+    Falls back to file creation time for files without a date in the filename.
     Returns text blocks in the same format as email processing.
     """
     logger.info(
@@ -283,14 +301,20 @@ def process_raw_content_files(target_date):
 
     for file_path in txt_files:
         try:
-            # Get file creation time
-            file_stat = os.path.getctime(file_path)
-            file_creation_date = datetime.datetime.fromtimestamp(file_stat).date()
+            # Try to extract date from filename first (e.g. research_digest_2026-03-25.txt)
+            file_date = _extract_date_from_filename(file_path)
+            date_source = "filename"
 
-            # Check if file was created on the target date
-            if file_creation_date == target_date:
+            # Fall back to file creation time if no date in filename
+            if file_date is None:
+                file_stat = os.path.getctime(file_path)
+                file_date = datetime.datetime.fromtimestamp(file_stat).date()
+                date_source = "creation time"
+
+            # Check if file matches the target date
+            if file_date == target_date:
                 logger.info(
-                    f"Processing raw content file: {os.path.basename(file_path)} (created: {file_creation_date})"
+                    f"Processing raw content file: {os.path.basename(file_path)} (matched by {date_source}: {file_date})"
                 )
 
                 # Read file content
@@ -323,11 +347,11 @@ def process_raw_content_files(target_date):
                     logger.error(f"Could not read file {file_path}: {e}")
             else:
                 logger.debug(
-                    f"Skipping file {os.path.basename(file_path)} - created on {file_creation_date}, not target date {target_date}"
+                    f"Skipping file {os.path.basename(file_path)} - {date_source} date {file_date}, not target date {target_date}"
                 )
 
         except OSError as e:
-            logger.error(f"Could not get creation time for file {file_path}: {e}")
+            logger.error(f"Could not get date for file {file_path}: {e}")
 
     if raw_text_blocks:
         logger.info(
