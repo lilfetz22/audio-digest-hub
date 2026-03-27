@@ -6,6 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List
 
+import httpx
 from google import genai
 from google.genai import types
 
@@ -224,9 +225,36 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         )
         logger.info(f"Batch job created: {batch_job.name}")
 
-        # Poll for completion
+        # Poll for completion with resilient retry on transient connection errors
+        max_conn_failures = 5
+        conn_failures = 0
         while True:
-            batch_job = client.batches.get(name=batch_job.name)
+            try:
+                batch_job = client.batches.get(name=batch_job.name)
+                conn_failures = 0  # reset on success
+            except (
+                httpx.ConnectError,
+                httpx.RemoteProtocolError,
+                httpx.ReadError,
+                ConnectionError,
+                OSError,
+            ) as e:
+                conn_failures += 1
+                if conn_failures >= max_conn_failures:
+                    raise RuntimeError(
+                        f"Batch polling failed after {max_conn_failures} "
+                        f"consecutive connection errors: {e}"
+                    ) from e
+                logger.warning(
+                    f"Transient connection error while polling batch job "
+                    f"(attempt {conn_failures}/{max_conn_failures}): {e}. "
+                    f"Recreating client and retrying in "
+                    f"{self.batch_poll_interval}s..."
+                )
+                time.sleep(self.batch_poll_interval)
+                client = genai.Client(api_key=self.api_key)
+                continue
+
             status = batch_job.state
 
             if status in types.JOB_STATES_SUCCEEDED:
@@ -241,12 +269,11 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
             )
             time.sleep(self.batch_poll_interval)
 
-        # Retrieve results
-        result = client.batches.get(name=batch_job.name)
+        # Retrieve results from the already-fetched batch job
         transcripts: List[str] = []
 
-        if result.dest and result.dest.inlined_responses:
-            for i, resp in enumerate(result.dest.inlined_responses):
+        if batch_job.dest and batch_job.dest.inlined_responses:
+            for i, resp in enumerate(batch_job.dest.inlined_responses):
                 if resp.error:
                     logger.error(
                         f"Batch request {i} error: {resp.error}"
