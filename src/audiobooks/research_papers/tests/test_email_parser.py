@@ -428,6 +428,84 @@ class TestExtractHtmlBody:
         assert result is not None
         assert "Hello" in result
 
+
+class TestMarkAsRead:
+    """Tests for marking emails as read after extraction."""
+
+    def test_marks_email_as_read_after_extraction(self, parser, mock_gmail_service):
+        """Should call messages().modify() to remove UNREAD label after processing."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
+        )
+
+        parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+
+        mock_gmail_service.users().messages().modify.assert_called_once_with(
+            userId="me",
+            id="msg1",
+            body={"removeLabelIds": ["UNREAD"]},
+        )
+
+    def test_marks_multiple_emails_as_read(self, parser, mock_gmail_service):
+        """Should mark each processed email as read individually."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}, {"id": "msg2"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
+        )
+
+        parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+
+        assert mock_gmail_service.users().messages().modify.call_count == 2
+
+    def test_marks_huggingface_email_as_read(self, parser, mock_gmail_service):
+        """Should mark HuggingFace emails as read after extraction."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg2"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg2", "no-reply@huggingface.co", HUGGINGFACE_EMAIL_HTML)
+        )
+
+        parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+
+        mock_gmail_service.users().messages().modify.assert_called_once_with(
+            userId="me",
+            id="msg2",
+            body={"removeLabelIds": ["UNREAD"]},
+        )
+
+    def test_does_not_mark_skipped_unknown_sender_as_read(self, parser, mock_gmail_service):
+        """Should not mark emails from unknown senders as read (they are skipped via continue)."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "unknown@example.com", ARXIV_EMAIL_HTML)
+        )
+
+        parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+
+        mock_gmail_service.users().messages().modify.assert_not_called()
+
+    def test_mark_as_read_failure_does_not_raise(self, parser, mock_gmail_service):
+        """A failure to mark as read should be logged but not propagate as an exception."""
+        mock_gmail_service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "msg1"}]
+        }
+        mock_gmail_service.users().messages().get().execute.return_value = (
+            _make_gmail_message("msg1", "no-reply@arxiv.org", ARXIV_EMAIL_HTML, subject="[cs] daily digest")
+        )
+        mock_gmail_service.users().messages().modify().execute.side_effect = Exception("API error")
+
+        # Should not raise
+        papers = parser.fetch_papers("2026-03-14", gmail_service=mock_gmail_service)
+        assert len(papers) > 0
+
     def test_returns_none_on_empty_payload(self, parser):
         """Should return None when payload has no parts and no body data."""
         msg = {"payload": {}}
