@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 import requests
 
+from .dedup import deduplicate
 from .interfaces import (
     PaperSource,
     ContentExtractor,
@@ -92,6 +93,12 @@ class ResearchPaperPipeline:
             return
 
         logger.info(f"Found {len(papers)} papers total")
+
+        # Step 3b: Remove papers already seen in the past 14 days
+        papers = deduplicate(papers, date_str)
+        if not papers:
+            logger.info(f"All papers for {date_str} were duplicates. Skipping.")
+            return
 
         # Step 4: Split by source
         hf_papers = [p for p in papers if p.source == "huggingface"]
