@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, SkipForward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PlayerControls } from '@/components/player/PlayerControls';
 import { ChaptersList } from '@/components/player/ChaptersList';
@@ -19,14 +19,46 @@ interface Audiobook {
   chapters_json: Record<string, number> | null;
 }
 
+/** Parse "Part X of Y" from a title like "Daily Digest for 2026-04-02 (Part 1 of 4)" */
+function parseMultiPart(title: string): { baseTitle: string; part: number; total: number } | null {
+  const match = title.match(/^(.+?)\s*\(Part (\d+) of (\d+)\)\s*$/i);
+  if (!match) return null;
+  return { baseTitle: match[1].trim(), part: parseInt(match[2], 10), total: parseInt(match[3], 10) };
+}
+
 const Player = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const autoPlay = (location.state as { autoPlay?: boolean })?.autoPlay ?? false;
   const [audiobook, setAudiobook] = useState<Audiobook | null>(null);
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [nextPartId, setNextPartId] = useState<string | null>(null);
+
+  const handleEnded = useCallback(async () => {
+    if (!audiobook) return;
+    const parsed = parseMultiPart(audiobook.title);
+    if (!parsed || parsed.part >= parsed.total) return;
+
+    const nextTitle = `${parsed.baseTitle} (Part ${parsed.part + 1} of ${parsed.total})`;
+    try {
+      const { data } = await supabase
+        .from('audiobooks')
+        .select('id')
+        .eq('title', nextTitle)
+        .maybeSingle();
+
+      if (data) {
+        toast({ title: 'Loading next part', description: nextTitle });
+        navigate(`/player/${data.id}`, { state: { autoPlay: true } });
+      }
+    } catch (err) {
+      console.error('Error finding next part:', err);
+    }
+  }, [audiobook, navigate, toast]);
 
   const {
     audioRef,
@@ -44,13 +76,45 @@ const Player = () => {
     handleVolumeChange,
     handlePlaybackRateChange,
     handleLoadedData,
-  } = useAudioPlayer(audiobook);
+  } = useAudioPlayer(audiobook, handleEnded);
 
   useEffect(() => {
     if (id) {
       fetchAudiobook();
     }
   }, [id, user]);
+
+  // Auto-play when navigating from a completed previous part
+  useEffect(() => {
+    if (autoPlay && audioUrl && audioRef.current) {
+      const audio = audioRef.current;
+      const tryAutoPlay = () => {
+        audio.play().catch((err) => console.error('Auto-play failed:', err));
+        audio.removeEventListener('canplay', tryAutoPlay);
+      };
+      if (audio.readyState >= 3) {
+        audio.play().catch((err) => console.error('Auto-play failed:', err));
+      } else {
+        audio.addEventListener('canplay', tryAutoPlay);
+        return () => audio.removeEventListener('canplay', tryAutoPlay);
+      }
+    }
+  }, [autoPlay, audioUrl]);
+
+  // Look up the next part ID for the UI "Next Part" button
+  useEffect(() => {
+    if (!audiobook) { setNextPartId(null); return; }
+    const parsed = parseMultiPart(audiobook.title);
+    if (!parsed || parsed.part >= parsed.total) { setNextPartId(null); return; }
+
+    const nextTitle = `${parsed.baseTitle} (Part ${parsed.part + 1} of ${parsed.total})`;
+    supabase
+      .from('audiobooks')
+      .select('id')
+      .eq('title', nextTitle)
+      .maybeSingle()
+      .then(({ data }) => setNextPartId(data?.id ?? null));
+  }, [audiobook]);
 
   const fetchAudiobook = async () => {
     if (!user || !id) return;
@@ -151,6 +215,8 @@ const Player = () => {
     typeof startTime === 'number' && !isNaN(startTime) && isFinite(startTime)
   );
 
+  const multiPart = parseMultiPart(audiobook.title);
+
   return (
     <div className="px-4 py-6 max-w-4xl mx-auto">
       <Button
@@ -166,7 +232,28 @@ const Player = () => {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">{audiobook.title}</CardTitle>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-2xl">{audiobook.title}</CardTitle>
+                  {multiPart && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      {multiPart.part < multiPart.total
+                        ? 'Next part will play automatically when this one ends.'
+                        : 'This is the final part.'}
+                    </p>
+                  )}
+                </div>
+                {nextPartId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/player/${nextPartId}`)}
+                  >
+                    <SkipForward className="h-4 w-4 mr-1" />
+                    Next Part
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <audio

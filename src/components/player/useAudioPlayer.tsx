@@ -10,7 +10,7 @@ interface Audiobook {
   chapters_json: Record<string, number> | null;
 }
 
-export const useAudioPlayer = (audiobook: Audiobook | null) => {
+export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -82,6 +82,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       console.log('Ended event fired');
       setIsPlaying(false);
       setIsLoading(false);
+      onEnded?.();
     };
 
     const handleLoadStart = () => {
@@ -162,7 +163,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null) => {
       audio.removeEventListener('seeked', handleSeeked);
       audio.removeEventListener('playing', handlePlaying);
     };
-  }, [audioRef.current]); // Only depend on the audio element itself
+  }, [audioRef.current, onEnded]); // Re-attach when audio element or onEnded changes
 
   // Save playback position every 5 seconds when playing
   useEffect(() => {
