@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-from collections import defaultdict
 from typing import Dict, List, Optional
 
 import requests
@@ -37,8 +36,7 @@ class ResearchPaperPipeline:
         api_url: str,
         api_key: str,
         output_dir: str = "raw_content",
-        deep_dive_per_category: int = 5,
-        summary_per_category: int = 10,
+        top_n_deep_dive: int = 25,
     ):
         self.email_parser = email_parser
         self.paper_downloader = paper_downloader
@@ -50,8 +48,7 @@ class ResearchPaperPipeline:
         self.api_url = api_url
         self.api_key = api_key
         self.output_dir = output_dir
-        self.deep_dive_per_category = deep_dive_per_category
-        self.summary_per_category = summary_per_category
+        self.top_n_deep_dive = top_n_deep_dive
 
     def run(self, date_str: str) -> None:
         """Run the full pipeline for a given date.
@@ -60,13 +57,12 @@ class ResearchPaperPipeline:
             1. Check idempotency (skip if output exists)
             2. Load preference profile from feedback
             3. Parse emails for paper references
-            4. Split by source (HuggingFace vs Arxiv)
-            5. Score Arxiv papers
-            6. Mark all HuggingFace papers as deep_dive
-            7. Download full content for deep_dive papers
-            8. Generate transcript
-            9. Save transcript to output_dir
-            10. Push paper metadata to Supabase
+            4. Score all papers (HuggingFace + Arxiv) together
+            5. Select top N papers for deep_dive, rest become summary
+            6. Download full content for deep_dive papers
+            7. Generate transcript
+            8. Save transcript to output_dir
+            9. Push paper metadata to Supabase
         """
         output_filename = f"research_digest_{date_str}.txt"
         output_path = os.path.join(self.output_dir, output_filename)
@@ -100,54 +96,33 @@ class ResearchPaperPipeline:
             logger.info(f"All papers for {date_str} were duplicates. Skipping.")
             return
 
-        # Step 4: Split by source
-        hf_papers = [p for p in papers if p.source == "huggingface"]
-        arxiv_papers = [p for p in papers if p.source == "arxiv"]
-        logger.info(
-            f"Split: {len(hf_papers)} HuggingFace, {len(arxiv_papers)} Arxiv"
-        )
-
-        # Step 5: Score Arxiv papers only
+        # Step 4: Score all papers together
         deep_dive_refs: List[PaperReference] = []
         summary_refs: List[PaperReference] = []
         url_to_score: Dict[str, float] = {}
 
-        if arxiv_papers:
-            try:
-                scored = self.paper_scorer.score(arxiv_papers, preference_profile)
-                # Group scored papers by category, select top N per category
-                by_category: dict[str, List[ScoredPaper]] = defaultdict(list)
-                for sp in scored:
-                    by_category[sp.paper.category or "arxiv"].append(sp)
-                    url_to_score[sp.paper.url] = sp.score
+        try:
+            scored = self.paper_scorer.score(papers, preference_profile)
+            for sp in scored:
+                url_to_score[sp.paper.url] = sp.score
 
-                for cat, cat_scored in by_category.items():
-                    # Already sorted by score descending from scorer
-                    cat_scored.sort(key=lambda s: s.score, reverse=True)
-                    for i, sp in enumerate(cat_scored):
-                        if i < self.deep_dive_per_category:
-                            deep_dive_refs.append(sp.paper)
-                        elif i < self.deep_dive_per_category + self.summary_per_category:
-                            summary_refs.append(sp.paper)
-                        # Papers beyond deep_dive + summary counts are discarded
+            # Step 5: Top N become deep_dive, rest become summary
+            scored.sort(key=lambda s: s.score, reverse=True)
+            for i, sp in enumerate(scored):
+                if i < self.top_n_deep_dive:
+                    deep_dive_refs.append(sp.paper)
+                else:
+                    summary_refs.append(sp.paper)
 
-                logger.info(
-                    f"Arxiv per-category selection: {len(deep_dive_refs)} deep-dive, "
-                    f"{len(summary_refs)} summary "
-                    f"(categories: {list(by_category.keys())})"
-                )
-            except Exception as e:
-                logger.error(f"Scoring failed, all Arxiv papers become summary: {e}")
-                summary_refs.extend(arxiv_papers)
+            logger.info(
+                f"Scored {len(scored)} papers: "
+                f"{len(deep_dive_refs)} deep-dive, {len(summary_refs)} summary"
+            )
+        except Exception as e:
+            logger.error(f"Scoring failed, all papers become summary: {e}")
+            summary_refs.extend(papers)
 
-        # Step 6: All HuggingFace papers are deep_dive
-        deep_dive_refs.extend(hf_papers)
-        logger.info(
-            f"Total deep-dive papers: {len(deep_dive_refs)} "
-            f"(including {len(hf_papers)} HuggingFace)"
-        )
-
-        # Step 7: Download full content for deep-dive papers
+        # Step 6: Download full content for deep-dive papers
         deep_dive_content: List[PaperContent] = []
         for paper in deep_dive_refs:
             try:
@@ -168,26 +143,26 @@ class ResearchPaperPipeline:
             f"{len(summary_refs)} summary papers"
         )
 
-        if not deep_dive_content and not summary_refs:
-            logger.warning("No papers available for transcript generation")
+        if not deep_dive_content:
+            logger.warning("No deep-dive papers available for transcript generation")
             return
 
-        # Step 8: Generate transcript
+        # Step 7: Generate transcript
         try:
             transcript = self.transcript_generator.generate(
-                deep_dive_content, summary_refs, date_str
+                deep_dive_content, date_str
             )
         except Exception as e:
             logger.error(f"Transcript generation failed: {e}", exc_info=True)
             return
 
-        # Step 9: Save transcript
+        # Step 8: Save transcript
         os.makedirs(self.output_dir, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(transcript)
         logger.info(f"Saved transcript to {output_path}")
 
-        # Step 10: Push metadata to Supabase
+        # Step 9: Push metadata to Supabase
         self._push_metadata(date_str, deep_dive_content, summary_refs, url_to_score)
 
         logger.info(f"=== Pipeline completed for {date_str} ===")
