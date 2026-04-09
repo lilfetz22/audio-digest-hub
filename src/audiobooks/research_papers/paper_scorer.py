@@ -1,4 +1,4 @@
-"""AI-powered paper scorer using Gemini Flash — Arxiv papers only."""
+"""AI-powered paper scorer using Gemini Flash."""
 
 import json
 import logging
@@ -19,7 +19,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 class GeminiPaperScorer(PaperScorer):
-    """Scores Arxiv papers by relevance using Gemini Flash."""
+    """Scores papers by relevance using Gemini Flash."""
 
     def __init__(
         self,
@@ -34,10 +34,10 @@ class GeminiPaperScorer(PaperScorer):
     def score(
         self, papers: List[PaperReference], preference_profile: str = ""
     ) -> List[ScoredPaper]:
-        """Score Arxiv papers and assign tiers.
+        """Score papers and assign tiers.
 
         Args:
-            papers: List of Arxiv PaperReferences to score.
+            papers: List of PaperReferences to score.
             preference_profile: Formatted preference string for prompt injection.
 
         Returns:
