@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from research_papers.transcript_generator import GeminiTranscriptGenerator
-from research_papers.models import PaperReference, PaperContent
+from research_papers.models import PaperContent
 from google.genai import types
 
 
@@ -36,33 +36,6 @@ def deep_dive_papers():
     ]
 
 
-@pytest.fixture
-def summary_papers():
-    return [
-        PaperReference(
-            url="https://arxiv.org/abs/2603.12346",
-            title="Diffusion Models for Images",
-            abstract="New architectures for diffusion-based generation.",
-            source="arxiv",
-            category="cs",
-        ),
-        PaperReference(
-            url="https://arxiv.org/abs/2603.12347",
-            title="Constrained Optimization via RL",
-            abstract="RL framework for constrained optimization.",
-            source="arxiv",
-            category="stat",
-        ),
-        PaperReference(
-            url="https://arxiv.org/abs/2603.12348",
-            title="Matrix Theory Results",
-            abstract="New results in random matrix theory.",
-            source="arxiv",
-            category="math",
-        ),
-    ]
-
-
 class TestPromptConstruction:
     """Tests for prompt construction."""
 
@@ -85,41 +58,12 @@ class TestPromptConstruction:
         assert "Novel agent-based approach" in prompt
 
 
-class TestSummaryTextConstruction:
-    """Tests for summary text (no LLM call)."""
-
-    def test_summary_text_includes_titles_and_abstracts(self, generator, summary_papers):
-        """Summary text should contain title and abstract for each paper."""
-        text = generator._build_summary_text(summary_papers)
-        assert "Diffusion Models for Images" in text
-        assert "New architectures for diffusion-based generation" in text
-        assert "Constrained Optimization via RL" in text
-        assert "Matrix Theory Results" in text
-
-    def test_summary_text_grouped_by_category(self, generator, summary_papers):
-        """Summary papers should be grouped by category with TTS-friendly headings."""
-        text = generator._build_summary_text(summary_papers)
-        assert "Computer Science" in text
-        assert "Statistics" in text
-        assert "Mathematics" in text
-
-    def test_summary_text_empty_for_no_papers(self, generator):
-        """Should return empty string when no summary papers."""
-        text = generator._build_summary_text([])
-        assert text == ""
-
-    def test_summary_text_has_intro_line(self, generator, summary_papers):
-        """Summary section should start with a TTS-friendly intro line."""
-        text = generator._build_summary_text(summary_papers)
-        assert "additional notable papers" in text
-
-
 class TestPerPaperGeneration:
     """Tests for per-paper deep dive generation."""
 
     @patch("research_papers.transcript_generator.genai")
     def test_each_paper_gets_own_llm_call(
-        self, mock_genai, generator, deep_dive_papers, summary_papers
+        self, mock_genai, generator, deep_dive_papers
     ):
         """Each deep-dive paper should trigger its own LLM call (realtime mode)."""
         mock_client = MagicMock()
@@ -129,34 +73,29 @@ class TestPerPaperGeneration:
         mock_response.text = "Deep dive transcript for this paper."
         mock_client.models.generate_content.return_value = mock_response
 
-        result = generator.generate(
-            deep_dive_papers, summary_papers, "2026-03-14"
-        )
+        result = generator.generate(deep_dive_papers, "2026-03-14")
 
         # Should be called once per deep-dive paper (2 papers = 2 calls)
         assert mock_client.models.generate_content.call_count == len(deep_dive_papers)
 
     @patch("research_papers.transcript_generator.genai")
-    def test_no_llm_call_for_summary_papers(
-        self, mock_genai, generator, summary_papers
+    def test_empty_deep_dive_returns_empty_string(
+        self, mock_genai, generator
     ):
-        """Summary papers should NOT trigger any LLM call."""
+        """With no deep-dive papers, should return an empty string without LLM calls."""
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
 
-        # No deep-dive papers — only summary
-        result = generator.generate([], summary_papers, "2026-03-14")
+        result = generator.generate([], "2026-03-14")
 
-        # No LLM calls should be made
         mock_client.models.generate_content.assert_not_called()
-        # But summary text should still be in the result
-        assert "Diffusion Models for Images" in result
+        assert result == ""
 
     @patch("research_papers.transcript_generator.genai")
-    def test_output_concatenates_deep_dives_and_summaries(
-        self, mock_genai, generator, deep_dive_papers, summary_papers
+    def test_output_concatenates_deep_dives(
+        self, mock_genai, generator, deep_dive_papers
     ):
-        """Final output should be deep-dive transcripts followed by summary text."""
+        """Final output should concatenate all deep-dive transcripts."""
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
 
@@ -166,23 +105,15 @@ class TestPerPaperGeneration:
             MagicMock(text="Deep dive on Foundation Model for Code."),
         ]
 
-        result = generator.generate(
-            deep_dive_papers, summary_papers, "2026-03-14"
-        )
+        result = generator.generate(deep_dive_papers, "2026-03-14")
 
         # Both deep dive transcripts should appear
         assert "Deep dive on Agent-Based Optimization" in result
         assert "Deep dive on Foundation Model for Code" in result
-        # Summary text should appear after deep dives
-        assert "Diffusion Models for Images" in result
-        # Deep dives should come before summaries
-        dd_pos = result.index("Deep dive on Agent-Based Optimization")
-        summary_pos = result.index("Diffusion Models for Images")
-        assert dd_pos < summary_pos
 
     @patch("research_papers.transcript_generator.genai")
     def test_handles_api_error(
-        self, mock_genai, generator, deep_dive_papers, summary_papers
+        self, mock_genai, generator, deep_dive_papers
     ):
         """Should raise on API error (pipeline handles the exception)."""
         mock_client = MagicMock()
@@ -190,14 +121,14 @@ class TestPerPaperGeneration:
         mock_client.models.generate_content.side_effect = Exception("API error")
 
         with pytest.raises(Exception):
-            generator.generate(deep_dive_papers, summary_papers, "2026-03-14")
+            generator.generate(deep_dive_papers, "2026-03-14")
 
 
 class TestBatchMode:
     """Tests for batch API mode."""
 
     @patch("research_papers.transcript_generator.genai")
-    def test_batch_creates_one_job_with_n_requests(self, mock_genai, deep_dive_papers, summary_papers):
+    def test_batch_creates_one_job_with_n_requests(self, mock_genai, deep_dive_papers):
         """Batch mode should create a single job with one InlinedRequest per paper."""
         gen = GeminiTranscriptGenerator(
             api_key="test-key",
@@ -235,7 +166,7 @@ class TestBatchMode:
         # Patch JOB_STATES_SUCCEEDED
         with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
              patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            result = gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+            result = gen.generate(deep_dive_papers, "2026-03-14")
 
         # Batch should be created once (not per paper)
         assert mock_client.batches.create.call_count == 1
@@ -250,7 +181,7 @@ class TestBatchErrorHandling:
     """Tests for batch mode error handling."""
 
     @patch("research_papers.transcript_generator.genai")
-    def test_batch_handles_error_response(self, mock_genai, deep_dive_papers, summary_papers):
+    def test_batch_handles_error_response(self, mock_genai, deep_dive_papers):
         """Should handle individual batch request errors gracefully."""
         gen = GeminiTranscriptGenerator(
             api_key="test-key",
@@ -282,13 +213,13 @@ class TestBatchErrorHandling:
 
         with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
              patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            result = gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+            result = gen.generate(deep_dive_papers, "2026-03-14")
 
         # First paper's transcript should be empty, second should work
         assert "Transcript 2" in result
 
     @patch("research_papers.transcript_generator.genai")
-    def test_batch_handles_empty_response(self, mock_genai, deep_dive_papers, summary_papers):
+    def test_batch_handles_empty_response(self, mock_genai, deep_dive_papers):
         """Should handle batch response with no candidates."""
         gen = GeminiTranscriptGenerator(
             api_key="test-key",
@@ -319,12 +250,12 @@ class TestBatchErrorHandling:
 
         with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
              patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            result = gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+            result = gen.generate(deep_dive_papers, "2026-03-14")
 
         assert isinstance(result, str)
 
     @patch("research_papers.transcript_generator.genai")
-    def test_batch_no_results_raises(self, mock_genai, deep_dive_papers, summary_papers):
+    def test_batch_no_results_raises(self, mock_genai, deep_dive_papers):
         """Should raise RuntimeError when batch returns no results at all."""
         gen = GeminiTranscriptGenerator(
             api_key="test-key",
@@ -348,10 +279,10 @@ class TestBatchErrorHandling:
         with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
              patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
             with pytest.raises(RuntimeError, match="No results"):
-                gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
+                gen.generate(deep_dive_papers, "2026-03-14")
 
     @patch("research_papers.transcript_generator.genai")
-    def test_batch_job_failure_raises(self, mock_genai, deep_dive_papers, summary_papers):
+    def test_batch_job_failure_raises(self, mock_genai, deep_dive_papers):
         """Should raise RuntimeError when batch job fails."""
         gen = GeminiTranscriptGenerator(
             api_key="test-key",
@@ -371,39 +302,7 @@ class TestBatchErrorHandling:
         with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
              patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
             with pytest.raises(RuntimeError, match="Batch job failed"):
-                gen.generate(deep_dive_papers, summary_papers, "2026-03-14")
-
-
-class TestSummaryUnknownCategory:
-    """Tests for summary text with unknown categories."""
-
-    def test_summary_text_with_unknown_category_uses_title_case(self, generator):
-        """Categories not in the display name map should use title case."""
-        papers = [
-            PaperReference(
-                url="https://arxiv.org/abs/2603.12345",
-                title="Some Paper",
-                abstract="Some abstract",
-                source="arxiv",
-                category="econ",
-            ),
-        ]
-        text = generator._build_summary_text(papers)
-        assert "Econ" in text
-
-    def test_summary_text_with_paper_without_abstract(self, generator):
-        """Papers without abstracts should still be included."""
-        papers = [
-            PaperReference(
-                url="https://arxiv.org/abs/2603.12345",
-                title="No Abstract Paper",
-                abstract="",
-                source="arxiv",
-                category="cs",
-            ),
-        ]
-        text = generator._build_summary_text(papers)
-        assert "No Abstract Paper" in text
+                gen.generate(deep_dive_papers, "2026-03-14")
 
 
 class TestOutputFormatting:
@@ -411,7 +310,7 @@ class TestOutputFormatting:
 
     @patch("research_papers.transcript_generator.genai")
     def test_output_is_clean_text(
-        self, mock_genai, generator, deep_dive_papers, summary_papers
+        self, mock_genai, generator, deep_dive_papers
     ):
         """Output should be clean transcript text without JSON or code blocks."""
         mock_client = MagicMock()
@@ -421,9 +320,7 @@ class TestOutputFormatting:
         mock_response.text = "A clean transcript about this paper."
         mock_client.models.generate_content.return_value = mock_response
 
-        result = generator.generate(
-            deep_dive_papers, summary_papers, "2026-03-14"
-        )
+        result = generator.generate(deep_dive_papers, "2026-03-14")
 
         assert not result.startswith("{")
         assert not result.startswith("[")
