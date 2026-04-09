@@ -21,8 +21,7 @@ def mock_deps():
         "api_url": "https://example.supabase.co/functions/v1",
         "api_key": "test-key",
         "output_dir": None,  # Will be set per test
-        "deep_dive_per_category": 2,
-        "summary_per_category": 3,
+        "top_n_deep_dive": 3,
     }
 
 
@@ -84,30 +83,27 @@ class TestFullFlow:
     """Test the full pipeline orchestration."""
 
     def test_end_to_end_flow(self, pipeline, mock_deps, sample_papers, tmp_path):
-        """Full flow: parse → score → download → generate → save."""
+        """Full flow: parse → score all → download top N → generate → save."""
         # Setup mocks
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
 
-        # Scorer returns scored Arxiv papers (all scored, tier assignment ignored by pipeline)
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        # Scorer returns scored papers for ALL papers (HF + Arxiv)
         scored = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="Good"),
-            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="OK"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="Low"),
-            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="Stat good"),
-            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="Stat ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="Good"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="OK"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="Low"),
+            ScoredPaper(paper=sample_papers[3], score=8, tier="deep_dive", reasoning="Stat good"),
+            ScoredPaper(paper=sample_papers[4], score=5, tier="summary", reasoning="Stat ok"),
+            ScoredPaper(paper=sample_papers[5], score=6, tier="summary", reasoning="HF ok"),
         ]
         mock_deps["paper_scorer"].score.return_value = scored
 
         # Downloader returns content for deep-dive papers
-        mock_deps["paper_downloader"].extract.return_value = PaperContent(
-            url="https://arxiv.org/abs/2603.12345",
-            title="Agent Paper",
-            abstract="Agent abstract",
-            full_text="Full text",
-            source="arxiv",
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract,
+            full_text="Full text", source=p.source,
         )
 
         # Transcript generator returns text
@@ -125,49 +121,48 @@ class TestFullFlow:
             content = f.read()
         assert "Welcome to today's digest" in content
 
-    def test_hf_papers_skip_scoring(self, pipeline, mock_deps, sample_papers, tmp_path):
-        """HuggingFace papers should NOT be sent to the scorer."""
+    def test_all_papers_sent_to_scorer(self, pipeline, mock_deps, sample_papers, tmp_path):
+        """All papers (HF + Arxiv) should be sent to the scorer together."""
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=sample_papers[0], score=5, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=sample_papers[1], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=sample_papers[2], score=2, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=sample_papers[3], score=4, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=sample_papers[4], score=1, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=p, score=5, tier="deep_dive", reasoning="ok")
+            for p in sample_papers
         ]
-        mock_deps["paper_downloader"].extract.return_value = PaperContent(
-            url="test", title="test", abstract="", full_text="text", source="arxiv"
+        mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
+            url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
         )
         mock_deps["transcript_generator"].generate.return_value = "Transcript"
 
         pipeline.run("2026-03-14")
 
-        # Scorer should only receive Arxiv papers
+        # Scorer should receive ALL papers including HuggingFace
         scorer_call = mock_deps["paper_scorer"].score.call_args
         scored_papers = scorer_call[0][0]
-        for p in scored_papers:
-            assert p.source == "arxiv"
+        sources = {p.source for p in scored_papers}
+        assert "huggingface" in sources
+        assert "arxiv" in sources
+        assert len(scored_papers) == len(sample_papers)
 
 
-class TestPerCategorySelection:
-    """Tests for per-category deep-dive and summary selection."""
+class TestTopNSelection:
+    """Tests for global top-N deep-dive selection."""
 
-    def test_selects_top_n_per_category_for_deep_dive(self, pipeline, mock_deps, sample_papers, tmp_path):
-        """Should select top deep_dive_per_category papers from each category."""
+    def test_selects_top_n_globally_for_deep_dive(self, pipeline, mock_deps, sample_papers, tmp_path):
+        """Should select top top_n_deep_dive papers globally for deep dive."""
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
 
-        # 3 CS papers scored: 9, 7, 3; 2 stat papers scored: 8, 5
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
+        # 6 papers total, top_n_deep_dive=3 → top 3 by score get deep dive
         scored = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="CS top"),
-            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="CS 2nd"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="CS low"),
-            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="Stat top"),
-            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="Stat 2nd"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="CS top"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="CS 2nd"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="CS low"),
+            ScoredPaper(paper=sample_papers[3], score=8, tier="deep_dive", reasoning="Stat top"),
+            ScoredPaper(paper=sample_papers[4], score=5, tier="summary", reasoning="Stat 2nd"),
+            ScoredPaper(paper=sample_papers[5], score=6, tier="summary", reasoning="HF"),
         ]
         mock_deps["paper_scorer"].score.return_value = scored
 
@@ -181,47 +176,38 @@ class TestPerCategorySelection:
         # Verify what was passed to transcript_generator.generate()
         gen_call = mock_deps["transcript_generator"].generate.call_args
         deep_dive_content = gen_call[0][0]
-        summary_refs = gen_call[0][1]
 
-        # deep_dive_per_category=2: top 2 from CS (scores 9, 7) + top 2 from stat (scores 8, 5)
-        # + 1 HF paper = total 5 deep dive
-        # But HF paper may fail download, so check Arxiv deep dives
+        # top_n_deep_dive=3: top 3 scores are 9, 8, 7
         deep_dive_urls = {p.url for p in deep_dive_content}
-        # CS top 2
         assert "https://arxiv.org/abs/2603.12345" in deep_dive_urls  # score 9
-        assert "https://arxiv.org/abs/2603.12346" in deep_dive_urls  # score 7
-        # Stat top 2
         assert "https://arxiv.org/abs/2603.12351" in deep_dive_urls  # score 8
-        assert "https://arxiv.org/abs/2603.12352" in deep_dive_urls  # score 5
-        # HF paper
-        assert "https://huggingface.co/papers/2603.11111" in deep_dive_urls
+        assert "https://arxiv.org/abs/2603.12346" in deep_dive_urls  # score 7
 
-        # summary_per_category=3: CS has 1 remaining (score 3), stat has 0 remaining
-        summary_urls = {p.url for p in summary_refs}
-        assert "https://arxiv.org/abs/2603.12350" in summary_urls  # CS low score
+        # Papers that didn't make the top 3 are NOT passed to generate()
+        assert "https://huggingface.co/papers/2603.11111" not in deep_dive_urls  # score 6
+        assert "https://arxiv.org/abs/2603.12352" not in deep_dive_urls  # score 5
+        assert "https://arxiv.org/abs/2603.12350" not in deep_dive_urls  # score 3
 
-    def test_discards_papers_beyond_limits(self, mock_deps, tmp_path):
-        """Papers beyond deep_dive + summary per category should be discarded."""
+    def test_discards_no_papers_all_become_deep_dive_or_summary(self, mock_deps, tmp_path):
+        """All papers should be either deep-dive or summary — none discarded."""
         mock_deps["output_dir"] = str(tmp_path)
-        mock_deps["deep_dive_per_category"] = 1
-        mock_deps["summary_per_category"] = 1
+        mock_deps["top_n_deep_dive"] = 1
         pipeline = ResearchPaperPipeline(**mock_deps)
 
-        # 3 CS papers
-        cs_papers = [
+        papers = [
             PaperReference(url=f"https://arxiv.org/abs/2603.1000{i}",
-                           title=f"CS Paper {i}", abstract=f"Abstract {i}",
+                           title=f"Paper {i}", abstract=f"Abstract {i}",
                            source="arxiv", category="cs")
             for i in range(3)
         ]
 
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
-        mock_deps["email_parser"].fetch_papers.return_value = cs_papers
+        mock_deps["email_parser"].fetch_papers.return_value = papers
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=cs_papers[0], score=9, tier="deep_dive", reasoning="top"),
-            ScoredPaper(paper=cs_papers[1], score=5, tier="summary", reasoning="mid"),
-            ScoredPaper(paper=cs_papers[2], score=2, tier="summary", reasoning="low"),
+            ScoredPaper(paper=papers[0], score=9, tier="deep_dive", reasoning="top"),
+            ScoredPaper(paper=papers[1], score=5, tier="summary", reasoning="mid"),
+            ScoredPaper(paper=papers[2], score=2, tier="summary", reasoning="low"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
             url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
@@ -232,13 +218,10 @@ class TestPerCategorySelection:
 
         gen_call = mock_deps["transcript_generator"].generate.call_args
         deep_dive_content = gen_call[0][0]
-        summary_refs = gen_call[0][1]
 
-        # deep_dive=1, summary=1 per category: 3rd CS paper (score 2) should be discarded
-        assert len(deep_dive_content) == 1  # top 1 CS
-        assert len(summary_refs) == 1  # next 1 CS
+        # top_n_deep_dive=1: top 1 paper only
+        assert len(deep_dive_content) == 1
         assert deep_dive_content[0].url == "https://arxiv.org/abs/2603.10000"
-        assert summary_refs[0].url == "https://arxiv.org/abs/2603.10001"
 
 
 class TestOutputFile:
@@ -295,13 +278,13 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=5, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=4, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=2, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=1, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=5, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=4, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=2, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=1, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=1, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.return_value = PaperContent(
             url="test", title="test", abstract="", full_text="text", source="arxiv"
@@ -318,49 +301,44 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=8, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=7, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=6, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=6, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=5, tier="summary", reasoning="ok"),
         ]
-        # Download returns None for all papers — they should move to summary
+        # Download returns None for all papers — they should move to summary in DB
+        # but transcript should NOT be generated (no deep-dive content)
         mock_deps["paper_downloader"].extract.return_value = None
         mock_deps["transcript_generator"].generate.return_value = "Transcript"
 
         pipeline.run("2026-03-14")
 
-        gen_call = mock_deps["transcript_generator"].generate.call_args
-        deep_dive_content = gen_call[0][0]
-        summary_refs = gen_call[0][1]
-        # All downloads failed, so deep_dive_content is empty
-        assert len(deep_dive_content) == 0
-        # Failed downloads moved to summary
-        assert len(summary_refs) > 0
+        # No transcript generated when all downloads fail (early exit)
+        mock_deps["transcript_generator"].generate.assert_not_called()
 
     def test_download_exception_moves_to_summary(self, pipeline, mock_deps, sample_papers, tmp_path):
         """When download raises exception, paper should be moved to summary."""
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=8, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=7, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=6, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=6, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=5, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = Exception("Download error")
         mock_deps["transcript_generator"].generate.return_value = "Transcript"
 
         pipeline.run("2026-03-14")
 
-        gen_call = mock_deps["transcript_generator"].generate.call_args
-        deep_dive_content = gen_call[0][0]
-        assert len(deep_dive_content) == 0
+        # No transcript generated when all downloads fail (early exit)
+        mock_deps["transcript_generator"].generate.assert_not_called()
 
     def test_no_papers_after_download_failure(self, pipeline, mock_deps, tmp_path):
         """Should return early when no papers are available after download failures."""
@@ -380,7 +358,7 @@ class TestErrorHandling:
         mock_deps["transcript_generator"].generate.return_value = "Transcript"
 
         pipeline.run("2026-03-14")
-        # Download failed → paper moves to summary → transcript still called
+        # Download failed → no deep-dive content → pipeline returns early (no transcript)
 
     @patch("research_papers.pipeline.requests")
     def test_push_metadata_success(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
@@ -388,13 +366,13 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = "preference"
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=6, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
             url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
@@ -417,13 +395,13 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = "preference"
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9.2, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=7.5, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3.1, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=8.0, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=4.8, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9.2, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=7.5, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3.1, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=8.0, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=4.8, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=6.0, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
             url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
@@ -441,12 +419,12 @@ class TestErrorHandling:
         pushed_papers = call_kwargs[1]["json"]["papers"]
         score_by_url = {p["url"]: p["score"] for p in pushed_papers}
 
-        # Deep-dive Arxiv papers must carry their real scores, not hardcoded 10
-        assert score_by_url[arxiv_papers[0].url] == 9.2
-        assert score_by_url[arxiv_papers[1].url] == 7.5
-        # Summary Arxiv papers must carry their real scores, not hardcoded 0
-        assert score_by_url[arxiv_papers[2].url] == 3.1
-        assert score_by_url[arxiv_papers[4].url] == 4.8
+        # Deep-dive papers must carry their real scores, not hardcoded 10
+        assert score_by_url[sample_papers[0].url] == 9.2
+        assert score_by_url[sample_papers[1].url] == 7.5
+        # Summary papers must carry their real scores, not hardcoded 0
+        assert score_by_url[sample_papers[2].url] == 3.1
+        assert score_by_url[sample_papers[4].url] == 4.8
 
     @patch("research_papers.pipeline.requests")
     def test_push_metadata_failure(self, mock_requests, pipeline, mock_deps, sample_papers, tmp_path):
@@ -454,13 +432,13 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=6, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
             url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
@@ -477,13 +455,15 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=6, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
             url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
@@ -502,13 +482,13 @@ class TestErrorHandling:
         mock_deps["feedback_client"].fetch_clicked_papers.side_effect = Exception("Feedback error")
         mock_deps["feedback_manager"].load_profile.return_value = ""
         mock_deps["email_parser"].fetch_papers.return_value = sample_papers
-        arxiv_papers = [p for p in sample_papers if p.source == "arxiv"]
         mock_deps["paper_scorer"].score.return_value = [
-            ScoredPaper(paper=arxiv_papers[0], score=9, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[1], score=7, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[2], score=3, tier="summary", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[3], score=8, tier="deep_dive", reasoning="ok"),
-            ScoredPaper(paper=arxiv_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[0], score=9, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[1], score=7, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[2], score=3, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[3], score=8, tier="deep_dive", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[4], score=5, tier="summary", reasoning="ok"),
+            ScoredPaper(paper=sample_papers[5], score=6, tier="summary", reasoning="ok"),
         ]
         mock_deps["paper_downloader"].extract.side_effect = lambda p: PaperContent(
             url=p.url, title=p.title, abstract=p.abstract, full_text="text", source=p.source
