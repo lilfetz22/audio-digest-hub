@@ -65,14 +65,12 @@ class TranscriptGenerator(ABC):
     def generate(
         self,
         deep_dive_papers: List[PaperContent],
-        summary_papers: List[PaperReference],
         date_str: str,
     ) -> str:
         """Generate a podcast transcript.
 
         Args:
             deep_dive_papers: Papers with full text for detailed narration.
-            summary_papers: Papers with only title+abstract for brief mention.
             date_str: Date string for the digest.
 
         Returns:
