@@ -72,11 +72,8 @@ def load_config(config_path="config.ini"):
             "top_n_threshold": config.getint(
                 "ResearchPapers", "TOP_N_THRESHOLD", fallback=10
             ),
-            "deep_dive_per_category": config.getint(
-                "ResearchPapers", "DEEP_DIVE_PER_CATEGORY", fallback=5
-            ),
-            "summary_per_category": config.getint(
-                "ResearchPapers", "SUMMARY_PER_CATEGORY", fallback=10
+            "top_n_deep_dive": config.getint(
+                "ResearchPapers", "TOP_N_DEEP_DIVE", fallback=25
             ),
             "arxiv_delay_seconds": config.getint(
                 "ResearchPapers", "ARXIV_DELAY_SECONDS", fallback=3
@@ -195,8 +192,7 @@ def main():
         api_url=config["api_url"],
         api_key=config["api_key"],
         output_dir=output_dir,
-        deep_dive_per_category=config["deep_dive_per_category"],
-        summary_per_category=config["summary_per_category"],
+        top_n_deep_dive=config["top_n_deep_dive"],
     )
 
     # Run pipeline for each date
