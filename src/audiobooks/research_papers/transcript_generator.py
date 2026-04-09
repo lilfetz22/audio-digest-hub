@@ -2,7 +2,6 @@
 
 import logging
 import time
-from collections import defaultdict
 from pathlib import Path
 from typing import List
 
@@ -11,35 +10,18 @@ from google import genai
 from google.genai import types
 
 from .interfaces import TranscriptGenerator
-from .models import PaperContent, PaperReference
+from .models import PaperContent
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # TTS-friendly display names for Arxiv category codes
-CATEGORY_DISPLAY_NAMES = {
-    "cs": "Computer Science",
-    "stat": "Statistics",
-    "math": "Mathematics",
-    "eess": "Electrical Engineering and Systems Science",
-    "q-bio": "Quantitative Biology",
-    "q-fin": "Quantitative Finance",
-    "physics": "Physics",
-    "astro-ph": "Astrophysics",
-    "cond-mat": "Condensed Matter",
-    "hep": "High Energy Physics",
-    "quant-ph": "Quantum Physics",
-    "arxiv": "Arxiv",
-}
-
 
 class GeminiTranscriptGenerator(TranscriptGenerator):
     """Generates podcast transcripts using Gemini 3.1 Pro.
 
     Each deep-dive paper is sent individually to the LLM for a full deep dive.
-    Summary papers are formatted as plain text (title + abstract) without any
-    LLM call, grouped by category.
     """
 
     def __init__(
@@ -57,22 +39,16 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
     def generate(
         self,
         deep_dive_papers: List[PaperContent],
-        summary_papers: List[PaperReference],
         date_str: str,
     ) -> str:
-        """Generate a podcast transcript from tiered paper content.
+        """Generate a podcast transcript from deep-dive paper content.
 
         Each deep-dive paper gets its own LLM call for a thorough, individual
-        deep dive. All deep-dive calls are submitted as separate InlinedRequests
-        in a single Batch job (or as sequential realtime calls).
-
-        Summary papers are NOT sent to the LLM. Their title + abstract are
-        formatted directly as plain text, grouped by category with TTS-friendly
-        headings, and appended after the deep-dive transcripts.
+        deep dive. All calls are submitted as separate InlinedRequests in a
+        single Batch job (or as sequential realtime calls).
 
         Args:
             deep_dive_papers: Papers with full text for detailed narration.
-            summary_papers: Papers with title+abstract only for brief mention.
             date_str: Date string for the digest.
 
         Returns:
@@ -98,17 +74,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                     for prompt in per_paper_prompts
                 ]
 
-        # Build summary text directly (no LLM call)
-        summary_text = self._build_summary_text(summary_papers)
-
-        # Assemble final transcript
-        parts = []
-        for transcript in deep_dive_transcripts:
-            parts.append(transcript.strip())
-        if summary_text:
-            parts.append(summary_text)
-
-        return "\n\n".join(parts)
+        return "\n\n".join(t.strip() for t in deep_dive_transcripts)
 
     def _load_system_prompt(self) -> str:
         """Load the narrator system prompt."""
@@ -127,41 +93,6 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
             f"Abstract: {paper.abstract}",
             f"Full Text:\n{paper.full_text}\n",
         ]
-        return "\n".join(sections)
-
-    def _build_summary_text(
-        self, summary_papers: List[PaperReference]
-    ) -> str:
-        """Format summary papers as plain text grouped by category.
-
-        This text is NOT sent to the LLM — it is assembled directly from the
-        paper metadata and appended to the end of the transcript.
-        """
-        if not summary_papers:
-            return ""
-
-        # Group by category
-        by_category: dict[str, List[PaperReference]] = defaultdict(list)
-        for paper in summary_papers:
-            cat = paper.category or paper.source
-            by_category[cat].append(paper)
-
-        sections = [
-            "\nAnd now, here are some additional notable papers worth mentioning.\n"
-        ]
-
-        for cat, papers in sorted(by_category.items()):
-            display_name = CATEGORY_DISPLAY_NAMES.get(cat, cat.title())
-            sections.append(
-                f"From the {display_name} category:\n"
-            )
-            for paper in papers:
-                sections.append(f"  {paper.title}.")
-                if paper.abstract:
-                    sections.append(f"  {paper.abstract}\n")
-                else:
-                    sections.append("")
-
         return "\n".join(sections)
 
     def _generate_realtime(self, system_prompt: str, user_prompt: str) -> str:
