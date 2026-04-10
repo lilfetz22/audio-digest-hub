@@ -1,18 +1,17 @@
 """Tests for transcript_generator.py — GeminiTranscriptGenerator."""
 
 import pytest
+import time
 from unittest.mock import patch, MagicMock
 from research_papers.transcript_generator import GeminiTranscriptGenerator
 from research_papers.models import PaperContent
-from google.genai import types
 
 
 @pytest.fixture
 def generator():
     return GeminiTranscriptGenerator(
         api_key="test-key",
-        model_name="gemini-3.1-pro-preview",
-        use_batch=False,  # Use realtime for tests
+        model_name="gemini-3.1-flash-lite-preview",
     )
 
 
@@ -65,7 +64,7 @@ class TestPerPaperGeneration:
     def test_each_paper_gets_own_llm_call(
         self, mock_genai, generator, deep_dive_papers
     ):
-        """Each deep-dive paper should trigger its own LLM call (realtime mode)."""
+        """Each deep-dive paper should trigger its own sequential LLM call."""
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
 
@@ -124,185 +123,39 @@ class TestPerPaperGeneration:
             generator.generate(deep_dive_papers, "2026-03-14")
 
 
-class TestBatchMode:
-    """Tests for batch API mode."""
+class TestRateLimiting:
+    """Tests for rate limiting logic."""
 
-    @patch("research_papers.transcript_generator.genai")
-    def test_batch_creates_one_job_with_n_requests(self, mock_genai, deep_dive_papers):
-        """Batch mode should create a single job with one InlinedRequest per paper."""
-        gen = GeminiTranscriptGenerator(
-            api_key="test-key",
-            model_name="gemini-3.1-pro-preview",
-            use_batch=True,
-        )
+    def test_rate_limiter_tracks_requests(self, generator):
+        """Rate limiter should track request timestamps."""
+        generator._request_timestamps = []
+        generator._wait_for_rate_limit(estimated_tokens=100)
+        assert len(generator._request_timestamps) == 1
 
-        mock_client = MagicMock()
-        mock_genai.Client.return_value = mock_client
-        mock_genai.types = MagicMock()
+    def test_rate_limiter_allows_requests_under_limit(self, generator):
+        """Should allow requests when under the RPM limit."""
+        generator._request_timestamps = [time.time()] * 10  # 10 recent requests
+        generator._token_usage = []
+        # Should not block — 10 < 15
+        generator._wait_for_rate_limit(estimated_tokens=100)
+        assert len(generator._request_timestamps) == 11
 
-        # Mock batch job lifecycle
-        mock_batch_job = MagicMock()
-        mock_batch_job.name = "batch-123"
-        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
-        mock_client.batches.create.return_value = mock_batch_job
+    def test_rate_limiter_prunes_old_timestamps(self, generator):
+        """Should prune timestamps older than 60 seconds."""
+        old_time = time.time() - 120  # 2 minutes ago
+        generator._request_timestamps = [old_time] * 5
+        generator._token_usage = [(old_time, 1000)] * 5
+        generator._wait_for_rate_limit(estimated_tokens=100)
+        # Old entries should be pruned, only the new request remains
+        assert len(generator._request_timestamps) == 1
+        assert len(generator._token_usage) == 0
 
-        # Mock successful state on get
-        mock_result = MagicMock()
-        mock_result.state = "JOB_STATE_SUCCEEDED"
-
-        # Create mock responses for each paper
-        mock_responses = []
-        for i in range(len(deep_dive_papers)):
-            resp = MagicMock()
-            resp.error = None
-            resp.response.candidates = [
-                MagicMock(content=MagicMock(parts=[MagicMock(text=f"Transcript {i}")]))
-            ]
-            mock_responses.append(resp)
-
-        mock_result.dest.inlined_responses = mock_responses
-        mock_client.batches.get.return_value = mock_result
-
-        # Patch JOB_STATES_SUCCEEDED
-        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
-             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            result = gen.generate(deep_dive_papers, "2026-03-14")
-
-        # Batch should be created once (not per paper)
-        assert mock_client.batches.create.call_count == 1
-
-        # The batch should contain one InlinedRequest per deep-dive paper
-        create_call = mock_client.batches.create.call_args
-        src = create_call[1].get("src") or create_call[0][1] if len(create_call[0]) > 1 else create_call[1]["src"]
-        assert len(src.inlined_requests) == len(deep_dive_papers)
-
-
-class TestBatchErrorHandling:
-    """Tests for batch mode error handling."""
-
-    @patch("research_papers.transcript_generator.genai")
-    def test_batch_handles_error_response(self, mock_genai, deep_dive_papers):
-        """Should handle individual batch request errors gracefully."""
-        gen = GeminiTranscriptGenerator(
-            api_key="test-key",
-            model_name="gemini-3.1-pro-preview",
-            use_batch=True,
-        )
-
-        mock_client = MagicMock()
-        mock_genai.Client.return_value = mock_client
-
-        mock_batch_job = MagicMock()
-        mock_batch_job.name = "batch-err"
-        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
-        mock_client.batches.create.return_value = mock_batch_job
-
-        mock_result = MagicMock()
-        mock_result.state = "JOB_STATE_SUCCEEDED"
-
-        # First response has error, second is OK
-        resp1 = MagicMock()
-        resp1.error = "Some error"
-        resp2 = MagicMock()
-        resp2.error = None
-        resp2.response.candidates = [
-            MagicMock(content=MagicMock(parts=[MagicMock(text="Transcript 2")]))
-        ]
-        mock_result.dest.inlined_responses = [resp1, resp2]
-        mock_client.batches.get.return_value = mock_result
-
-        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
-             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            result = gen.generate(deep_dive_papers, "2026-03-14")
-
-        # First paper's transcript should be empty, second should work
-        assert "Transcript 2" in result
-
-    @patch("research_papers.transcript_generator.genai")
-    def test_batch_handles_empty_response(self, mock_genai, deep_dive_papers):
-        """Should handle batch response with no candidates."""
-        gen = GeminiTranscriptGenerator(
-            api_key="test-key",
-            model_name="gemini-3.1-pro-preview",
-            use_batch=True,
-        )
-
-        mock_client = MagicMock()
-        mock_genai.Client.return_value = mock_client
-
-        mock_batch_job = MagicMock()
-        mock_batch_job.name = "batch-empty"
-        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
-        mock_client.batches.create.return_value = mock_batch_job
-
-        mock_result = MagicMock()
-        mock_result.state = "JOB_STATE_SUCCEEDED"
-
-        # Response with no candidates
-        resp1 = MagicMock()
-        resp1.error = None
-        resp1.response = None
-        resp2 = MagicMock()
-        resp2.error = None
-        resp2.response.candidates = []
-        mock_result.dest.inlined_responses = [resp1, resp2]
-        mock_client.batches.get.return_value = mock_result
-
-        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
-             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            result = gen.generate(deep_dive_papers, "2026-03-14")
-
-        assert isinstance(result, str)
-
-    @patch("research_papers.transcript_generator.genai")
-    def test_batch_no_results_raises(self, mock_genai, deep_dive_papers):
-        """Should raise RuntimeError when batch returns no results at all."""
-        gen = GeminiTranscriptGenerator(
-            api_key="test-key",
-            model_name="gemini-3.1-pro-preview",
-            use_batch=True,
-        )
-
-        mock_client = MagicMock()
-        mock_genai.Client.return_value = mock_client
-
-        mock_batch_job = MagicMock()
-        mock_batch_job.name = "batch-no-results"
-        mock_batch_job.state = "JOB_STATE_SUCCEEDED"
-        mock_client.batches.create.return_value = mock_batch_job
-
-        mock_result = MagicMock()
-        mock_result.state = "JOB_STATE_SUCCEEDED"
-        mock_result.dest = None  # No dest at all
-        mock_client.batches.get.return_value = mock_result
-
-        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
-             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            with pytest.raises(RuntimeError, match="No results"):
-                gen.generate(deep_dive_papers, "2026-03-14")
-
-    @patch("research_papers.transcript_generator.genai")
-    def test_batch_job_failure_raises(self, mock_genai, deep_dive_papers):
-        """Should raise RuntimeError when batch job fails."""
-        gen = GeminiTranscriptGenerator(
-            api_key="test-key",
-            model_name="gemini-3.1-pro-preview",
-            use_batch=True,
-        )
-
-        mock_client = MagicMock()
-        mock_genai.Client.return_value = mock_client
-
-        mock_batch_job = MagicMock()
-        mock_batch_job.name = "batch-fail"
-        mock_batch_job.state = "JOB_STATE_FAILED"
-        mock_client.batches.create.return_value = mock_batch_job
-        mock_client.batches.get.return_value = mock_batch_job
-
-        with patch.object(types, "JOB_STATES_SUCCEEDED", {"JOB_STATE_SUCCEEDED"}), \
-             patch.object(types, "JOB_STATES_ENDED", {"JOB_STATE_FAILED"}):
-            with pytest.raises(RuntimeError, match="Batch job failed"):
-                gen.generate(deep_dive_papers, "2026-03-14")
+    def test_record_usage_appends(self, generator):
+        """_record_usage should append to token_usage list."""
+        generator._token_usage = []
+        generator._record_usage(5000)
+        assert len(generator._token_usage) == 1
+        assert generator._token_usage[0][1] == 5000
 
 
 class TestOutputFormatting:
