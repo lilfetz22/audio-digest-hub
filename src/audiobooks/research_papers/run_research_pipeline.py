@@ -17,7 +17,7 @@ from googleapiclient.discovery import build
 
 from research_papers.email_parser import ArxivHFEmailParser
 from research_papers.paper_downloader import PaperContentDownloader
-from research_papers.paper_scorer import GeminiPaperScorer
+from research_papers.paper_scorer import EmbeddingPaperScorer
 from research_papers.transcript_generator import GeminiTranscriptGenerator
 from research_papers.feedback import PreferenceProfileManager, FeedbackClient
 from research_papers.pipeline import ResearchPaperPipeline
@@ -59,8 +59,8 @@ def load_config(config_path="config.ini"):
             "credentials_file": config["Gmail"]["CREDENTIALS_FILE"],
             "token_file": config["Gmail"]["TOKEN_FILE"],
             "gemini_api_key": config["Gemini"]["API_KEY"],
-            "scoring_model": config["Gemini"]["SCORING_MODEL"],
             "generation_model": config["Gemini"]["GENERATION_MODEL"],
+            "scoring_model_name": config.get("Scoring", "MODEL_NAME", fallback="all-MiniLM-L6-v2"),
             "arxiv_senders": [
                 s.strip()
                 for s in config["ResearchPapers"]["ARXIV_SENDERS"].split(",")
@@ -162,15 +162,15 @@ def main():
     paper_downloader = PaperContentDownloader(
         delay_seconds=config["arxiv_delay_seconds"]
     )
-    paper_scorer = GeminiPaperScorer(
-        api_key=config["gemini_api_key"],
-        model_name=config["scoring_model"],
+    interest_profile_path = os.path.join(script_dir, "prompts", "interest_profile.txt")
+    paper_scorer = EmbeddingPaperScorer(
+        model_name=config["scoring_model_name"],
         top_n=config["top_n_threshold"],
+        interest_profile_path=interest_profile_path,
     )
     transcript_generator = GeminiTranscriptGenerator(
         api_key=config["gemini_api_key"],
         model_name=config["generation_model"],
-        use_batch=True,
     )
     feedback_manager = PreferenceProfileManager(
         profile_path=profile_path,
