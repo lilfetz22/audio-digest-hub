@@ -1,11 +1,10 @@
-"""Transcript generator using Gemini 3.1 Pro (Batch or Realtime)."""
+"""Transcript generator using Gemini (sequential realtime calls with rate limiting)."""
 
 import logging
 import time
 from pathlib import Path
 from typing import List
 
-import httpx
 from google import genai
 from google.genai import types
 
@@ -16,25 +15,29 @@ logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-# TTS-friendly display names for Arxiv category codes
+# Free-tier rate limits for gemini-3.1-flash-lite-preview
+MAX_REQUESTS_PER_MINUTE = 15
+MAX_TOKENS_PER_MINUTE = 1_000_000
+# Rough chars-to-tokens ratio (1 token ≈ 4 chars is a conservative estimate)
+CHARS_PER_TOKEN = 4
+
 
 class GeminiTranscriptGenerator(TranscriptGenerator):
-    """Generates podcast transcripts using Gemini 3.1 Pro.
+    """Generates podcast transcripts using Gemini.
 
-    Each deep-dive paper is sent individually to the LLM for a full deep dive.
+    Each deep-dive paper is sent individually via sequential realtime API calls
+    with rate limiting to stay within the free tier (15 RPM, 1M TPM).
     """
 
     def __init__(
         self,
         api_key: str,
-        model_name: str = "gemini-3.1-pro-preview",
-        use_batch: bool = True,
-        batch_poll_interval: int = 60,
+        model_name: str = "gemini-3.1-flash-lite-preview",
     ):
         self.api_key = api_key
         self.model_name = model_name
-        self.use_batch = use_batch
-        self.batch_poll_interval = batch_poll_interval
+        self._request_timestamps: List[float] = []
+        self._token_usage: List[tuple] = []  # (timestamp, token_count)
 
     def generate(
         self,
@@ -43,9 +46,8 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
     ) -> str:
         """Generate a podcast transcript from deep-dive paper content.
 
-        Each deep-dive paper gets its own LLM call for a thorough, individual
-        deep dive. All calls are submitted as separate InlinedRequests in a
-        single Batch job (or as sequential realtime calls).
+        Each deep-dive paper gets its own sequential LLM call with rate
+        limiting to stay within the free tier.
 
         Args:
             deep_dive_papers: Papers with full text for detailed narration.
@@ -56,23 +58,35 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         """
         system_prompt = self._load_system_prompt()
 
-        # Generate per-paper deep dive transcripts
         deep_dive_transcripts: List[str] = []
         if deep_dive_papers:
-            per_paper_prompts = [
-                self._build_single_paper_prompt(paper, date_str)
-                for paper in deep_dive_papers
-            ]
+            client = genai.Client(api_key=self.api_key)
+            for i, paper in enumerate(deep_dive_papers):
+                prompt = self._build_single_paper_prompt(paper, date_str)
+                estimated_input_tokens = (
+                    len(system_prompt) + len(prompt)
+                ) // CHARS_PER_TOKEN
 
-            if self.use_batch:
-                deep_dive_transcripts = self._generate_batch_multi(
-                    system_prompt, per_paper_prompts
+                self._wait_for_rate_limit(estimated_input_tokens)
+
+                logger.info(
+                    f"Generating transcript for paper {i + 1}/{len(deep_dive_papers)}: "
+                    f"{paper.title}"
                 )
-            else:
-                deep_dive_transcripts = [
-                    self._generate_realtime(system_prompt, prompt)
-                    for prompt in per_paper_prompts
-                ]
+                transcript = self._generate_realtime(
+                    client, system_prompt, prompt
+                )
+                deep_dive_transcripts.append(transcript)
+
+                # Log estimated token usage for the response as well
+                estimated_output_tokens = len(transcript) // CHARS_PER_TOKEN
+                total_tokens = estimated_input_tokens + estimated_output_tokens
+                self._record_usage(total_tokens)
+
+                logger.info(
+                    f"Paper {i + 1}/{len(deep_dive_papers)} done "
+                    f"(~{total_tokens:,} tokens estimated)"
+                )
 
         return "\n\n".join(t.strip() for t in deep_dive_transcripts)
 
@@ -95,10 +109,10 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         ]
         return "\n".join(sections)
 
-    def _generate_realtime(self, system_prompt: str, user_prompt: str) -> str:
+    def _generate_realtime(
+        self, client: genai.Client, system_prompt: str, user_prompt: str
+    ) -> str:
         """Generate transcript using realtime API."""
-        client = genai.Client(api_key=self.api_key)
-
         response = client.models.generate_content(
             model=self.model_name,
             contents=user_prompt,
@@ -107,116 +121,59 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                 temperature=0.7,
             ),
         )
-
         return response.text
 
-    def _generate_batch_multi(
-        self, system_prompt: str, user_prompts: List[str]
-    ) -> List[str]:
-        """Generate transcripts for multiple papers in a single Batch job.
+    def _wait_for_rate_limit(self, estimated_tokens: int) -> None:
+        """Block until sending another request would stay within free-tier limits."""
+        now = time.time()
+        window_start = now - 60
 
-        Each paper gets its own InlinedRequest within one batch job. This avoids
-        per-paper polling overhead while keeping each LLM call focused on a
-        single paper for thorough deep-dive coverage.
-
-        Args:
-            system_prompt: The narrator system prompt.
-            user_prompts: List of per-paper user prompts.
-
-        Returns:
-            List of transcript strings, one per paper, in the same order as
-            user_prompts.
-        """
-        client = genai.Client(api_key=self.api_key)
-
-        inlined_requests = [
-            types.InlinedRequest(
-                model=self.model_name,
-                contents=[
-                    types.Content(
-                        parts=[types.Part(text=prompt)],
-                        role="user",
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.7,
-                ),
-            )
-            for prompt in user_prompts
+        # Prune old entries outside the 1-minute window
+        self._request_timestamps = [
+            t for t in self._request_timestamps if t > window_start
+        ]
+        self._token_usage = [
+            (t, c) for t, c in self._token_usage if t > window_start
         ]
 
-        logger.info(
-            f"Creating batch job with {len(inlined_requests)} "
-            f"per-paper deep-dive requests..."
-        )
-        batch_job = client.batches.create(
-            model=self.model_name,
-            src=types.BatchJobSource(inlined_requests=inlined_requests),
-        )
-        logger.info(f"Batch job created: {batch_job.name}")
-
-        # Poll for completion with resilient retry on transient connection errors
-        max_conn_failures = 5
-        conn_failures = 0
-        while True:
-            try:
-                batch_job = client.batches.get(name=batch_job.name)
-                conn_failures = 0  # reset on success
-            except (
-                httpx.ConnectError,
-                httpx.RemoteProtocolError,
-                httpx.ReadError,
-                ConnectionError,
-                OSError,
-            ) as e:
-                conn_failures += 1
-                if conn_failures >= max_conn_failures:
-                    raise RuntimeError(
-                        f"Batch polling failed after {max_conn_failures} "
-                        f"consecutive connection errors: {e}"
-                    ) from e
-                logger.warning(
-                    f"Transient connection error while polling batch job "
-                    f"(attempt {conn_failures}/{max_conn_failures}): {e}. "
-                    f"Recreating client and retrying in "
-                    f"{self.batch_poll_interval}s..."
-                )
-                time.sleep(self.batch_poll_interval)
-                client = genai.Client(api_key=self.api_key)
-                continue
-
-            status = batch_job.state
-
-            if status in types.JOB_STATES_SUCCEEDED:
-                logger.info("Batch job completed successfully")
-                break
-            elif status in types.JOB_STATES_ENDED:
-                raise RuntimeError(f"Batch job failed with state: {status}")
-
+        # Check request count limit
+        while len(self._request_timestamps) >= MAX_REQUESTS_PER_MINUTE:
+            oldest = self._request_timestamps[0]
+            wait_time = oldest - window_start
             logger.info(
-                f"Batch job status: {status}. "
-                f"Polling again in {self.batch_poll_interval}s..."
+                f"Rate limit: {len(self._request_timestamps)} requests in last 60s, "
+                f"waiting {wait_time:.1f}s..."
             )
-            time.sleep(self.batch_poll_interval)
+            time.sleep(wait_time + 0.1)
+            now = time.time()
+            window_start = now - 60
+            self._request_timestamps = [
+                t for t in self._request_timestamps if t > window_start
+            ]
+            self._token_usage = [
+                (t, c) for t, c in self._token_usage if t > window_start
+            ]
 
-        # Retrieve results from the already-fetched batch job
-        transcripts: List[str] = []
+        # Check token count limit
+        tokens_in_window = sum(c for _, c in self._token_usage)
+        while tokens_in_window + estimated_tokens > MAX_TOKENS_PER_MINUTE:
+            oldest_ts = self._token_usage[0][0]
+            wait_time = oldest_ts - window_start
+            logger.info(
+                f"Rate limit: ~{tokens_in_window:,} tokens in last 60s, "
+                f"waiting {wait_time:.1f}s..."
+            )
+            time.sleep(wait_time + 0.1)
+            now = time.time()
+            window_start = now - 60
+            self._token_usage = [
+                (t, c) for t, c in self._token_usage if t > window_start
+            ]
+            tokens_in_window = sum(c for _, c in self._token_usage)
 
-        if batch_job.dest and batch_job.dest.inlined_responses:
-            for i, resp in enumerate(batch_job.dest.inlined_responses):
-                if resp.error:
-                    logger.error(
-                        f"Batch request {i} error: {resp.error}"
-                    )
-                    transcripts.append("")
-                elif resp.response and resp.response.candidates:
-                    text = resp.response.candidates[0].content.parts[0].text
-                    transcripts.append(text)
-                else:
-                    logger.warning(f"Batch request {i}: no content in response")
-                    transcripts.append("")
-        else:
-            raise RuntimeError("No results in batch job response")
+        # Record this request's timestamp
+        self._request_timestamps.append(time.time())
 
-        return transcripts
+    def _record_usage(self, token_count: int) -> None:
+        """Record token usage for rate limiting."""
+        self._token_usage.append((time.time(), token_count))
