@@ -1,4 +1,4 @@
-"""AI-powered paper scorer using Gemini Flash."""
+"""Paper scoring: LLM-based (GeminiPaperScorer) and embedding-based (EmbeddingPaperScorer)."""
 
 import json
 import logging
@@ -189,3 +189,110 @@ class GeminiPaperScorer(PaperScorer):
             logger.debug(f"Response text: {response_text[:500]}")
             # Return empty — caller will assign default scores
             return {}
+
+
+class EmbeddingPaperScorer(PaperScorer):
+    """Scores papers by cosine similarity to a local interest profile using sentence-transformers.
+
+    No API calls required. Model (~80 MB) is downloaded on first use and cached on disk.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        top_n: int = 10,
+        interest_profile_path: str | None = None,
+    ):
+        self.model_name = model_name
+        self.top_n = top_n
+        self.interest_profile_path = (
+            Path(interest_profile_path)
+            if interest_profile_path
+            else PROMPTS_DIR / "interest_profile.txt"
+        )
+        self._model = None  # Lazy-loaded on first score() call
+
+    def _get_model(self):
+        """Load the SentenceTransformer model on first use."""
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+            logger.info(f"Loading embedding model '{self.model_name}' (downloads ~80 MB on first run)...")
+            self._model = SentenceTransformer(self.model_name)
+            logger.info("Embedding model loaded.")
+        return self._model
+
+    def _build_query(self, preference_profile: str) -> str:
+        """Construct interest query from profile file + optional dynamic profile."""
+        base_query = self.interest_profile_path.read_text(encoding="utf-8").strip()
+        if preference_profile:
+            return f"{base_query}. {preference_profile.strip()}"
+        return base_query
+
+    def _compute_scores(
+        self, papers: List[PaperReference], preference_profile: str
+    ) -> List[ScoredPaper]:
+        """Embed query and all papers, compute cosine similarities, return ScoredPapers."""
+        from sentence_transformers import util  # noqa: PLC0415
+
+        model = self._get_model()
+        query = self._build_query(preference_profile)
+
+        # Encode query + all papers in one batch for efficiency
+        paper_texts = [f"{p.title}. {p.abstract}" for p in papers]
+        all_texts = [query] + paper_texts
+        embeddings = model.encode(all_texts, convert_to_tensor=True, show_progress_bar=False)
+
+        query_embedding = embeddings[0]
+        paper_embeddings = embeddings[1:]
+
+        scored = []
+        for i, paper in enumerate(papers):
+            similarity = float(util.cos_sim(query_embedding, paper_embeddings[i]))
+            # Clamp to [0, 1] before scaling (cosine can be slightly negative)
+            similarity = max(0.0, min(1.0, similarity))
+            # Map to 1–10 scale for backward compatibility with Supabase schema and tier logic
+            score = round(similarity * 9.0 + 1.0, 2)
+            scored.append(
+                ScoredPaper(
+                    paper=paper,
+                    score=score,
+                    tier="summary",  # Temporary; tiering assigned after sort
+                    reasoning=f"Embedding similarity: {similarity:.3f}",
+                )
+            )
+
+        return scored
+
+    def score(
+        self, papers: List[PaperReference], preference_profile: str = ""
+    ) -> List[ScoredPaper]:
+        """Score papers and assign tiers.
+
+        Args:
+            papers: List of PaperReferences to score.
+            preference_profile: Additional preference text appended to the base interest query.
+
+        Returns:
+            List of ScoredPaper sorted by score descending. Top N = deep_dive, rest = summary.
+        """
+        if not papers:
+            return []
+
+        try:
+            scored = self._compute_scores(papers, preference_profile)
+        except Exception as e:
+            logger.error(f"Embedding scoring failed: {e}", exc_info=True)
+            # Fallback: neutral score, tier logic still applied below
+            scored = [
+                ScoredPaper(paper=p, score=5.0, tier="summary", reasoning="Scoring failed")
+                for p in papers
+            ]
+
+        # Sort by score descending
+        scored.sort(key=lambda s: s.score, reverse=True)
+
+        # Assign tiers: top N = deep_dive, rest = summary
+        for i, sp in enumerate(scored):
+            sp.tier = "deep_dive" if i < self.top_n else "summary"
+
+        return scored
