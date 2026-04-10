@@ -9,6 +9,7 @@ torchaudio
 google-genai
 pymupdf
 beautifulsoup4
+sentence-transformers
 pytest
 pytest-mock
 requests-mock
