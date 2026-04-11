@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,6 +37,7 @@ const Player = () => {
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [nextPartId, setNextPartId] = useState<string | null>(null);
+  const pendingAutoPlayRef = useRef(false);
 
   const handleEnded = useCallback(async () => {
     if (!audiobook) return;
@@ -78,28 +79,20 @@ const Player = () => {
     handleLoadedData,
   } = useAudioPlayer(audiobook, handleEnded);
 
+  // Reset state and fetch when navigating to a different audiobook
   useEffect(() => {
+    setAudiobook(null);
+    setAudioUrl('');
+    setLoading(true);
     if (id) {
       fetchAudiobook();
     }
   }, [id, user]);
 
-  // Auto-play when navigating from a completed previous part
+  // Track pending auto-play across part transitions
   useEffect(() => {
-    if (autoPlay && audioUrl && audioRef.current) {
-      const audio = audioRef.current;
-      const tryAutoPlay = () => {
-        audio.play().catch((err) => console.error('Auto-play failed:', err));
-        audio.removeEventListener('canplay', tryAutoPlay);
-      };
-      if (audio.readyState >= 3) {
-        audio.play().catch((err) => console.error('Auto-play failed:', err));
-      } else {
-        audio.addEventListener('canplay', tryAutoPlay);
-        return () => audio.removeEventListener('canplay', tryAutoPlay);
-      }
-    }
-  }, [autoPlay, audioUrl]);
+    pendingAutoPlayRef.current = autoPlay;
+  }, [autoPlay, id]);
 
   // Look up the next part ID for the UI "Next Part" button
   useEffect(() => {
@@ -265,7 +258,14 @@ const Player = () => {
                 onPlay={() => console.log('Audio onPlay event')}
                 onPause={() => console.log('Audio onPause event')}
                 onLoadStart={() => console.log('Audio onLoadStart event')}
-                onCanPlay={() => console.log('Audio onCanPlay event')}
+                onCanPlay={() => {
+                  console.log('Audio onCanPlay event');
+                  if (pendingAutoPlayRef.current) {
+                    pendingAutoPlayRef.current = false;
+                    console.log('Auto-playing next part');
+                    audioRef.current?.play().catch((err) => console.error('Auto-play failed:', err));
+                  }
+                }}
                 onError={(e) => console.log('Audio onError event', e)}
                 onWaiting={() => console.log('Audio onWaiting event')}
                 onPlaying={() => console.log('Audio onPlaying event')}
