@@ -12,6 +12,7 @@ interface Audiobook {
 
 export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void) => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const onEndedRef = useRef(onEnded);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -20,6 +21,11 @@ export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSeeking, setIsSeeking] = useState(false);
+
+  // Keep onEnded ref in sync so event listeners don't need to be re-attached
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
 
   // Sync state with audio element
   const syncAudioState = useCallback(() => {
@@ -82,7 +88,15 @@ export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void
       console.log('Ended event fired');
       setIsPlaying(false);
       setIsLoading(false);
-      onEnded?.();
+      // Save final position before triggering onEnded (which may navigate away)
+      if (audiobook && audio.currentTime > 0) {
+        supabase
+          .from('audiobooks')
+          .update({ last_playback_position_seconds: Math.floor(audio.duration || audio.currentTime) })
+          .eq('id', audiobook.id)
+          .then(() => console.log('Saved final playback position on ended'));
+      }
+      onEndedRef.current?.();
     };
 
     const handleLoadStart = () => {
@@ -163,7 +177,7 @@ export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void
       audio.removeEventListener('seeked', handleSeeked);
       audio.removeEventListener('playing', handlePlaying);
     };
-  }, [audioRef.current, onEnded]); // Re-attach when audio element or onEnded changes
+  }, [audioRef.current]); // Only depend on the audio element itself
 
   // Save playback position every 5 seconds when playing
   useEffect(() => {
