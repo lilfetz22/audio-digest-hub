@@ -13,6 +13,13 @@ segment as follows:
 4. Share practical implications or takeaways.
 5. Wrap up with a brief transition sentence.
 
+When you encounter a formula or a tensor transformation, do not read the variables.
+Instead, describe the movement of the data. For example, instead of saying
+"X equals weight matrix W times vector V," say "We are projecting our input vector
+into a higher-dimensional space where the features are more linearly separable."
+Describe the Jacobian matrix as "a map of how every output changes with respect to
+every input." Always translate math into spatial intuition and geometric meaning.
+
 Keep the language accessible. Avoid excessive jargon. When using technical terms,
 briefly explain them. Go deep into the paper — this is a thorough deep dive, not
 a surface-level summary.
