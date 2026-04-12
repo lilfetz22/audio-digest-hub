@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from .interfaces import TranscriptGenerator
@@ -112,16 +113,33 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
     def _generate_realtime(
         self, client: genai.Client, system_prompt: str, user_prompt: str
     ) -> str:
-        """Generate transcript using realtime API."""
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.7,
-            ),
-        )
-        return response.text
+        """Generate transcript using realtime API, with retries on transient errors."""
+        max_retries = 4
+        base_delay = 30  # seconds; doubles each attempt (30, 60, 120, 240)
+
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=self.model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.7,
+                    ),
+                )
+                return response.text
+            except genai_errors.ServerError as e:
+                is_retryable = getattr(e, "status_code", None) == 503
+                if is_retryable and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(
+                        f"Gemini API unavailable (503). "
+                        f"Retrying in {delay}s "
+                        f"(attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
 
     def _wait_for_rate_limit(self, estimated_tokens: int) -> None:
         """Block until sending another request would stay within free-tier limits."""
