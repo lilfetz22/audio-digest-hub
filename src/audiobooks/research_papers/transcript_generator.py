@@ -1,9 +1,10 @@
 """Transcript generator using Gemini (sequential realtime calls with rate limiting)."""
 
 import logging
+import random
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -60,8 +61,9 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         system_prompt = self._load_system_prompt()
 
         deep_dive_transcripts: List[str] = []
+        titles: List[str] = []
+        client = genai.Client(api_key=self.api_key)
         if deep_dive_papers:
-            client = genai.Client(api_key=self.api_key)
             for i, paper in enumerate(deep_dive_papers):
                 prompt = self._build_single_paper_prompt(paper, date_str)
                 estimated_input_tokens = (
@@ -78,6 +80,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                     client, system_prompt, prompt
                 )
                 deep_dive_transcripts.append(transcript)
+                titles.append(paper.title)
 
                 # Log estimated token usage for the response as well
                 estimated_output_tokens = len(transcript) // CHARS_PER_TOKEN
@@ -89,12 +92,73 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                     f"(~{total_tokens:,} tokens estimated)"
                 )
 
-        return "\n\n".join(t.strip() for t in deep_dive_transcripts)
+        # Append Interrogator Q&A episode from 5 randomly sampled transcripts
+        interrogator_section = ""
+        if deep_dive_transcripts:
+            sample_size = min(5, len(deep_dive_transcripts))
+            indices = random.sample(range(len(deep_dive_transcripts)), sample_size)
+            sampled = [(titles[i], deep_dive_transcripts[i]) for i in indices]
+            logger.info(
+                f"Interrogator: sampling {sample_size} transcripts — "
+                + ", ".join(f'"{t}"' for t, _ in sampled)
+            )
+            interrogator_section = self._generate_interrogator_episode(
+                client, sampled, date_str
+            )
+
+        parts = [t.strip() for t in deep_dive_transcripts]
+        if interrogator_section:
+            parts.append(
+                f"=== THE INTERROGATOR ===\n\n{interrogator_section.strip()}"
+            )
+        return "\n\n".join(parts)
 
     def _load_system_prompt(self) -> str:
         """Load the narrator system prompt."""
         prompt_path = PROMPTS_DIR / "narrator_system.txt"
         return prompt_path.read_text(encoding="utf-8")
+
+    def _load_interrogator_system_prompt(self) -> str:
+        """Load the Interrogator Q&A system prompt."""
+        prompt_path = PROMPTS_DIR / "interrogator_qa_system.txt"
+        return prompt_path.read_text(encoding="utf-8")
+
+    def _generate_interrogator_episode(
+        self,
+        client: genai.Client,
+        sampled: List[Tuple[str, str]],
+        date_str: str,
+    ) -> str:
+        """Generate the Interrogator Q&A episode from 5 sampled transcripts.
+
+        Args:
+            client: Gemini client (already authenticated).
+            sampled: List of (title, transcript) pairs.
+            date_str: Date string for the episode.
+
+        Returns:
+            Interrogator episode text with 2 Q&A pairs per paper.
+        """
+        system_prompt = self._load_interrogator_system_prompt()
+
+        parts = [f"Generate an Interrogator Q&A episode for {date_str}.\n"]
+        for title, transcript in sampled:
+            parts.append(f"=== {title} ===\n{transcript.strip()}\n")
+        user_prompt = "\n".join(parts)
+
+        estimated_input_tokens = (
+            len(system_prompt) + len(user_prompt)
+        ) // CHARS_PER_TOKEN
+        self._wait_for_rate_limit(estimated_input_tokens)
+
+        logger.info("Generating Interrogator episode...")
+        result = self._generate_realtime(client, system_prompt, user_prompt)
+
+        estimated_output_tokens = len(result) // CHARS_PER_TOKEN
+        self._record_usage(estimated_input_tokens + estimated_output_tokens)
+
+        logger.info("Interrogator episode complete")
+        return result
 
     def _build_single_paper_prompt(
         self, paper: PaperContent, date_str: str
