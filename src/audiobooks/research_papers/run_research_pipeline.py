@@ -60,6 +60,9 @@ def load_config(config_path="config.ini"):
             "token_file": config["Gmail"]["TOKEN_FILE"],
             "gemini_api_key": config["Gemini"]["API_KEY"],
             "generation_model": config["Gemini"]["GENERATION_MODEL"],
+            "backup_api_key": config.get("Gemini", "BACKUP_API_KEY", fallback=None),
+            "paid_api_key": config.get("Gemini", "PAID_API_KEY", fallback=None),
+            "paid_generation_model": config.get("Gemini", "PAID_GENERATION_MODEL", fallback=None),
             "scoring_model_name": config.get("Scoring", "MODEL_NAME", fallback="all-MiniLM-L6-v2"),
             "arxiv_senders": [
                 s.strip()
@@ -171,6 +174,9 @@ def main():
     transcript_generator = GeminiTranscriptGenerator(
         api_key=config["gemini_api_key"],
         model_name=config["generation_model"],
+        backup_api_key=config.get("backup_api_key"),
+        paid_api_key=config.get("paid_api_key"),
+        paid_model_name=config.get("paid_generation_model"),
     )
     feedback_manager = PreferenceProfileManager(
         profile_path=profile_path,
