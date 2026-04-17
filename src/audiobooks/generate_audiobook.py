@@ -26,7 +26,7 @@ from upload_mp3 import upload_audiobook, _create_chapter_list, _create_metadata
 
 # --- Configuration & Constants ---
 logger = logging.getLogger(__name__)
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
 
 UPLOAD_MP3_BASENAME = "temp_output"
 ARCHIVE_FOLDER = "archive_mp3"
@@ -504,7 +504,43 @@ def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
     return text_filepath
 
 
-def request_user_feedback(date_str: str) -> str | None:
+def send_notification_email(service, date_str: str, expected_filename: str) -> None:
+    """
+    Sends an email notification to the authenticated Gmail user (self)
+    indicating that the script is ready for TTS processing.
+    """
+    try:
+        profile = service.users().getProfile(userId="me").execute()
+        user_email = profile["emailAddress"]
+
+        subject = f"🎧 Ready for TTS: Daily Digest {date_str}"
+        body = (
+            f"The audiobook pipeline has finished processing content for {date_str} "
+            f"and is now waiting for the TTS-generated MP3.\n\n"
+            f"Next steps:\n"
+            f"  1. Open the TTS Generation Colab notebook\n"
+            f"  2. Run it to generate the audio\n"
+            f"  3. Download the output file: {expected_filename}\n\n"
+            f"The script will automatically detect the file in your Downloads folder."
+        )
+
+        from email.mime.text import MIMEText
+        message = MIMEText(body)
+        message["to"] = user_email
+        message["from"] = user_email
+        message["subject"] = subject
+
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+        service.users().messages().send(
+            userId="me", body={"raw": raw}
+        ).execute()
+
+        logger.info(f"📧 Notification email sent to {user_email}")
+    except Exception as e:
+        logger.warning(f"Could not send notification email: {e}. Continuing anyway.")
+
+
+def request_user_feedback(date_str: str, gmail_service=None) -> str | None:
     """
     Waits for TTS processing to complete by polling the Downloads folder every 5 minutes.
     Checks Downloads folder for the specific MP3 file and moves it to archive_mp3.
@@ -516,6 +552,10 @@ def request_user_feedback(date_str: str) -> str | None:
     expected_filename = f"digest_{date_str}_cleaned_generated_audio.mp3"
     logger.info(f"📂 Looking for: {expected_filename} in Downloads folder")
     logger.info("🔄 Will check every 5 minutes...")
+
+    # Send email notification so user knows it's time to run the Colab notebook
+    if gmail_service:
+        send_notification_email(gmail_service, date_str, expected_filename)
 
     poll_interval_seconds = 300  # 5 minutes
 
@@ -581,7 +621,7 @@ def upload_audio(
 
 
 def generate_and_upload_audio_hybrid(
-    text_content: str, text_blocks: list, config: dict, date_str: str
+    text_content: str, text_blocks: list, config: dict, date_str: str, gmail_service=None
 ) -> list:
     """
     Hybrid workflow: Save text locally, wait for Colab TTS, then upload.
@@ -597,7 +637,7 @@ def generate_and_upload_audio_hybrid(
     text_filepath = notify_user_of_full_text_readiness(text_content, date_str)
 
     # Step 2: Wait for user to complete TTS in Colab and move file from Downloads
-    mp3_filepath = request_user_feedback(date_str)
+    mp3_filepath = request_user_feedback(date_str, gmail_service=gmail_service)
 
     if not mp3_filepath:
         logger.error("❌ No MP3 file found. Workflow aborted.")
@@ -873,7 +913,7 @@ Default behavior (when no dates are specified):
                     block["text"] = remove_markdown_links(block["text"])
 
                 files_created = generate_and_upload_audio_hybrid(
-                    cleaned_full_text, text_blocks, config, date_str
+                    cleaned_full_text, text_blocks, config, date_str, gmail_service=gmail_service
                 )
                 logger.info(f"Successfully completed process for {date_str}.")
 
