@@ -199,17 +199,23 @@ Scores **Arxiv papers only** (HuggingFace papers bypass scoring entirely). Uses 
 **File:** [transcript_generator.py](transcript_generator.py)
 **Class:** `GeminiTranscriptGenerator` (implements `TranscriptGenerator`)
 
-Generates the final podcast transcript using Gemini 3.1 Pro:
+Generates the final podcast transcript using sequential Gemini API calls with rate limiting:
 
-**Deep-dive papers** — each paper gets its **own individual LLM call** with the full paper text, producing a thorough standalone narration segment. All calls are submitted as separate `InlinedRequest` entries in a single **Batch API job** (50% cost savings, 24-hour turnaround acceptable for daily digests). A realtime fallback mode is available for testing.
+**Deep-dive papers** — each paper gets its **own individual LLM call** with the full paper text, producing a thorough standalone narration segment.
 
 **Summary papers** — formatted as **plain text without any LLM call**. Papers are grouped by Arxiv category with human-readable headings (e.g., "Computer Science", "Statistics") and listed with title + abstract. This section is appended after the deep-dive transcripts.
 
-**Batch API workflow:**
-1. Create a batch job with N `InlinedRequest` entries (one per deep-dive paper)
-2. Poll for completion at a configurable interval (default 60 seconds)
-3. Extract generated text from each response
-4. Concatenate all segments into the final transcript
+**Multi-tier API key & model fallback:**
+
+The generator supports automatic failover across multiple API keys and models to maximise uptime:
+
+1. **Primary API key** — tries the configured model chain (`gemini-3.1-flash-lite-preview` → `gemini-3-flash-preview` → `gemini-2.5-pro`)
+2. **Backup API key** (optional) — same model chain on a second free-tier key
+3. **Paid API key + model** (optional) — last resort fallback
+
+On a 429 (quota exhausted) error, the system immediately skips to the next API key tier without wasting retries. Each model gets up to 10 retries with exponential backoff (30s base, capped at 10 minutes). Network errors (`httpx.ReadError`, `httpx.ConnectError`, etc.) are also retried.
+
+**Model locking:** once a model succeeds, it is reused for all subsequent calls in the same run. If the locked-in model later fails, the full fallback chain is re-entered.
 
 ### Feedback System
 
@@ -292,8 +298,11 @@ TOKEN_FILE = token.json                # Auto-created after first auth
 
 [Gemini]
 API_KEY = your-gemini-api-key
+BACKUP_API_KEY = your-backup-gemini-key   # Optional: second free-tier key for failover
+PAID_API_KEY = your-paid-gemini-key       # Optional: paid key as last resort
 SCORING_MODEL = gemini-3-flash-preview
-GENERATION_MODEL = gemini-3.1-pro-preview
+GENERATION_MODEL = gemini-3.1-flash-lite-preview
+PAID_GENERATION_MODEL = gemini-2.5-pro    # Optional: model to use with paid key
 
 [ResearchPapers]
 ARXIV_SENDERS = no-reply@arxiv.org
