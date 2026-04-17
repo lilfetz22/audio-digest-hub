@@ -32,6 +32,7 @@ src/audiobooks/config.ini
 src/audiobooks/credentials.json
 .gitignore
 src/audiobooks/token.json
+src/audiobooks/token_backup.json
 
 # temp audio files
 *.wav
