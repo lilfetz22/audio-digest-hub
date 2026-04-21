@@ -6,31 +6,20 @@ from pathlib import Path
 from typing import List
 
 from .models import ClassifiedSection
+from .utils import load_prompt
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-
-def _load_prompt(filename: str, fallback: str) -> str:
-    """Load a prompt template from disk with a safe fallback."""
-    try:
-        prompt_path = PROMPTS_DIR / filename
-        if prompt_path.exists():
-            return prompt_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.warning(f"Failed loading prompt {filename}: {e}")
-    return fallback
-
-
-CLASSIFY_SYSTEM_PROMPT = _load_prompt("classify_system.txt", """You are a research paper classifier. Given a transcript section, classify it into one or more categories.
+_CLASSIFY_SYSTEM_FALLBACK = """You are a research paper classifier. Given a transcript section, classify it into one or more categories.
 
 Return a JSON object with these fields:
 - "category": The primary category (one of: "AI Architecture", "Hardware", "Benchmarking", "Optimization", "NLP", "Computer Vision", "Reinforcement Learning", "Robotics", "Time Series", "AI Agents", "Safety & Alignment", "Other")
 - "title": A short descriptive title for this section (max 10 words)
 - "paper_urls": Any URLs mentioned in the text (list of strings)
 
-Respond ONLY with valid JSON, no markdown formatting.""")
+Respond ONLY with valid JSON, no markdown formatting."""
 
 
 class TranscriptClassifier:
@@ -39,6 +28,7 @@ class TranscriptClassifier:
     def __init__(self, llm_client=None, model_name: str = "gemini-3.1-flash-lite-preview"):
         self.llm_client = llm_client
         self.model_name = model_name
+        self._classify_prompt = load_prompt(PROMPTS_DIR, "classify_system.txt", _CLASSIFY_SYSTEM_FALLBACK)
 
     def classify(self, sections: List[str]) -> List[ClassifiedSection]:
         """Classify a list of transcript sections.
@@ -64,7 +54,7 @@ class TranscriptClassifier:
             response = self.llm_client.models.generate_content(
                 model=self.model_name,
                 contents=text[:4000],  # Limit input size
-                config={"system_instruction": CLASSIFY_SYSTEM_PROMPT},
+                config={"system_instruction": self._classify_prompt},
             )
             result_text = response.text.strip()
             # Strip markdown code fences if present
@@ -81,8 +71,11 @@ class TranscriptClassifier:
                 title=data.get("title", ""),
                 paper_urls=data.get("paper_urls", []),
             )
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Classification failed: {e}")
+        except json.JSONDecodeError as e:
+            logger.warning("LLM returned invalid JSON: %s", e)
+            return ClassifiedSection(text=text, category="Other", title="Unclassified")
+        except Exception:
+            logger.exception("Unexpected error during classification")
             return ClassifiedSection(text=text, category="Other", title="Unclassified")
 
 
