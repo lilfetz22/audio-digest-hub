@@ -39,12 +39,19 @@ class IndexBuilder:
             if meta:
                 page_type = meta.get("type", "concept")
                 rel_path = md_file.relative_to(self.wiki_dir)
-                pages_by_type.setdefault(page_type, []).append({
-                    "title": meta.get("title", md_file.stem),
-                    "path": str(rel_path).replace("\\", "/"),
-                    "updated": meta.get("updated", ""),
-                    "categories": meta.get("categories", []),
-                })
+                if page_type not in pages_by_type:
+                    logger.warning(
+                        "Skipping page %s with unknown type %r",
+                        md_file.name,
+                        page_type,
+                    )
+                else:
+                    pages_by_type[page_type].append({
+                        "title": meta.get("title", md_file.stem),
+                        "path": str(rel_path).replace("\\", "/"),
+                        "updated": meta.get("updated", ""),
+                        "categories": meta.get("categories", []),
+                    })
 
         # Generate index content
         date_str = datetime.now().strftime("%Y-%m-%d")
