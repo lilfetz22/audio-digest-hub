@@ -1,16 +1,14 @@
 """Query saver — saves Q&A results as wiki pages."""
 
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
-import yaml
+from typing import List, Optional
 
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
 from .models import WikiPageMeta
+from .utils import slugify, format_page
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ class QuerySaver:
             wiki_dir=str(self.wiki_dir),
         )
 
-    def save(self, question: str, answer: str, sources: list = None) -> Path:
+    def save(self, question: str, answer: str, sources: Optional[List[str]] = None) -> Path:
         """Save a Q&A exchange as a wiki page.
 
         Args:
@@ -52,7 +50,7 @@ class QuerySaver:
         self.queries_dir.mkdir(parents=True, exist_ok=True)
 
         date_str = datetime.now().strftime("%Y-%m-%d")
-        slug = self._slugify(question)
+        slug = slugify(question)[:60]
         filename = f"{date_str}_{slug}.md"
         filepath = self.queries_dir / filename
 
@@ -78,7 +76,7 @@ class QuerySaver:
 
 {answer}
 """
-        content = self._format_page(meta, body)
+        content = format_page(meta, body)
         filepath.write_text(content, encoding="utf-8")
 
         if self.rebuild_index:
@@ -92,16 +90,9 @@ class QuerySaver:
         logger.info(f"Saved query result: {filepath}")
         return filepath
 
-    def _format_page(self, meta: WikiPageMeta, body: str) -> str:
-        """Format a wiki page with YAML frontmatter."""
-        frontmatter = yaml.dump(meta.to_dict(), default_flow_style=False, sort_keys=False)
-        return f"---\n{frontmatter}---\n\n{body}\n"
-
     @staticmethod
     def _slugify(text: str) -> str:
         """Convert question text to a filesystem-safe slug."""
-        slug = text.lower().strip()
-        slug = re.sub(r"[^\w\s-]", "", slug)
-        slug = re.sub(r"[\s]+", "_", slug)
-        # Truncate to reasonable length
-        return slug[:60]
+        return slugify(text)[:60]
+
+
