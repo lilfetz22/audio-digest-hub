@@ -15,12 +15,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from google import genai
+
 from research_papers.email_parser import ArxivHFEmailParser
 from research_papers.paper_downloader import PaperContentDownloader
 from research_papers.paper_scorer import EmbeddingPaperScorer
 from research_papers.transcript_generator import GeminiTranscriptGenerator
 from research_papers.feedback import PreferenceProfileManager, FeedbackClient
 from research_papers.pipeline import ResearchPaperPipeline
+from research_papers.wiki_engine.ingestion import WikiIngestionEngine
 
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
@@ -201,6 +204,15 @@ def main():
         top_n_deep_dive=config["top_n_deep_dive"],
     )
 
+    wiki_dir = os.path.join(script_dir, "wiki")
+    wiki_llm_client = genai.Client(api_key=config["gemini_api_key"])
+    wiki_engine = WikiIngestionEngine(
+        wiki_dir=wiki_dir,
+        llm_client=wiki_llm_client,
+        model_name=config["generation_model"],
+        auto_commit=True,
+    )
+
     # Run pipeline for each date
     for date in dates_to_process:
         date_str = date.strftime("%Y-%m-%d")
@@ -208,6 +220,21 @@ def main():
             pipeline.run(date_str)
         except Exception as e:
             logger.error(f"Pipeline failed for {date_str}: {e}", exc_info=True)
+            continue
+
+        transcript_path = os.path.join(output_dir, f"research_digest_{date_str}.txt")
+        if os.path.exists(transcript_path):
+            try:
+                result = wiki_engine.ingest_transcript(transcript_path, date_str)
+                logger.info(
+                    f"Wiki ingestion for {date_str}: "
+                    f"{len(result['concepts_created'])} concepts created, "
+                    f"{len(result['concepts_updated'])} updated"
+                )
+            except Exception as e:
+                logger.error(f"Wiki ingestion failed for {date_str}: {e}", exc_info=True)
+        else:
+            logger.info(f"No transcript found for {date_str}, skipping wiki ingestion")
 
     logger.info("Research paper pipeline finished.")
 
