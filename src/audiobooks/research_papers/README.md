@@ -508,15 +508,22 @@ Verify the server starts and responds to a `tools/list` request:
 
 ```powershell
 cd src\audiobooks\research_papers
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | python -m wiki_engine.mcp_server
+python tests/smoke_test_mcp_server.py
 ```
 
 A valid response looks like:
-```json
-{"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "wiki_search", ...}, ...]}}
+```
+OK — server returned 4 tool(s):
+  • wiki_search
+  • wiki_get_page
+  • wiki_list_pages
+  • wiki_save_query
 ```
 
-If you see that JSON on stdout the server is working correctly.
+> **Note:** The MCP protocol requires an `initialize` → `notifications/initialized` handshake
+> before any tool calls. Piping a bare `tools/list` message directly to the server will fail
+> with *"Received request before initialization was complete"* — the helper script above
+> performs the full handshake automatically.
 
 #### 3. MCP Inspector (browser UI — recommended)
 
