@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, List, Optional
 
 import yaml
 
@@ -36,7 +36,7 @@ class WikiMcpServer:
     without running an async server loop or importing the ``mcp`` package.
     """
 
-    TOOLS = [
+    TOOLS: ClassVar[List[dict]] = [
         {
             "name": "wiki_search",
             "description": (
