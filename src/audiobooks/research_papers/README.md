@@ -453,6 +453,140 @@ pytest tests/test_feedback.py -v
 
 ---
 
+---
+
+## LLM Wiki & MCP Server
+
+The wiki pipeline transforms daily transcripts into a versioned knowledge base and exposes it to LLM agents (GitHub Copilot, Claude Desktop, etc.) via a local MCP (Model Context Protocol) server.
+
+### Wiki Structure
+
+```
+wiki/
+├── index.md          # Auto-rebuilt on every ingestion run
+├── sources/          # One page per daily transcript
+├── concepts/         # Synthesized concept pages (upserted, never overwritten)
+└── queries/          # Saved Q&A exchanges
+```
+
+### MCP Tools Available to Agents
+
+| Tool | What it does |
+|------|-------------|
+| `wiki_search` | Hybrid BM25+semantic search over all wiki pages |
+| `wiki_get_page` | Read full Markdown content of a specific page |
+| `wiki_list_pages` | List all pages, optionally filtered by type (`concept`, `source`, `query-result`) |
+| `wiki_save_query` | Persist a Q&A exchange to `wiki/queries/` so it survives beyond the chat session |
+
+---
+
+### Installation
+
+Install the MCP Python SDK (one-time):
+
+```powershell
+cd src\audiobooks
+pip install mcp
+```
+
+---
+
+### Smoke Testing the MCP Server
+
+#### 1. Unit tests (no server process needed)
+
+```powershell
+cd src\audiobooks\research_papers
+python -m pytest tests/test_wiki_mcp_server.py -v
+```
+
+All 19 tests exercise the tool handlers in isolation with mocked dependencies — no real wiki files or network calls required.
+
+#### 2. JSON-RPC smoke test (raw stdio)
+
+Verify the server starts and responds to a `tools/list` request:
+
+```powershell
+cd src\audiobooks\research_papers
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | python -m wiki_engine.mcp_server
+```
+
+A valid response looks like:
+```json
+{"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "wiki_search", ...}, ...]}}
+```
+
+If you see that JSON on stdout the server is working correctly.
+
+#### 3. MCP Inspector (browser UI — recommended)
+
+The inspector lets you call each tool manually and inspect inputs/outputs:
+
+```powershell
+# One-time install
+npm install -g @modelcontextprotocol/inspector
+
+# Launch — opens a browser tab automatically
+npx @modelcontextprotocol/inspector python -m wiki_engine.mcp_server
+```
+
+From the browser UI you can:
+- Click **List Tools** to confirm all 4 tools appear
+- Enter a query and call `wiki_search` directly
+- Browse pages via `wiki_list_pages`
+- Read a specific page via `wiki_get_page`
+
+---
+
+### Running in Production (VS Code Copilot)
+
+The `.vscode/mcp.json` file at the project root registers the server with VS Code automatically.
+
+1. Open the workspace in VS Code
+2. Open the **GitHub Copilot Chat** panel
+3. Click the **Tools** icon (plug icon) in the chat input bar — you should see `llm-wiki` listed with all 4 tools
+4. In a chat, ask Copilot to use the tools, e.g.:
+   - *"Search the wiki for information about attention mechanisms"*
+   - *"List all concept pages in the wiki"*
+   - *"Save this answer about LoRA to the wiki"*
+
+The server process is started automatically by VS Code when a tool call is needed and shut down when the session ends. No manual process management required.
+
+#### Running in Production (Claude Desktop)
+
+Add this block to your `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "llm-wiki": {
+      "command": "python",
+      "args": ["-m", "wiki_engine.mcp_server"],
+      "cwd": "C:\\Users\\cindy\\Documents\\audio-digest-hub\\src\\audiobooks\\research_papers"
+    }
+  }
+}
+```
+
+Restart Claude Desktop and the wiki tools will appear in the tool palette.
+
+---
+
+### Ingesting a New Transcript into the Wiki
+
+```powershell
+cd src\audiobooks\research_papers
+python -c "
+from wiki_engine.ingestion import WikiIngestionPipeline
+p = WikiIngestionPipeline(wiki_dir='wiki', auto_commit=True)
+p.ingest('raw_content/research_digest_2026-04-20.txt')
+"
+```
+
+After ingestion, `wiki/index.md` is rebuilt and a git commit is created automatically if `auto_commit=True`.
+
+---
+
 ## Dependencies
 
 Core Python packages (see `requirements.txt` in parent directory):
