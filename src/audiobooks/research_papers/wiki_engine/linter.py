@@ -11,24 +11,13 @@ from typing import List, Optional, Set
 import yaml
 
 from .git_hooks import WikiGitManager
+from .utils import load_prompt, slugify
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-
-def _load_prompt(filename: str, fallback: str) -> str:
-    """Load a prompt template from disk with a safe fallback."""
-    try:
-        prompt_path = PROMPTS_DIR / filename
-        if prompt_path.exists():
-            return prompt_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.warning(f"Failed loading prompt {filename}: {e}")
-    return fallback
-
-
-LINT_SYSTEM_PROMPT = _load_prompt("lint_system.txt", """You are a knowledge base auditor. Review the following wiki pages and identify:
+_LINT_SYSTEM_FALLBACK = """You are a knowledge base auditor. Review the following wiki pages and identify:
 
 1. CONTRADICTIONS: Cases where two pages make conflicting claims about the same topic.
 2. IMPLICIT CONCEPTS: Terms or concepts that are mentioned frequently but do not have their own dedicated page.
@@ -39,7 +28,16 @@ For each issue found, provide:
 - "pages_involved": List of page filenames involved
 - "severity": "high", "medium", or "low"
 
-Return a JSON array of issues. Respond ONLY with valid JSON.""")
+Return a JSON array of issues. Respond ONLY with valid JSON."""
+
+LINT_SYSTEM_PROMPT = load_prompt(PROMPTS_DIR, "lint_system.txt", _LINT_SYSTEM_FALLBACK)
+
+_TECH_TERM_PATTERN = re.compile(
+    r"\b(?:transformer|attention|diffusion|reinforcement learning|"
+    r"state space|mixture of experts|fine-tuning|"
+    r"knowledge distillation|quantization|pruning)\b",
+    re.IGNORECASE,
+)
 
 
 class WikiLinter:
@@ -122,7 +120,7 @@ class WikiLinter:
                 content = md_file.read_text(encoding="utf-8")
                 links = re.findall(r"\[\[([^\]]+)\]\]", content)
                 for link in links:
-                    linked_pages.add(self._slugify(link))
+                    linked_pages.add(slugify(link))
             except Exception:
                 continue
 
@@ -180,8 +178,11 @@ class WikiLinter:
             ]
             return contradictions
 
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Contradiction detection failed: {e}")
+        except json.JSONDecodeError as e:
+            logger.warning("LLM returned invalid JSON: %s", e)
+            return []
+        except Exception:
+            logger.exception("Unexpected error during contradiction detection")
             return []
 
     def find_implicit_concepts(self, min_mentions: int = 3) -> List[dict]:
@@ -212,13 +213,7 @@ class WikiLinter:
                 # Extract potential concept terms (capitalized multi-word phrases)
                 terms = re.findall(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", content)
                 # Also capture common technical terms
-                tech_terms = re.findall(
-                    r"\b(?:transformer|attention|diffusion|reinforcement learning|"
-                    r"state space|mixture of experts|fine-tuning|"
-                    r"knowledge distillation|quantization|pruning)\b",
-                    content,
-                    re.IGNORECASE,
-                )
+                tech_terms = _TECH_TERM_PATTERN.findall(content)
                 for term in terms + tech_terms:
                     normalized = term.lower().strip()
                     if normalized not in existing_concepts and len(normalized) > 3:
@@ -304,14 +299,6 @@ class WikiLinter:
         report_path.write_text("".join(lines), encoding="utf-8")
         logger.info(f"Lint report written to {report_path}")
         return report_path
-
-    @staticmethod
-    def _slugify(name: str) -> str:
-        """Convert a concept name to a slug for comparison."""
-        slug = name.lower().strip()
-        slug = re.sub(r"[^\w\s-]", "", slug)
-        slug = re.sub(r"[\s]+", "_", slug)
-        return slug
 
     def _updated_sort_key(self, filepath: Path) -> str:
         """Sort concept pages by YAML `updated` metadata."""
