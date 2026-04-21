@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -13,24 +12,13 @@ from .models import WikiPageMeta, ExtractedConcept, ClassifiedSection
 from .classifier import TranscriptClassifier, split_transcript_into_sections
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
+from .utils import load_prompt, slugify, format_page
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-
-def _load_prompt(filename: str, fallback: str) -> str:
-    """Load a prompt template from disk with a safe fallback."""
-    try:
-        prompt_path = PROMPTS_DIR / filename
-        if prompt_path.exists():
-            return prompt_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.warning(f"Failed loading prompt {filename}: {e}")
-    return fallback
-
-
-EXTRACT_CONCEPTS_PROMPT = _load_prompt("extract_concepts_system.txt", """You are a knowledge extraction engine. Given a research paper transcript section, extract the key concepts discussed.
+_EXTRACT_CONCEPTS_FALLBACK = """You are a knowledge extraction engine. Given a research paper transcript section, extract the key concepts discussed.
 
 For EACH distinct concept, return a JSON array where each element has:
 - "name": The concept name (e.g., "Mixture of Experts", "State Space Models")
@@ -42,9 +30,9 @@ For EACH distinct concept, return a JSON array where each element has:
 - "related_concepts": Names of other concepts this relates to
 - "sources": Any paper URLs or references mentioned
 
-Respond ONLY with a valid JSON array. No markdown formatting.""")
+Respond ONLY with a valid JSON array. No markdown formatting."""
 
-UPDATE_CONCEPT_PROMPT = _load_prompt("update_concept_system.txt", """You are a knowledge base editor. You are updating an existing concept page with new information from a recent research paper.
+_UPDATE_CONCEPT_FALLBACK = """You are a knowledge base editor. You are updating an existing concept page with new information from a recent research paper.
 
 EXISTING PAGE CONTENT:
 {existing_content}
@@ -66,7 +54,7 @@ Return a JSON object with:
 - "confidence": Updated confidence score (0.0-1.0)
 - "new_sources": List of new source URLs to add
 
-Respond ONLY with valid JSON. No markdown formatting.""")
+Respond ONLY with valid JSON. No markdown formatting."""
 
 
 class WikiIngestionEngine:
@@ -98,6 +86,8 @@ class WikiIngestionEngine:
             repo_root=str(repo_path),
             wiki_dir=str(self.wiki_dir),
         )
+        self._extract_prompt = load_prompt(PROMPTS_DIR, "extract_concepts_system.txt", _EXTRACT_CONCEPTS_FALLBACK)
+        self._update_prompt = load_prompt(PROMPTS_DIR, "update_concept_system.txt", _UPDATE_CONCEPT_FALLBACK)
 
     def ingest_transcript(self, transcript_path: str, date_str: str) -> dict:
         """Ingest a daily transcript into the wiki.
@@ -165,7 +155,7 @@ class WikiIngestionEngine:
             categories=["daily-digest"],
         )
 
-        content = self._format_page(meta, transcript_text)
+        content = format_page(meta, transcript_text)
         filepath.write_text(content, encoding="utf-8")
         logger.info(f"Created source page: {filepath}")
         return filepath
@@ -179,7 +169,7 @@ class WikiIngestionEngine:
             response = self.llm_client.models.generate_content(
                 model=self.model_name,
                 contents=section.text[:8000],
-                config={"system_instruction": EXTRACT_CONCEPTS_PROMPT},
+                config={"system_instruction": self._extract_prompt},
             )
             result_text = response.text.strip()
             if result_text.startswith("```"):
@@ -205,15 +195,18 @@ class WikiIngestionEngine:
                 concepts.append(concept)
             return concepts
 
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Concept extraction failed: {e}")
+        except json.JSONDecodeError as e:
+            logger.warning("LLM returned invalid JSON: %s", e)
+            return []
+        except Exception:
+            logger.exception("Unexpected error during concept extraction")
             return []
 
     def _upsert_concept(self, concept: ExtractedConcept, date_str: str) -> bool:
         """Create or update a concept page. Returns True if updated existing."""
         self.concepts_dir.mkdir(parents=True, exist_ok=True)
 
-        slug = self._slugify(concept.name)
+        slug = slugify(concept.name)
         filepath = self.concepts_dir / f"{slug}.md"
 
         if filepath.exists():
@@ -255,7 +248,7 @@ class WikiIngestionEngine:
 
 {related_links}
 """
-        content = self._format_page(meta, body)
+        content = format_page(meta, body)
         filepath.write_text(content, encoding="utf-8")
         logger.info(f"Created concept page: {filepath}")
 
@@ -279,7 +272,7 @@ class WikiIngestionEngine:
         _, existing_body = self._parse_page(existing_content)
         new_info = f"Name: {concept.name}\nTLDR: {concept.tldr}\nBody: {concept.body}\nCounterarguments: {concept.counterarguments}"
 
-        prompt = UPDATE_CONCEPT_PROMPT.format(
+        prompt = self._update_prompt.format(
             existing_content=existing_content,
             new_info=new_info,
         )
@@ -335,7 +328,7 @@ class WikiIngestionEngine:
 
 {related_links}
 """
-            return self._format_page(meta, body)
+            return format_page(meta, body)
 
         except Exception as e:
             logger.warning(f"LLM update failed, using simple append: {e}")
@@ -352,12 +345,7 @@ class WikiIngestionEngine:
             append_text += f"\n**New counterarguments:** {concept.counterarguments}\n"
 
         new_body = body + append_text
-        return self._format_page(meta, new_body)
-
-    def _format_page(self, meta: WikiPageMeta, body: str) -> str:
-        """Format a wiki page with YAML frontmatter + body."""
-        frontmatter = yaml.dump(meta.to_dict(), default_flow_style=False, sort_keys=False)
-        return f"---\n{frontmatter}---\n\n{body}\n"
+        return format_page(meta, new_body)
 
     def _parse_page(self, content: str) -> Tuple[WikiPageMeta, str]:
         """Parse a wiki page into metadata and body."""
@@ -382,7 +370,4 @@ class WikiIngestionEngine:
     @staticmethod
     def _slugify(name: str) -> str:
         """Convert a concept name to a filesystem-safe slug."""
-        slug = name.lower().strip()
-        slug = re.sub(r"[^\w\s-]", "", slug)
-        slug = re.sub(r"[\s]+", "_", slug)
-        return slug
+        return slugify(name)
