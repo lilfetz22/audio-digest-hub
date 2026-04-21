@@ -53,6 +53,7 @@ class WikiGitManager:
             )
             return bool(result.stdout.strip())
         except Exception:
+            logger.warning("has_changes() failed — assuming no changes", exc_info=True)
             return False
 
     def _run_git(self, args: list, check: bool = True) -> subprocess.CompletedProcess:
