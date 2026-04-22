@@ -30,3 +30,13 @@ The primary limitation of this approach is the high computational complexity req
 
 [[Trombone Maneuver]] [[TRACON]] [[Trajectory-Based Operations]]
 
+---
+
+### Update (2026-04-22)
+
+Geometric Trajectory Optimization addresses the limitations of traditional node-link abstraction models in air traffic control. Instead of treating flights as discrete segments with static time buffers, this approach models the actual physical space a plane traverses within a Terminal Radar Approach Control (TRACON) environment.
+
+By incorporating spatial dynamics, the method accounts for the continuous nature of aircraft movement. This allows for the integration of maneuvers—such as the 'trombone' procedure—directly into the scheduling algorithm, providing a more precise representation of how speed, heading, and geometry affect arrival times.
+
+**New counterarguments:** The primary limitation is computational complexity; modeling continuous geometry for a high volume of aircraft is significantly more resource-intensive than graph-based scheduling. Furthermore, real-world variables like sudden weather shifts or pilot performance can introduce stochasticity that rigid geometric models struggle to adapt to in real-time.
+

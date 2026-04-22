@@ -4,36 +4,45 @@
 
 ---
 
-## Concepts (148 pages)
+## Concepts (201 pages)
 
 - [[API-Logic Translation Bottleneck]](concepts/api-logic_translation_bottleneck.md) — LLM Reasoning, API Integration, Code Generation
 - [[Adaptive Computation in Multimodal Agents]](concepts/adaptive_computation_in_multimodal_agents.md) — Artificial Intelligence, Multimodal Systems, Model Efficiency
 - [[Adaptive Preference Water-Filling]](concepts/adaptive_preference_water-filling.md) — AI Agents, Control Systems, Decision Making
 - [[Adaptive Visual Reasoning (AVR)]](concepts/adaptive_visual_reasoning_avr.md) — Computer Vision, Multimodal Learning, Model Architecture
 - [[Agentic Multi-Turn Feedback Loops]](concepts/agentic_multi-turn_feedback_loops.md) — AI Agents, Reinforcement Learning, Debugging
+- [[Algorithm Synthesis via Dynamical Systems]](concepts/algorithm_synthesis_via_dynamical_systems.md) — Control Theory, Optimization Theory
 - [[Algorithmic Reasoning Capability]](concepts/algorithmic_reasoning_capability.md) — Artificial Intelligence, Algorithmic Reasoning, Large Language Models
+- [[Algorithmic Reinvention Capability]](concepts/algorithmic_reinvention_capability.md) — Artificial Intelligence, Algorithmic Reasoning, Machine Learning
 - [[Ambiguity Set]](concepts/ambiguity_set.md) — Robust Optimization, Control Theory
 - [[Asymptotic Stability in Control]](concepts/asymptotic_stability_in_control.md) — Control Theory, Stability Analysis
+- [[Asymptotic Stability via Descent Conditions]](concepts/asymptotic_stability_via_descent_conditions.md) — Control Theory, Optimization
 - [[Bayesian Neural Networks]](concepts/bayesian_neural_networks.md) — Machine Learning, Bayesian Inference, Uncertainty Quantification
 - [[Bayesian Neural Networks (BNNs)]](concepts/bayesian_neural_networks_bnns.md) — Deep Learning, Probabilistic Machine Learning, Uncertainty Estimation
 - [[Bayesian Uncertainty Quantification]](concepts/bayesian_uncertainty_quantification.md) — Artificial Intelligence, Bayesian Statistics, Machine Learning Reliability
 - [[Bisimulation Function]](concepts/bisimulation_function.md) — Multitask Learning, Robotics, Control Theory
 - [[Bismut-Elworthy-Li Formula]](concepts/bismut-elworthy-li_formula.md) — Stochastic Calculus, Optimization, Differential Geometry
 - [[Bootstrapping Strategy for Trajectory Optimization]](concepts/bootstrapping_strategy_for_trajectory_optimization.md) — Machine Learning, Robotics, Optimization
+- [[Capacity Threshold in Traffic Flow]](concepts/capacity_threshold_in_traffic_flow.md) — Traffic Management, Operations Research, Control Systems
 - [[Catastrophic Forgetting]](concepts/catastrophic_forgetting.md) — Continual Learning, Neural Network Optimization
 - [[Catastrophic Forgetting Dynamics]](concepts/catastrophic_forgetting_dynamics.md) — Continual Learning, Optimization Theory
 - [[Catastrophic Forgetting in the Kernel Regime]](concepts/catastrophic_forgetting_in_the_kernel_regime.md) — Machine Learning Theory, Continual Learning, Neural Dynamics
 - [[Certainty Equivalence]](concepts/certainty_equivalence.md) — Stochastic Control, Decision Theory
+- [[Certainty Equivalence in Stochastic Semilinear Problems]](concepts/certainty_equivalence_in_stochastic_semilinear_problems.md) — Stochastic Control, Reinforcement Learning, Optimal Control
 - [[Certainty Equivalence in Stochastic Semilinear Systems]](concepts/certainty_equivalence_in_stochastic_semilinear_systems.md) — Stochastic Control, Reinforcement Learning, Control Theory
 - [[Coarse-to-Fine 1D Ordered Tokenization]](concepts/coarse-to-fine_1d_ordered_tokenization.md) — Computer Vision, Generative Models, Inference Optimization
+- [[Coarse-to-Fine Tokenization]](concepts/coarse-to-fine_tokenization.md) — Machine Learning, Generative AI, Inference Optimization
 - [[Coarse-to-fine Token Ordering]](concepts/coarse-to-fine_token_ordering.md) — Generative AI, Inference Optimization, Search Algorithms
+- [[Cole-Hopf Transformation]](concepts/cole-hopf_transformation.md) — Mathematical Optimization, Control Theory, Stochastic Calculus
 - [[Combinatorial Solver Complexity]](concepts/combinatorial_solver_complexity.md) — Optimization, Computational Complexity, Scheduling
+- [[Conservative Jacobian]](concepts/conservative_jacobian.md) — Control Theory, Optimization
 - [[Controlled Evolution Optimization]](concepts/controlled_evolution_optimization.md) — Optimization, Computational Finance, Reinforcement Learning
 - [[Coupled Particle Swarm Exploration]](concepts/coupled_particle_swarm_exploration.md) — Optimization, Swarm Intelligence
 - [[DARLING (Detection Augmented Reinforcement Learning)]](concepts/darling_detection_augmented_reinforcement_learning.md) — Reinforcement Learning, Non-stationary Environments, Model Adaptation
 - [[DARLING (Detection-Aware Reinforcement Learning)]](concepts/darling_detection-aware_reinforcement_learning.md) — Reinforcement Learning, Non-Stationary Environments, Adaptive Agents
 - [[DR-SAC (Distributionally Robust Soft Actor-Critic)]](concepts/dr-sac_distributionally_robust_soft_actor-critic.md) — Reinforcement Learning, Robust Optimization, Offline RL
 - [[Decision Regret Minimization]](concepts/decision_regret_minimization.md) — Decision Theory, Machine Learning
+- [[Deep Operator Networks]](concepts/deep_operator_networks.md) — Machine Learning, Scientific Machine Learning, Numerical Analysis
 - [[Deep Operator Networks (DeepONets)]](concepts/deep_operator_networks_deeponets.md) — Machine Learning, Scientific Machine Learning, Neural Operators
 - [[DeepONet]](concepts/deeponet.md) — Machine Learning, Scientific Computing, Neural Operators
 - [[Derivative-Free SDE-based Optimization]](concepts/derivative-free_sde-based_optimization.md) — Optimization, Stochastic Processes, Machine Learning
@@ -42,38 +51,59 @@
 - [[Differentiable Model Predictive Control]](concepts/differentiable_model_predictive_control.md) — Control Theory, Reinforcement Learning, Robotics
 - [[Differential Riccati Equation (DRE)]](concepts/differential_riccati_equation_dre.md) — Control Theory, Optimal Control, Mathematical Optimization
 - [[Diffusion Model Training Dynamics]](concepts/diffusion_model_training_dynamics.md) — Generative AI, Deep Learning, Optimization
+- [[Direct Collocation]](concepts/direct_collocation.md) — Numerical Optimization, Optimal Control
 - [[Direct Collocation (DCNLP)]](concepts/direct_collocation_dcnlp.md) — Trajectory Planning, Numerical Optimization, Control Theory
 - [[Distributionally Robust Soft Actor-Critic (DR-SAC)]](concepts/distributionally_robust_soft_actor-critic_dr-sac.md) — Reinforcement Learning, Robust AI, Offline RL
 - [[Domain-Specific Agent Execution Environments]](concepts/domain-specific_agent_execution_environments.md) — Agentic Workflows, Software Engineering, LLM Integration
 - [[Dynamic Optimality]](concepts/dynamic_optimality.md) — Optimization, Complexity Theory
 - [[Early Stopping in Diffusion Models]](concepts/early_stopping_in_diffusion_models.md) — Training Dynamics, Generative Modeling
+- [[Early-Stopping in Denoising Score Matching]](concepts/early-stopping_in_denoising_score_matching.md) — Optimization, Regularization, Generative Modeling
 - [[End-to-End Predict-then-Optimize]](concepts/end-to-end_predict-then-optimize.md) — Machine Learning, Optimization, Operations Research
+- [[End-to-End Predict-then-Optimize (PyEPO)]](concepts/end-to-end_predict-then-optimize_pyepo.md) — Machine Learning, Operations Research, Decision Theory
 - [[Evidence Lower Bound (ELBO)]](concepts/evidence_lower_bound_elbo.md) — Optimization, Information Theory, Probabilistic Machine Learning
+- [[Exponential Stability in Control Systems]](concepts/exponential_stability_in_control_systems.md) — Control Theory, Mathematical Optimization
 - [[Exponential Stability in Learned Systems]](concepts/exponential_stability_in_learned_systems.md) — Control Theory, Robustness, Formal Verification
 - [[FS-GRPO (Few-Shot Group Relative Policy Optimization)]](concepts/fs-grpo_few-shot_group_relative_policy_optimization.md) — Reinforcement Learning, Model Optimization, Policy Gradient Methods
 - [[First-on-Final-First-Serve (FOFFS)]](concepts/first-on-final-first-serve_foffs.md) — Air Traffic Management, Logistics Optimization, Sequencing Algorithms
+- [[Forgetting Error Decomposition]](concepts/forgetting_error_decomposition.md) — Continual Learning, Model Evaluation
 - [[Four-Stage Evaluation Gauntlet]](concepts/four-stage_evaluation_gauntlet.md) — Software Engineering, AI Evaluation, Quantitative Finance
+- [[Functional Approximation for Robust RL]](concepts/functional_approximation_for_robust_rl.md) — Optimization, Reinforcement Learning
+- [[Gap-Dependent Variance Characterization]](concepts/gap-dependent_variance_characterization.md) — Stochastic Optimization, Mathematical Analysis
+- [[Generative Model Advantage]](concepts/generative_model_advantage.md) — Reinforcement Learning, Simulation
 - [[Generative Verifiers]](concepts/generative_verifiers.md) — AI Safety, Agentic Frameworks, Reasoning Architectures
+- [[Geometric Constraints in Optimization]](concepts/geometric_constraints_in_optimization.md) — Optimization, AI Logistics, Control Theory
 - [[Geometric Coupling]](concepts/geometric_coupling.md) — Air Traffic Management, Trajectory Optimization, Aerospace Engineering
 - [[Geometric Path Extension Modeling]](concepts/geometric_path_extension_modeling.md) — Aeronautics, Flight Path Planning
 - [[Geometric Trajectory Optimization]](concepts/geometric_trajectory_optimization.md) — Operations Research, Air Traffic Management, Optimization
 - [[Gradient Dynamics of Sequential Learning]](concepts/gradient_dynamics_of_sequential_learning.md) — Optimization Theory, Neural Dynamics
+- [[Greedy Autoregressive Generation]](concepts/greedy_autoregressive_generation.md) — Generative AI, Inference Strategies
 - [[Group Relative Policy Optimization (GRPO)]](concepts/group_relative_policy_optimization_grpo.md) — Reinforcement Learning, Machine Unlearning
+- [[HJB (Hamilton-Jacobi-Bellman) Equations]](concepts/hjb_hamilton-jacobi-bellman_equations.md) — Control Theory, Applied Mathematics
+- [[Hamilton-Jacobi equations in optimization]](concepts/hamilton-jacobi_equations_in_optimization.md) — Optimization Theory, Quantum Computing, Mathematical Physics
 - [[Hamilton-Jacobi-Bellman (HJB) Equation]](concepts/hamilton-jacobi-bellman_hjb_equation.md) — Optimal Control, Stochastic Processes, Mathematics
 - [[Hamilton-Jacobi-Bellman (HJB) Equations]](concepts/hamilton-jacobi-bellman_hjb_equations.md) — Control Theory, Applied Mathematics, Scientific Machine Learning
 - [[Hamilton-Jacobi-Schrödinger Mapping]](concepts/hamilton-jacobi-schrödinger_mapping.md) — Quantum Computing, Optimization Theory, Mathematical Physics
+- [[Hierarchical Abstraction in Robotics]](concepts/hierarchical_abstraction_in_robotics.md) — Autonomous Systems, Robotics Architecture
+- [[High-Fidelity Geometric Modeling]](concepts/high-fidelity_geometric_modeling.md) — Optimization, Autonomous Systems, Operations Research
 - [[History-Dependent Lifting]](concepts/history-dependent_lifting.md) — Reinforcement Learning, Control Theory, State Estimation
 - [[Hybrid Model-Based and Model-Free Optimization]](concepts/hybrid_model-based_and_model-free_optimization.md) — Reinforcement Learning, Control Theory, Model Predictive Control
+- [[Hölder Smoothness Adaptation]](concepts/hölder_smoothness_adaptation.md) — Optimization, Functional Analysis
 - [[Individual Minima (IM) Optimization]](concepts/individual_minima_im_optimization.md) — Optimization, Computational Geometry
 - [[Individual Minima-Informed Decision-Making]](concepts/individual_minima-informed_decision-making.md) — Optimization, Decision Theory
+- [[Individual Minima-Informed Multi-Objective Control]](concepts/individual_minima-informed_multi-objective_control.md) — Multi-Objective Optimization, Model Predictive Control, Control Theory
 - [[Intent-aligned Autonomous Spacecraft Guidance]](concepts/intent-aligned_autonomous_spacecraft_guidance.md) — Space Robotics, Autonomous Systems, Large Language Models, Path Planning
 - [[Interval Arithmetic for Certification]](concepts/interval_arithmetic_for_certification.md) — Formal Methods, Symbolic AI, Optimization
 - [[Inverse Optimality in Algorithm Synthesis]](concepts/inverse_optimality_in_algorithm_synthesis.md) — Optimization Theory, Computational Methods
+- [[Inverse Optimality in Optimization]](concepts/inverse_optimality_in_optimization.md) — Optimal Control, Numerical Optimization
+- [[Kernel Regime]](concepts/kernel_regime.md) — Deep Learning Theory, Mathematical Optimization
+- [[Kernel Regression Optimization in Diffusion Models]](concepts/kernel_regression_optimization_in_diffusion_models.md) — Diffusion Models, Optimization Theory, Machine Learning
 - [[Kernel Regression in Diffusion Models]](concepts/kernel_regression_in_diffusion_models.md) — Generative Models, Optimization Theory, Diffusion Models
 - [[L2 Regularization Equivalency]](concepts/l2_regularization_equivalency.md) — Optimization Theory, Regularization
 - [[Lifted Linear Dynamics]](concepts/lifted_linear_dynamics.md) — Control Theory, Optimization Theory
+- [[Linear Quadratic Gaussian (LQG)]](concepts/linear_quadratic_gaussian_lqg.md) — Control Theory, Stochastic Systems, Robotics
 - [[Linear Quadratic Gaussian (LQG) Control]](concepts/linear_quadratic_gaussian_lqg_control.md) — Control Theory, Stochastic Systems, Robotics
 - [[Linear Quadratic Regulator (LQR)]](concepts/linear_quadratic_regulator_lqr.md) — Control Theory, Robotics, Optimal Control
+- [[Linear Relaxation in Optimization]](concepts/linear_relaxation_in_optimization.md) — Optimization, Numerical Methods
 - [[Linear Relaxation in Training]](concepts/linear_relaxation_in_training.md) — Optimization, Computational Efficiency
 - [[Markov Jump Systems]](concepts/markov_jump_systems.md) — Control Theory, Stochastic Processes, System Identification
 - [[Mean-Field Control]](concepts/mean-field_control.md) — Mean-Field Theory, Wasserstein Geometry, Multi-Agent Systems
@@ -83,7 +113,9 @@
 - [[Monte Carlo Dropout]](concepts/monte_carlo_dropout.md) — Machine Learning, Regularization
 - [[Multi-Objective Model Predictive Control (MOMPC)]](concepts/multi-objective_model_predictive_control_mompc.md) — Control Theory, Optimization, Automation
 - [[Nadir-CHIM Method]](concepts/nadir-chim_method.md) — Optimization, Control Theory, Multi-objective Optimization
+- [[Neural Tangent Kernel (NTK) in Diffusion Models]](concepts/neural_tangent_kernel_ntk_in_diffusion_models.md) — Deep Learning Theory, Optimization, Diffusion Models
 - [[Neural Warm-Starting]](concepts/neural_warm-starting.md) — Optimization, Neural Networks, Trajectory Planning
+- [[Node-Link Abstractions]](concepts/node-link_abstractions.md) — Operations Research, Network Theory
 - [[Nonlinear Programming (NLP) for Trajectory Planning]](concepts/nonlinear_programming_nlp_for_trajectory_planning.md) — Operations Research, Aviation, Optimization
 - [[Offline Reinforcement Learning Brittleness]](concepts/offline_reinforcement_learning_brittleness.md) — Reinforcement Learning, Generalization
 - [[Operator Learning]](concepts/operator_learning.md) — Scientific Machine Learning, Control Theory, Neural Networks
@@ -91,8 +123,11 @@
 - [[Oracle-based Stochastic Gradient Descent (ALOE)]](concepts/oracle-based_stochastic_gradient_descent_aloe.md) — Optimization, Machine Learning, Stochastic Calculus
 - [[Ordered Tokens]](concepts/ordered_tokens.md) — Autoregressive Models, Tokenization, Reasoning
 - [[Overconfidence]](concepts/overconfidence.md) — Model Reliability, Failure Analysis
+- [[Overconfidence Wall]](concepts/overconfidence_wall.md) — Model Reliability, Deep Learning, Safety-Critical AI
+- [[PTST (Policy Testing with Subproblem Transformation)]](concepts/ptst_policy_testing_with_subproblem_transformation.md) — Reinforcement Learning, Algorithms, Policy Optimization
 - [[PTST Algorithm]](concepts/ptst_algorithm.md) — Reinforcement Learning, Algorithm Design, Sample Complexity
 - [[Pascoletti-Serafini (PS) Scalarization]](concepts/pascoletti-serafini_ps_scalarization.md) — Optimization, Multi-Objective Optimization, Mathematical Programming
+- [[Perturbed Optimizers]](concepts/perturbed_optimizers.md) — Stochastic Optimization, Machine Learning
 - [[Perturbed Optimizers (DPO/PFYL)]](concepts/perturbed_optimizers_dpopfyl.md) — Stochastic Optimization, Machine Learning, Differentiable Programming
 - [[Physical Derivation of Momentum]](concepts/physical_derivation_of_momentum.md) — Optimization Theory, Physics of Computation
 - [[Physical Emergence of Momentum]](concepts/physical_emergence_of_momentum.md) — Optimization Theory, Machine Learning Dynamics
@@ -102,36 +137,50 @@
 - [[Policy Testing in Markov Decision Processes]](concepts/policy_testing_in_markov_decision_processes.md) — Reinforcement Learning, Statistical Inference
 - [[Policy Testing with Static Sampling (PTST)]](concepts/policy_testing_with_static_sampling_ptst.md) — Reinforcement Learning, Optimization, Statistical Learning
 - [[Pontryagin-type Minimum Principle in Optimization]](concepts/pontryagin-type_minimum_principle_in_optimization.md) — Optimization Theory, Control Theory, Mathematical Foundations
+- [[Positive Orthant Stability]](concepts/positive_orthant_stability.md) — Stability Theory, Control Systems
 - [[Predict-then-Optimize (PtO)]](concepts/predict-then-optimize_pto.md) — Machine Learning, Mathematical Optimization, Decision Science
+- [[Probing Episodes]](concepts/probing_episodes.md) — Exploration Strategies, Model Monitoring
 - [[Product-Box Decomposition]](concepts/product-box_decomposition.md) — Optimization, Constraint Satisfaction, Algorithms
 - [[Progressive Learning Strategy]](concepts/progressive_learning_strategy.md) — Deep Learning, Transfer Learning, Scaling Laws
 - [[Progressive Scaling]](concepts/progressive_scaling.md) — Machine Learning, Training Methodology, Scaling Laws
 - [[PyEPO]](concepts/pyepo.md) — Software Engineering, Machine Learning Frameworks, Mathematical Programming
 - [[QuantCode-Bench]](concepts/quantcode-bench.md) — Artificial Intelligence, Quantitative Finance, Benchmarking
+- [[Reality Gap Correction in Agent Modeling]](concepts/reality_gap_correction_in_agent_modeling.md) — Reinforcement Learning, Robotics, Sim-to-Real Transfer
 - [[Reasoning Model for Mission Planning]](concepts/reasoning_model_for_mission_planning.md) — Large Language Models, Agentic AI, Task Planning
 - [[Reasoning Path Redundancy]](concepts/reasoning_path_redundancy.md) — Artificial Intelligence, Model Efficiency, Computer Vision
 - [[Reparameterization Trick]](concepts/reparameterization_trick.md) — Deep Learning, Optimization, Stochastic Calculus
 - [[Reversed MDP]](concepts/reversed_mdp.md) — Reinforcement Learning, Algorithm Design, Optimization
 - [[Reversed MDP Optimization]](concepts/reversed_mdp_optimization.md) — Optimization, Operations Research, Mathematical Programming
 - [[Riccati Bottleneck]](concepts/riccati_bottleneck.md) — Computational Complexity, Real-time Control
+- [[SDE-based Optimization]](concepts/sde-based_optimization.md) — Optimization, Stochastic Processes, Machine Learning
 - [[SPGM (Sequential Proximal Gradient Method)]](concepts/spgm_sequential_proximal_gradient_method.md) — Optimization, Machine Learning Algorithms, Mathematical Optimization
+- [[SPGM (Stochastic Proximal Gradient Method)]](concepts/spgm_stochastic_proximal_gradient_method.md) — Optimization Algorithms, Machine Learning Theory, Mathematical Optimization
 - [[SPGM (Subgame Perfect Gradient Methods)]](concepts/spgm_subgame_perfect_gradient_methods.md) — Optimization Theory, Game Theory, Algorithmic Efficiency
+- [[SPGM Dynamic Optimality]](concepts/spgm_dynamic_optimality.md) — Optimization Theory, Control Systems, Numerical Methods
+- [[SPO+ (Smart Predict-then-Optimize)]](concepts/spo_smart_predict-then-optimize.md) — Machine Learning, Combinatorial Optimization, Predict-then-Optimize
+- [[Saddle-point Equilibrium]](concepts/saddle-point_equilibrium.md) — Game Theory, Control Theory
 - [[Safety-Critical Robotics Reasoning]](concepts/safety-critical_robotics_reasoning.md) — Robotics, Safety-Critical Systems, Formal Methods
 - [[Search Lyapunov Function (SLF)]](concepts/search_lyapunov_function_slf.md) — Dynamical Systems, Optimization Theory
+- [[Self-Bounding Analysis]](concepts/self-bounding_analysis.md) — Optimization, Hyperparameter Tuning, Machine Learning Methodology
 - [[Self-Bounding Optimization]](concepts/self-bounding_optimization.md) — Optimization, Hyperparameter Tuning, Machine Learning Infrastructure
 - [[Semi-DCNLP]](concepts/semi-dcnlp.md) — Numerical Analysis, Control Theory, Computational Mathematics
 - [[Semi-DCNLP (Semi-Direct Collocation with Nonlinear Programming)]](concepts/semi-dcnlp_semi-direct_collocation_with_nonlinear_programming.md) — Optimal Control, Differential Games, Numerical Optimization
 - [[Semilinear Dynamic Programming]](concepts/semilinear_dynamic_programming.md) — Optimal Control, Stochastic Optimization, Dynamic Programming
 - [[Semilinear Stochastic Control]](concepts/semilinear_stochastic_control.md) — Stochastic Control, Optimization Theory, Dynamic Systems
+- [[Sequential Convex Programming (SCP)]](concepts/sequential_convex_programming_scp.md) — Control Theory, Optimization, Astrodynamics
 - [[Sequential Convex Programming (SCP) in Space Guidance]](concepts/sequential_convex_programming_scp_in_space_guidance.md) — Control Theory, Orbital Mechanics, Optimization
 - [[Shooting Methods]](concepts/shooting_methods.md) — Numerical Analysis, Optimal Control
 - [[Slack Variables]](concepts/slack_variables.md) — Optimization, Constrained Optimization
 - [[Smart Predict-then-Optimize (SPO+)]](concepts/smart_predict-then-optimize_spo.md) — Optimization, Machine Learning, Differentiable Programming
 - [[Stabilizability in Positive Orthants]](concepts/stabilizability_in_positive_orthants.md) — Control Theory, Stability Analysis
 - [[Stackelberg Equilibrium]](concepts/stackelberg_equilibrium.md) — Control Theory, Game Theory, Optimization
+- [[Stackelberg Equilibrium in Differential Games]](concepts/stackelberg_equilibrium_in_differential_games.md) — Control Theory, Game Theory, Differential Games
 - [[Stackelberg Framework]](concepts/stackelberg_framework.md) — Optimization, Multi-Agent Systems, Control Theory
+- [[Stackelberg Game Framework]](concepts/stackelberg_game_framework.md) — Game Theory, Multi-Agent Systems, Optimization
+- [[Stochastic Constraint Optimization]](concepts/stochastic_constraint_optimization.md) — Stochastic Optimization, Artificial Intelligence, Formal Verification
 - [[Stochastic Control for Optimization]](concepts/stochastic_control_for_optimization.md) — Optimization, Stochastic Control, Machine Learning
 - [[Stochastic Uncertainty in Constraint Solving]](concepts/stochastic_uncertainty_in_constraint_solving.md) — Stochastic Optimization, Formal Verification, AI
+- [[Subgame Perfect Gradient Method]](concepts/subgame_perfect_gradient_method.md) — Optimization, Machine Learning Theory, Convex Optimization
 - [[Subgame Perfect Gradient Method (SPGM)]](concepts/subgame_perfect_gradient_method_spgm.md) — Optimization, Game Theory, Machine Learning Theory
 - [[Successor Features]](concepts/successor_features.md) — Reinforcement Learning, Representation Learning
 - [[Terminal Maneuvering Area (TMA) Scheduling]](concepts/terminal_maneuvering_area_tma_scheduling.md) — Aviation, Logistics, Control Theory
@@ -147,11 +196,15 @@
 - [[Transversality Mapping Principle]](concepts/transversality_mapping_principle.md) — Optimization, Control Theory, Dynamical Systems
 - [[Truncation Argument]](concepts/truncation_argument.md) — Robust Optimization, Deep Learning
 - [[Two-Phase Sequencing and Trajectory Planning]](concepts/two-phase_sequencing_and_trajectory_planning.md) — Operations Research, Air Traffic Management, Optimization
+- [[Uncertainty Estimation in AI]](concepts/uncertainty_estimation_in_ai.md) — Bayesian Statistics, Explainable AI, Machine Learning Reliability
 - [[Unlearn-and-Reinvent Pipeline]](concepts/unlearn-and-reinvent_pipeline.md) — Machine Learning, Model Evaluation, Algorithmic Synthesis
+- [[VAE-based Transition Modeling]](concepts/vae-based_transition_modeling.md) — Generative Modeling, Offline RL
 - [[Variational Inference]](concepts/variational_inference.md) — Bayesian Statistics, Optimization
 - [[Variational Inference (VI)]](concepts/variational_inference_vi.md) — Probabilistic Machine Learning, Optimization, Inference
+- [[Visual Normal Vector (Control)]](concepts/visual_normal_vector_control.md) — Control Systems, Computational Geometry, Numerical Stability
 - [[Visual Normal Vectoring]](concepts/visual_normal_vectoring.md) — Numerical Analysis, Optimization
 - [[Wasserstein Space Optimization]](concepts/wasserstein_space_optimization.md) — Optimal Transport, Stochastic Analysis, Optimization
+- [[Water-filling Algorithm for Adaptive Preferences]](concepts/water-filling_algorithm_for_adaptive_preferences.md) — Multi-objective Optimization, Adaptive Control
 - [[Wind Uncertainty Modeling]](concepts/wind_uncertainty_modeling.md) — Aerospace Engineering, Robust Optimization, Flight Dynamics
 - [[k-SPGM]](concepts/k-spgm.md) — Computational Optimization, Memory-Efficient Algorithms
 

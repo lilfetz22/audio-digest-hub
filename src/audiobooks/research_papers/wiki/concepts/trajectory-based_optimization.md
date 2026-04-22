@@ -2,6 +2,7 @@
 title: Trajectory-Based Optimization
 type: concept
 sources:
+- Yutian Pang et al.
 - Pang, Y. et al. (Research on Trajectory-based optimization in TMA)
 created: '2026-04-22'
 updated: '2026-04-22'
@@ -31,4 +32,24 @@ The primary limitation of this approach is increased computational complexity co
 ## Related Concepts
 
 [[Stochastic Optimization]] [[Formal Verification]] [[Geometric Modeling]]
+
+---
+
+### Update (2026-04-22)
+
+Traditional air traffic control scheduling relies on node-link abstractions, which treat airspace as a network of fixed points. While efficient for routing, these models often fail to account for the physical constraints of flight, such as speed profiles and maneuverability. This leads to scheduling plans that are theoretically sound but practically difficult for pilots to execute without adjustments.
+
+Trajectory-based optimization shifts the focus from scheduling abstract arrival times to generating specific, flyable paths. By calculating base-leg extensions and segment-wise speed adjustments, this framework ensures that the aircraft can physically meet separation requirements. This integration bridges the gap between high-level scheduling and low-level flight control.
+
+**New counterarguments:** The primary limitation of trajectory-based optimization is computational complexity, as calculating physics-informed paths for multiple aircraft simultaneously requires significantly more resources than simple node-link scheduling. Additionally, this approach may be sensitive to real-time variables like sudden weather shifts or unexpected turbulence, which can quickly render optimized geometric paths obsolete.
+
+---
+
+### Update (2026-04-22)
+
+Trajectory-based optimization focuses on the continuous path taken by an agent or system rather than just its arrival or departure time at specific nodes. This method allows for more fluid operational management, enabling systems to dynamically adjust speed and pathing to maintain safety and efficiency.
+
+In the context of terminal management, this transition mirrors human decision-making, where controllers visualize and adjust the entire path of a vehicle rather than just scheduling static time slots. This allows for the integration of real-time environmental factors, leading to a more holistic control strategy.
+
+**New counterarguments:** Trajectory-based models are inherently more difficult to solve than time-based models because they exist in a continuous state space rather than a discrete one. The added dimensionality can make finding global optima more challenging and may necessitate heuristic or approximate solutions rather than exact ones.
 

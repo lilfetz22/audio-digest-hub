@@ -35,3 +35,13 @@ Finding an appropriate Lyapunov function for non-convex or complex, rugged lands
 
 [[Lyapunov Stability]] [[Hamilton-Jacobi Equations]] [[Optimal Control]]
 
+---
+
+### Update (2026-04-22)
+
+The Search Lyapunov Function (SLF) serves as a scalar function that defines the 'energy' of an optimization process. By construction, an algorithm utilizing an SLF ensures that each update step (or 'control jump') reduces this energy value, mirroring the stability criteria used in control theory. 
+
+Instead of explicitly solving for trajectories, the algorithm navigates a vector field defined by the SLF. This shifts the focus from heuristic step-size selection to ensuring the functional decrease of the energy landscape, providing a rigorous mathematical guarantee that the state will converge to the target optimal set.
+
+**New counterarguments:** Designing an appropriate SLF for complex, non-convex optimization problems can be mathematically intractable. Furthermore, ensuring that the function strictly decreases throughout the optimization process may result in overly conservative step sizes, potentially leading to slow convergence in practice.
+

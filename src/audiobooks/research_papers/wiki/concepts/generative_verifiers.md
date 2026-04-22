@@ -29,3 +29,13 @@ The effectiveness of a generative verifier is strictly bounded by its own logic;
 
 [[Constitutional AI]] [[Formal Verification]] [[Chain-of-Thought Verification]]
 
+---
+
+### Update (2026-04-22)
+
+Generative verifiers are external monitoring systems designed to supervise the output of an AI agent, ensuring that it maintains a high-entropy, structured reasoning process. Rather than relying on the internal latent state of an LLM, these verifiers enforce constraints on the reasoning chain, preventing the model from deviating into non-logical paths.
+
+These systems are particularly critical for long-horizon tasks where a small error early in the chain can lead to a catastrophic failure of the final output. By offloading the 'judgment' of logic to an external, potentially symbolic or structured verifier, agents can achieve a level of reliability that matches the complexity of their target tasks.
+
+**New counterarguments:** The primary limitation of external verifiers is the complexity of designing a verifier that is more robust than the model it is supervising. If the verifier is too restrictive, it may prune valid creative pathways; if it is too permissive, it fails to prevent 'thought collapse.'
+

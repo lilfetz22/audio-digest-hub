@@ -4,7 +4,7 @@ type: concept
 sources: []
 created: '2026-04-22'
 updated: '2026-04-22'
-confidence: 0.95
+confidence: 0.98
 categories:
 - Computer Vision
 - Generative Models
@@ -13,7 +13,7 @@ categories:
 
 ## TLDR
 
-A structural approach to image generation that sequences data from global structure to fine detail, enabling meaningful intermediate states for search algorithms.
+A structural approach to image generation that sequences data from high-level global structure to fine-grained detail, enabling meaningful and semantically interpretable intermediate states for search and evaluation.
 
 ## Body
 
@@ -23,11 +23,13 @@ The coarse-to-fine method reframes the generation sequence into a 1D ordered tok
 
 By forcing the model to commit to high-level structures early, the sequence becomes traversable. Verifiers can evaluate these structural 'sketches' to prune low-quality paths early in the inference process, significantly improving the efficacy of test-time search.
 
+[NEW RESEARCH ADDITIONS]: By organizing tokens in this hierarchical manner, each step in the generation process represents a logically evolving version of the final output. This mimics a human artist who sketches a composition before refining the specific features, ensuring that the model's latent representation remains semantically interpretable throughout the entire generation process.
+
 ## Counterarguments / Data Gaps
 
-While this method improves searchability, it may introduce inductive biases that restrict the model's ability to represent certain types of fine-grained, non-hierarchical, or highly irregular visual patterns. Furthermore, enforcing a specific sequence order can limit the flexibility of training data pipelines and may require more complex architectural adaptations to standard transformer blocks.
+While this method improves searchability, it may introduce inductive biases that restrict the model's ability to represent certain types of fine-grained, non-hierarchical, or highly irregular visual patterns. Furthermore, enforcing a specific sequence order can limit the flexibility of training data pipelines and may require more complex architectural adaptations to standard transformer blocks. [NEW DATA GAPS]: Additionally, this approach may impose constraints on creative flexibility, as the hardcoded order forces a top-down generation constraint that might not be optimal for all art styles. There is also a risk that the forced structure could lead to a loss of information or 'blurriness' if the initial coarse tokens are not sufficiently expressive.
 
 ## Related Concepts
 
-[[Test-time Search]] [[Beam Search]] [[Latent Diffusion Models]] [[Autoregressive Generation]]
+[[Latent Diffusion]] [[Tokenization]] [[Hierarchical Generation]]
 

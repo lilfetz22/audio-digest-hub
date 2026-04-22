@@ -39,3 +39,13 @@ By reframing the problem, researchers can transform non-convex constraints into 
 
 **New counterarguments:** While this transformation simplifies the constraints, it often introduces non-convexity into the objective function itself, which may lead to convergence toward local optima. Additionally, the physical interpretation of a 'reversed' MDP may not always map cleanly back to real-world deployment scenarios.
 
+---
+
+### Update (2026-04-22)
+
+In standard Markov Decision Processes (MDPs), policy testing often leads to non-convex constraints that prevent the use of standard optimization techniques. The Reversed MDP approach addresses this by reframing the optimization objective, treating the policy variables as fixed parameters while optimizing over the transition dynamics or dual variables.
+
+By inverting these roles, the intractable constraints of the original formulation are converted into convex ones. This transformation allows the problem to be decomposed into smaller, manageable subproblems that can be solved iteratively using convex optimization methods.
+
+**New counterarguments:** The transformation assumes that the transition probabilities can be treated as variables within the specific constraints of the problem, which may not always be physically or logically meaningful in real-world environments. Furthermore, while the constraints become convex, the resulting objective function remains non-convex, meaning convergence to a global optimum is not guaranteed.
+

@@ -30,3 +30,13 @@ The primary limitation of ordered tokenization is the increased complexity in ma
 
 [[Test-Time Search]] [[Chain-of-Thought Prompting]] [[Autoregressive Generation]]
 
+---
+
+### Update (2026-04-22)
+
+Traditional autoregressive models rely on 2D grid-based or raster-scan tokenization, which forces a strictly sequential, greedy generation process. Ordered tokens introduce a structured sequence that allows the model to prioritize critical information or reasoning steps before committing to final output generation.
+
+This approach aims to move beyond the 'next token' limitation where models lack foresight. By imposing an order that mimics deliberate planning, the model can effectively 'think' or perform test-time search, improving the quality and logical consistency of generated outputs in complex tasks like those performed by AI agents.
+
+**New counterarguments:** The primary limitation of ordered tokens is the potential increase in sequence length, which can exacerbate the computational cost of self-attention mechanisms in Transformers. Additionally, enforcing a specific token order may constrain the model's ability to learn diverse latent representations compared to unstructured or learnable tokenization strategies.
+

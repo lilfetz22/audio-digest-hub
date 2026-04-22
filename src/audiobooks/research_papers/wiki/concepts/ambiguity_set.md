@@ -28,3 +28,13 @@ Defining an appropriate ambiguity set is a subjective task; there is no universa
 
 [[Worst-Case Optimization]] [[Distribution Shift]]
 
+---
+
+### Update (2026-04-22)
+
+In distributionally robust control, the ambiguity set represents the collection of possible transition dynamics models that the agent must consider. By defining this set as a ball centered around a nominal model estimated from data, researchers can mathematically characterize the range of environments the agent might encounter.
+
+The use of an ambiguity set allows for the formulation of a robust objective function. Instead of maximizing the expected return under a single transition probability, the algorithm maximizes the return against the 'worst-case' transition model residing within this set, thereby prioritizing stability and safety in deployment.
+
+**New counterarguments:** The choice of the size and shape of the ambiguity set is often heuristic; an overly large set can lead to overly conservative policies that perform poorly, while a set that is too small fails to provide meaningful robustness. Additionally, defining distance using KL-divergence may not capture all relevant physical constraints of an environment.
+

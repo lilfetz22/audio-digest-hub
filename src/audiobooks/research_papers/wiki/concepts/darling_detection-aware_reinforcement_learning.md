@@ -33,3 +33,15 @@ Additionally, the effectiveness of 'probing episodes' assumes that the base agen
 
 [[Piecewise-Stationary Reinforcement Learning]] [[Successor Features]] [[Change-Point Detection]] [[Regret Minimization]]
 
+---
+
+### Update (2026-04-22)
+
+DARLING operates by decoupling the exploration required for change detection from the learning process of the base agent. It introduces 'probing episodes,' during which the base agent's policy is frozen to prevent exploratory actions from introducing bias into the agent's statistical convergence. This separation ensures that the base learner remains stable even when the environment undergoes sudden or continuous shifts.
+
+At the core of the framework is the transition dynamics monitoring approach. Rather than relying on cumulative reward drops—which are lagging indicators of environmental change—DARLING monitors successor features to detect shifts in the underlying transition model. This proactive approach allows for immediate identification of non-stationarity, enabling the agent to trigger resets or adaptations before performance degrades significantly.
+
+The framework is designed for modularity, allowing it to wrap existing reinforcement learning algorithms (such as UCB-based agents) without requiring a complete overhaul of the underlying architecture. By functioning as a high-frequency monitor, it maintains the relevance of the base agent in environments characterized by frequent change-points or continuous drift.
+
+**New counterarguments:** While the framework is computationally efficient, its performance is highly dependent on the sensitivity of the change-detection mechanism; if the detection threshold is poorly tuned, it may trigger unnecessary resets (false positives) that disrupt learning. Furthermore, while the paper claims minimax optimality, the reliance on probing episodes implies a temporary cessation of policy optimization, which could potentially result in missed learning opportunities during the probing phase if not balanced correctly.
+
