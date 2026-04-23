@@ -1,28 +1,54 @@
 # LLM Wiki Index
 
-*Last rebuilt: 2026-04-22*
+*Last rebuilt: 2026-04-23*
 
 ---
 
-## Concepts (201 pages)
+## Concepts (355 pages)
 
+- [[6G Autonomy and Digital Twins]](concepts/6g_autonomy_and_digital_twins.md) — 6G, Network Intelligence, Digital Twins
+- [[AI Equalizer Hypothesis]](concepts/ai_equalizer_hypothesis.md) — Labor Economics, Human-Computer Interaction
 - [[API-Logic Translation Bottleneck]](concepts/api-logic_translation_bottleneck.md) — LLM Reasoning, API Integration, Code Generation
+- [[Actor-Critic Framework]](concepts/actor-critic_framework.md) — Reinforcement Learning, Deep Learning
 - [[Adaptive Computation in Multimodal Agents]](concepts/adaptive_computation_in_multimodal_agents.md) — Artificial Intelligence, Multimodal Systems, Model Efficiency
+- [[Adaptive Multi-Agent Systems (MAS)]](concepts/adaptive_multi-agent_systems_mas.md) — Multi-Agent Systems, Artificial Intelligence, Autonomous Agents
+- [[Adaptive Planning]](concepts/adaptive_planning.md) — AI Agents, Planning Algorithms
 - [[Adaptive Preference Water-Filling]](concepts/adaptive_preference_water-filling.md) — AI Agents, Control Systems, Decision Making
+- [[Adaptive Reward Modulation]](concepts/adaptive_reward_modulation.md) — Reinforcement Learning, Training Strategy
 - [[Adaptive Visual Reasoning (AVR)]](concepts/adaptive_visual_reasoning_avr.md) — Computer Vision, Multimodal Learning, Model Architecture
+- [[Advantage Actor-Critic (A2C)]](concepts/advantage_actor-critic_a2c.md) — Reinforcement Learning, Deep Learning, Algorithmic Trading
+- [[Agent Failure Modes]](concepts/agent_failure_modes.md) — LLM Reliability, Agentic Workflow
+- [[Agent-World]](concepts/agent-world.md) — AI Agents, Reinforcement Learning, Environment Synthesis
+- [[AgentDynEx]](concepts/agentdynex.md) — Software Engineering, Simulation Infrastructure, Multi-Agent Systems
+- [[Agentic Entropy]](concepts/agentic_entropy.md) — Software Engineering, Artificial Intelligence, System Architecture
+- [[Agentic Environment-Task Discovery]](concepts/agentic_environment-task_discovery.md) — Reinforcement Learning, Autonomous Agents, Automated Data Synthesis
 - [[Agentic Multi-Turn Feedback Loops]](concepts/agentic_multi-turn_feedback_loops.md) — AI Agents, Reinforcement Learning, Debugging
+- [[Agentic Orchestration]](concepts/agentic_orchestration.md) — Artificial Intelligence, Software Engineering, Agentic Workflows
+- [[Agentic Steering]](concepts/agentic_steering.md) — Autonomous Agents, Human-AI Collaboration
 - [[Algorithm Synthesis via Dynamical Systems]](concepts/algorithm_synthesis_via_dynamical_systems.md) — Control Theory, Optimization Theory
 - [[Algorithmic Reasoning Capability]](concepts/algorithmic_reasoning_capability.md) — Artificial Intelligence, Algorithmic Reasoning, Large Language Models
 - [[Algorithmic Reinvention Capability]](concepts/algorithmic_reinvention_capability.md) — Artificial Intelligence, Algorithmic Reasoning, Machine Learning
 - [[Ambiguity Set]](concepts/ambiguity_set.md) — Robust Optimization, Control Theory
+- [[Asymmetric Neurosymbolic Coupling]](concepts/asymmetric_neurosymbolic_coupling.md) — Neurosymbolic AI, AI Reliability, LLM Safety
 - [[Asymptotic Stability in Control]](concepts/asymptotic_stability_in_control.md) — Control Theory, Stability Analysis
 - [[Asymptotic Stability via Descent Conditions]](concepts/asymptotic_stability_via_descent_conditions.md) — Control Theory, Optimization
+- [[Authority-Induced Collapse]](concepts/authority-induced_collapse.md) — Multi-Agent Systems, Cognitive Architecture, Organizational Behavior
+- [[Automated Environment Generation]](concepts/automated_environment_generation.md) — Simulation, AI Benchmarking
+- [[Automatic Agent Nudging]](concepts/automatic_agent_nudging.md) — Multi-Agent Systems, Simulation Control, Reinforcement Learning
+- [[AutomationBench]](concepts/automationbench.md) — AI Benchmarking, Agentic Workflows, Software Engineering
+- [[BAPO (Boundary-Aware Policy Optimization)]](concepts/bapo_boundary-aware_policy_optimization.md) — Reinforcement Learning, Model Alignment, Robustness
+- [[BONSAI (Human-AI Co-Development Workspace)]](concepts/bonsai_human-ai_co-development_workspace.md) — Human-AI Interaction, Software Engineering, Visual Analytics
 - [[Bayesian Neural Networks]](concepts/bayesian_neural_networks.md) — Machine Learning, Bayesian Inference, Uncertainty Quantification
 - [[Bayesian Neural Networks (BNNs)]](concepts/bayesian_neural_networks_bnns.md) — Deep Learning, Probabilistic Machine Learning, Uncertainty Estimation
 - [[Bayesian Uncertainty Quantification]](concepts/bayesian_uncertainty_quantification.md) — Artificial Intelligence, Bayesian Statistics, Machine Learning Reliability
+- [[Biological AI Architecture]](concepts/biological_ai_architecture.md) — Artificial Intelligence, Neuroscience, Model Architecture
+- [[Biomimetic Underwater Multi-Agent Systems]](concepts/biomimetic_underwater_multi-agent_systems.md) — Robotics, Physical Systems, Control Theory
 - [[Bisimulation Function]](concepts/bisimulation_function.md) — Multitask Learning, Robotics, Control Theory
 - [[Bismut-Elworthy-Li Formula]](concepts/bismut-elworthy-li_formula.md) — Stochastic Calculus, Optimization, Differential Geometry
 - [[Bootstrapping Strategy for Trajectory Optimization]](concepts/bootstrapping_strategy_for_trajectory_optimization.md) — Machine Learning, Robotics, Optimization
+- [[Boundary-Aware Policy Optimization (BAPO)]](concepts/boundary-aware_policy_optimization_bapo.md) — Reinforcement Learning, Agentic Workflows, LLM Reliability
+- [[Bounded Action Spaces]](concepts/bounded_action_spaces.md) — Safety Engineering, System Design, Constraint Satisfaction
+- [[Capability Gaps in Transformers]](concepts/capability_gaps_in_transformers.md) — Machine Learning, Transformer Architectures
 - [[Capacity Threshold in Traffic Flow]](concepts/capacity_threshold_in_traffic_flow.md) — Traffic Management, Operations Research, Control Systems
 - [[Catastrophic Forgetting]](concepts/catastrophic_forgetting.md) — Continual Learning, Neural Network Optimization
 - [[Catastrophic Forgetting Dynamics]](concepts/catastrophic_forgetting_dynamics.md) — Continual Learning, Optimization Theory
@@ -30,44 +56,83 @@
 - [[Certainty Equivalence]](concepts/certainty_equivalence.md) — Stochastic Control, Decision Theory
 - [[Certainty Equivalence in Stochastic Semilinear Problems]](concepts/certainty_equivalence_in_stochastic_semilinear_problems.md) — Stochastic Control, Reinforcement Learning, Optimal Control
 - [[Certainty Equivalence in Stochastic Semilinear Systems]](concepts/certainty_equivalence_in_stochastic_semilinear_systems.md) — Stochastic Control, Reinforcement Learning, Control Theory
+- [[ClawEnvKit]](concepts/clawenvkit.md) — AI Infrastructure, Agent Benchmarking, Automated Environment Generation
+- [[Co-evolutionary Learning Loop]](concepts/co-evolutionary_learning_loop.md) — Machine Learning, Curriculum Learning
 - [[Coarse-to-Fine 1D Ordered Tokenization]](concepts/coarse-to-fine_1d_ordered_tokenization.md) — Computer Vision, Generative Models, Inference Optimization
 - [[Coarse-to-Fine Tokenization]](concepts/coarse-to-fine_tokenization.md) — Machine Learning, Generative AI, Inference Optimization
 - [[Coarse-to-fine Token Ordering]](concepts/coarse-to-fine_token_ordering.md) — Generative AI, Inference Optimization, Search Algorithms
+- [[Cognitive Trajectory Reshaping]](concepts/cognitive_trajectory_reshaping.md) — Cognitive Science, Sociology, AI Ethics
 - [[Cole-Hopf Transformation]](concepts/cole-hopf_transformation.md) — Mathematical Optimization, Control Theory, Stochastic Calculus
 - [[Combinatorial Solver Complexity]](concepts/combinatorial_solver_complexity.md) — Optimization, Computational Complexity, Scheduling
+- [[Composable Agentic Harnesses]](concepts/composable_agentic_harnesses.md) — Software Engineering, Agent Architecture, AI Infrastructure
+- [[Compute Efficiency Paradox]](concepts/compute_efficiency_paradox.md) — AI Alignment, Model Training, Machine Learning
+- [[ConActU Strategy]](concepts/conactu_strategy.md) — Inference Optimization, Search Algorithms
+- [[Connection Significance]](concepts/connection_significance.md) — Infrastructure Optimization, System Architecture, Telemetry
 - [[Conservative Jacobian]](concepts/conservative_jacobian.md) — Control Theory, Optimization
+- [[Context Degradation in AI Agents]](concepts/context_degradation_in_ai_agents.md) — AI Engineering, Software Architecture
+- [[Context Window Scaling for Tooling]](concepts/context_window_scaling_for_tooling.md) — Large Language Models, Prompt Engineering, Inference Optimization
+- [[Context-Latency Trap]](concepts/context-latency_trap.md) — Retrieval-Augmented Generation, Software Engineering, System Architecture
+- [[Context-Switching Fatigue]](concepts/context-switching_fatigue.md) — Human-Computer Interaction, Cognitive Science, Developer Productivity
+- [[Contextual Interference]](concepts/contextual_interference.md) — Prompt Engineering, Model Behavior, Agent Architecture
+- [[Continuous Evaluation]](concepts/continuous_evaluation.md) — MLOps, Software Testing, Evaluation Metrics
+- [[Continuous Self-Evolving Agent Training]](concepts/continuous_self-evolving_agent_training.md) — Reinforcement Learning, Curriculum Learning, Model Robustness
+- [[Contrastive Comparator]](concepts/contrastive_comparator.md) — Meta-Learning, Contrastive Learning
+- [[Control Function Approach]](concepts/control_function_approach.md) — Econometrics, Research Methodology
 - [[Controlled Evolution Optimization]](concepts/controlled_evolution_optimization.md) — Optimization, Computational Finance, Reinforcement Learning
 - [[Coupled Particle Swarm Exploration]](concepts/coupled_particle_swarm_exploration.md) — Optimization, Swarm Intelligence
+- [[Cross-application Orchestration]](concepts/cross-application_orchestration.md) — AI Agents, Workflow Automation, System Integration
+- [[Curriculum Generation]](concepts/curriculum_generation.md) — Reinforcement Learning, Training Pipelines, Machine Learning
 - [[DARLING (Detection Augmented Reinforcement Learning)]](concepts/darling_detection_augmented_reinforcement_learning.md) — Reinforcement Learning, Non-stationary Environments, Model Adaptation
 - [[DARLING (Detection-Aware Reinforcement Learning)]](concepts/darling_detection-aware_reinforcement_learning.md) — Reinforcement Learning, Non-Stationary Environments, Adaptive Agents
 - [[DR-SAC (Distributionally Robust Soft Actor-Critic)]](concepts/dr-sac_distributionally_robust_soft_actor-critic.md) — Reinforcement Learning, Robust Optimization, Offline RL
+- [[Data Contamination (Future Leakage)]](concepts/data_contamination_future_leakage.md) — Machine Learning Evaluation, Software Engineering
+- [[Decentralized Execution]](concepts/decentralized_execution.md) — Robotics, Distributed Systems
 - [[Decision Regret Minimization]](concepts/decision_regret_minimization.md) — Decision Theory, Machine Learning
+- [[Decoupled Reasoning (Atomic Action Spaces)]](concepts/decoupled_reasoning_atomic_action_spaces.md) — Agentic AI, Reasoning, Prompt Engineering
 - [[Deep Operator Networks]](concepts/deep_operator_networks.md) — Machine Learning, Scientific Machine Learning, Numerical Analysis
 - [[Deep Operator Networks (DeepONets)]](concepts/deep_operator_networks_deeponets.md) — Machine Learning, Scientific Machine Learning, Neural Operators
 - [[DeepONet]](concepts/deeponet.md) — Machine Learning, Scientific Computing, Neural Operators
 - [[Derivative-Free SDE-based Optimization]](concepts/derivative-free_sde-based_optimization.md) — Optimization, Stochastic Processes, Machine Learning
 - [[Detection-Restart Algorithms]](concepts/detection-restart_algorithms.md) — Reinforcement Learning, Change Point Detection
+- [[Deterministic External Verification]](concepts/deterministic_external_verification.md) — AI Reliability, AutomationBench, Agent Evaluation
+- [[Deterministic Inference Control]](concepts/deterministic_inference_control.md) — LLM Inference, AI Reliability, Production Engineering
+- [[Deterministic Structural Access]](concepts/deterministic_structural_access.md) — Information Retrieval, Agentic Workflows
+- [[Developmental Initialization]](concepts/developmental_initialization.md) — Artificial Intelligence, Neural Architectures, Bio-inspired Computing
 - [[Differentiable Black-Box (DBB)]](concepts/differentiable_black-box_dbb.md) — Differentiable Programming, Optimization, Neural Networks
 - [[Differentiable Model Predictive Control]](concepts/differentiable_model_predictive_control.md) — Control Theory, Reinforcement Learning, Robotics
 - [[Differential Riccati Equation (DRE)]](concepts/differential_riccati_equation_dre.md) — Control Theory, Optimal Control, Mathematical Optimization
 - [[Diffusion Model Training Dynamics]](concepts/diffusion_model_training_dynamics.md) — Generative AI, Deep Learning, Optimization
+- [[Digital Brain Twins]](concepts/digital_brain_twins.md) — Computational Neuroscience, Biological Simulation, AI Strategy
 - [[Direct Collocation]](concepts/direct_collocation.md) — Numerical Optimization, Optimal Control
 - [[Direct Collocation (DCNLP)]](concepts/direct_collocation_dcnlp.md) — Trajectory Planning, Numerical Optimization, Control Theory
 - [[Distributionally Robust Soft Actor-Critic (DR-SAC)]](concepts/distributionally_robust_soft_actor-critic_dr-sac.md) — Reinforcement Learning, Robust AI, Offline RL
+- [[Diversity Collapse]](concepts/diversity_collapse.md) — Multi-Agent Systems, LLM Evaluation, Creative AI
+- [[Domain-Agnostic Execution Flow (DAEF)]](concepts/domain-agnostic_execution_flow_daef.md) — Agentic Frameworks, Transfer Learning, Task Execution
 - [[Domain-Specific Agent Execution Environments]](concepts/domain-specific_agent_execution_environments.md) — Agentic Workflows, Software Engineering, LLM Integration
+- [[Dual-Level Uncertainty Framework]](concepts/dual-level_uncertainty_framework.md) — AI Agents, Decision Making, Reinforcement Learning
 - [[Dynamic Optimality]](concepts/dynamic_optimality.md) — Optimization, Complexity Theory
 - [[Early Stopping in Diffusion Models]](concepts/early_stopping_in_diffusion_models.md) — Training Dynamics, Generative Modeling
 - [[Early-Stopping in Denoising Score Matching]](concepts/early-stopping_in_denoising_score_matching.md) — Optimization, Regularization, Generative Modeling
+- [[End-state Grading]](concepts/end-state_grading.md) — AI Evaluation, Agentic Frameworks
 - [[End-to-End Predict-then-Optimize]](concepts/end-to-end_predict-then-optimize.md) — Machine Learning, Optimization, Operations Research
 - [[End-to-End Predict-then-Optimize (PyEPO)]](concepts/end-to-end_predict-then-optimize_pyepo.md) — Machine Learning, Operations Research, Decision Theory
+- [[Endogeneity in AI Adoption]](concepts/endogeneity_in_ai_adoption.md) — Human-AI Interaction, Behavioral Economics, Research Methodology
+- [[Evaluation Bottleneck]](concepts/evaluation_bottleneck.md) — AI Agents, Software Engineering, Benchmarking
+- [[Event-driven Computation]](concepts/event-driven_computation.md) — Neuromorphic Engineering, Computational Efficiency, Hardware Acceleration
 - [[Evidence Lower Bound (ELBO)]](concepts/evidence_lower_bound_elbo.md) — Optimization, Information Theory, Probabilistic Machine Learning
+- [[EvoGraph]](concepts/evograph.md) — AI-Assisted Programming, Software Engineering, Human-Computer Interaction
+- [[EvoMaster]](concepts/evomaster.md) — Autonomous Agents, Agentic Science, System Architecture
+- [[EvoMaster Architecture]](concepts/evomaster_architecture.md) — AI Architecture, Agentic Systems, Software Engineering
 - [[Exponential Stability in Control Systems]](concepts/exponential_stability_in_control_systems.md) — Control Theory, Mathematical Optimization
 - [[Exponential Stability in Learned Systems]](concepts/exponential_stability_in_learned_systems.md) — Control Theory, Robustness, Formal Verification
 - [[FS-GRPO (Few-Shot Group Relative Policy Optimization)]](concepts/fs-grpo_few-shot_group_relative_policy_optimization.md) — Reinforcement Learning, Model Optimization, Policy Gradient Methods
 - [[First-on-Final-First-Serve (FOFFS)]](concepts/first-on-final-first-serve_foffs.md) — Air Traffic Management, Logistics Optimization, Sequencing Algorithms
 - [[Forgetting Error Decomposition]](concepts/forgetting_error_decomposition.md) — Continual Learning, Model Evaluation
+- [[Foundation AgenticOS (FAOS)]](concepts/foundation_agenticos_faos.md) — Agentic Frameworks, Software Architecture, AI Governance
 - [[Four-Stage Evaluation Gauntlet]](concepts/four-stage_evaluation_gauntlet.md) — Software Engineering, AI Evaluation, Quantitative Finance
+- [[Function Removal Agent]](concepts/function_removal_agent.md) — Benchmark Creation, Software Testing, Agentic Workflows
 - [[Functional Approximation for Robust RL]](concepts/functional_approximation_for_robust_rl.md) — Optimization, Reinforcement Learning
+- [[Future Context Leakage]](concepts/future_context_leakage.md) — Machine Learning Evaluation, Benchmarking, LLM Research
 - [[Gap-Dependent Variance Characterization]](concepts/gap-dependent_variance_characterization.md) — Stochastic Optimization, Mathematical Analysis
 - [[Generative Model Advantage]](concepts/generative_model_advantage.md) — Reinforcement Learning, Simulation
 - [[Generative Verifiers]](concepts/generative_verifiers.md) — AI Safety, Agentic Frameworks, Reasoning Architectures
@@ -76,50 +141,92 @@
 - [[Geometric Path Extension Modeling]](concepts/geometric_path_extension_modeling.md) — Aeronautics, Flight Path Planning
 - [[Geometric Trajectory Optimization]](concepts/geometric_trajectory_optimization.md) — Operations Research, Air Traffic Management, Optimization
 - [[Gradient Dynamics of Sequential Learning]](concepts/gradient_dynamics_of_sequential_learning.md) — Optimization Theory, Neural Dynamics
+- [[Grammar-Constrained Sampling]](concepts/grammar-constrained_sampling.md) — Inference, Structured Data, LLM Engineering
+- [[Granular Action Space]](concepts/granular_action_space.md) — Agentic Reasoning, LLM Architecture, Prompt Engineering
 - [[Greedy Autoregressive Generation]](concepts/greedy_autoregressive_generation.md) — Generative AI, Inference Strategies
+- [[Grounded AI Coding Agents]](concepts/grounded_ai_coding_agents.md) — Artificial Intelligence, Software Engineering, Human-Computer Interaction
+- [[Grounding Gap]](concepts/grounding_gap.md) — AI Ethics, Reliability, Enterprise AI
 - [[Group Relative Policy Optimization (GRPO)]](concepts/group_relative_policy_optimization_grpo.md) — Reinforcement Learning, Machine Unlearning
+- [[Group-Relative Policy Optimization (GRPO)]](concepts/group-relative_policy_optimization_grpo.md) — Reinforcement Learning, Optimization
 - [[HJB (Hamilton-Jacobi-Bellman) Equations]](concepts/hjb_hamilton-jacobi-bellman_equations.md) — Control Theory, Applied Mathematics
 - [[Hamilton-Jacobi equations in optimization]](concepts/hamilton-jacobi_equations_in_optimization.md) — Optimization Theory, Quantum Computing, Mathematical Physics
 - [[Hamilton-Jacobi-Bellman (HJB) Equation]](concepts/hamilton-jacobi-bellman_hjb_equation.md) — Optimal Control, Stochastic Processes, Mathematics
 - [[Hamilton-Jacobi-Bellman (HJB) Equations]](concepts/hamilton-jacobi-bellman_hjb_equations.md) — Control Theory, Applied Mathematics, Scientific Machine Learning
 - [[Hamilton-Jacobi-Schrödinger Mapping]](concepts/hamilton-jacobi-schrödinger_mapping.md) — Quantum Computing, Optimization Theory, Mathematical Physics
+- [[Hardened Agent Environment]](concepts/hardened_agent_environment.md) — Benchmarking, Robustness
+- [[Harness Engineering]](concepts/harness_engineering.md) — Agentic AI, Reinforcement Learning, System Design
 - [[Hierarchical Abstraction in Robotics]](concepts/hierarchical_abstraction_in_robotics.md) — Autonomous Systems, Robotics Architecture
+- [[Hierarchical Cognitive Caching]](concepts/hierarchical_cognitive_caching.md) — Agentic Workflows, Reinforcement Learning, Memory Systems
+- [[Hierarchical Context Compression]](concepts/hierarchical_context_compression.md) — Natural Language Processing, Memory Systems, Machine Learning
 - [[High-Fidelity Geometric Modeling]](concepts/high-fidelity_geometric_modeling.md) — Optimization, Autonomous Systems, Operations Research
 - [[History-Dependent Lifting]](concepts/history-dependent_lifting.md) — Reinforcement Learning, Control Theory, State Estimation
+- [[Human-in-the-Loop Simulation Oversight]](concepts/human-in-the-loop_simulation_oversight.md) — Human-Computer Interaction, AI Governance, Simulation Engineering
+- [[Human-in-the-loop Interfaces]](concepts/human-in-the-loop_interfaces.md) — Human-Computer Interaction, Software Engineering, AI Productivity
 - [[Hybrid Model-Based and Model-Free Optimization]](concepts/hybrid_model-based_and_model-free_optimization.md) — Reinforcement Learning, Control Theory, Model Predictive Control
 - [[Hölder Smoothness Adaptation]](concepts/hölder_smoothness_adaptation.md) — Optimization, Functional Analysis
+- [[Illusory Coordination]](concepts/illusory_coordination.md) — Multi-Agent Systems, Cognitive Science, System Evaluation
+- [[In-Memory Computing]](concepts/in-memory_computing.md) — Hardware Architecture, Neuromorphic Engineering
 - [[Individual Minima (IM) Optimization]](concepts/individual_minima_im_optimization.md) — Optimization, Computational Geometry
 - [[Individual Minima-Informed Decision-Making]](concepts/individual_minima-informed_decision-making.md) — Optimization, Decision Theory
 - [[Individual Minima-Informed Multi-Objective Control]](concepts/individual_minima-informed_multi-objective_control.md) — Multi-Objective Optimization, Model Predictive Control, Control Theory
+- [[Inference Backends (llama.cpp vs. mlx-lm)]](concepts/inference_backends_llamacpp_vs_mlx-lm.md) — Inference Infrastructure, Hardware Optimization
 - [[Intent-aligned Autonomous Spacecraft Guidance]](concepts/intent-aligned_autonomous_spacecraft_guidance.md) — Space Robotics, Autonomous Systems, Large Language Models, Path Planning
+- [[Interface Contracts]](concepts/interface_contracts.md) — Software Engineering, Systems Architecture
 - [[Interval Arithmetic for Certification]](concepts/interval_arithmetic_for_certification.md) — Formal Methods, Symbolic AI, Optimization
 - [[Inverse Optimality in Algorithm Synthesis]](concepts/inverse_optimality_in_algorithm_synthesis.md) — Optimization Theory, Computational Methods
 - [[Inverse Optimality in Optimization]](concepts/inverse_optimality_in_optimization.md) — Optimal Control, Numerical Optimization
+- [[Inverse Parametric Knowledge Effect]](concepts/inverse_parametric_knowledge_effect.md) — LLM Performance, Cognitive Architecture, Research Findings
+- [[Iterative Model Building]](concepts/iterative_model_building.md) — Reasoning, State Management, LLM Performance
+- [[Joint Optimization of Multi-Agent Systems]](concepts/joint_optimization_of_multi-agent_systems.md) — Machine Learning, System Architecture
 - [[Kernel Regime]](concepts/kernel_regime.md) — Deep Learning Theory, Mathematical Optimization
 - [[Kernel Regression Optimization in Diffusion Models]](concepts/kernel_regression_optimization_in_diffusion_models.md) — Diffusion Models, Optimization Theory, Machine Learning
 - [[Kernel Regression in Diffusion Models]](concepts/kernel_regression_in_diffusion_models.md) — Generative Models, Optimization Theory, Diffusion Models
+- [[Knowledge Gap in Specialized Domains]](concepts/knowledge_gap_in_specialized_domains.md) — Machine Learning, Data Science
 - [[L2 Regularization Equivalency]](concepts/l2_regularization_equivalency.md) — Optimization Theory, Regularization
+- [[LSP Integration]](concepts/lsp_integration.md) — Software Engineering, Development Tools
+- [[Language Server Protocol (LSP) Integration]](concepts/language_server_protocol_lsp_integration.md) — Software Engineering, Agentic Workflows
+- [[Lexical Search]](concepts/lexical_search.md) — Information Retrieval, Natural Language Processing
+- [[Lifelong Skill Evolution]](concepts/lifelong_skill_evolution.md) — Autonomous Agents, Machine Learning, Cognitive Architectures
 - [[Lifted Linear Dynamics]](concepts/lifted_linear_dynamics.md) — Control Theory, Optimization Theory
 - [[Linear Quadratic Gaussian (LQG)]](concepts/linear_quadratic_gaussian_lqg.md) — Control Theory, Stochastic Systems, Robotics
 - [[Linear Quadratic Gaussian (LQG) Control]](concepts/linear_quadratic_gaussian_lqg_control.md) — Control Theory, Stochastic Systems, Robotics
 - [[Linear Quadratic Regulator (LQR)]](concepts/linear_quadratic_regulator_lqr.md) — Control Theory, Robotics, Optimal Control
 - [[Linear Relaxation in Optimization]](concepts/linear_relaxation_in_optimization.md) — Optimization, Numerical Methods
 - [[Linear Relaxation in Training]](concepts/linear_relaxation_in_training.md) — Optimization, Computational Efficiency
+- [[Local System Dynamics AI Agents]](concepts/local_system_dynamics_ai_agents.md) — AI Agents, System Dynamics, Edge AI, Data Privacy
+- [[Log-Based Scoring Risk]](concepts/log-based_scoring_risk.md) — Agent Evaluation, LLM Alignment, Machine Learning Engineering
+- [[M2GRPO]](concepts/m2grpo.md) — Swarm Robotics, Multi-Agent Systems, Sequential Decision Making
+- [[M2GRPO (Multi-agent Mamba-based Generalized Reinforcement Policy Optimization)]](concepts/m2grpo_multi-agent_mamba-based_generalized_reinforcement_policy_optimization.md) — Reinforcement Learning, Multi-Agent Systems, Robotics
+- [[Mamba-based Multi-Agent Group Relative Policy Optimization (M2GRPO)]](concepts/mamba-based_multi-agent_group_relative_policy_optimization_m2grpo.md) — Reinforcement Learning, Multi-Agent Systems, State Space Models, Robotics
+- [[Mamba-based Policy Network]](concepts/mamba-based_policy_network.md) — Reinforcement Learning, Deep Learning, Multi-Agent Systems
 - [[Markov Jump Systems]](concepts/markov_jump_systems.md) — Control Theory, Stochastic Processes, System Identification
 - [[Mean-Field Control]](concepts/mean-field_control.md) — Mean-Field Theory, Wasserstein Geometry, Multi-Agent Systems
 - [[Minimax-Optimal Generalization Error]](concepts/minimax-optimal_generalization_error.md) — Statistical Learning Theory, Generative Modeling
 - [[Model Granularity Sensitivity]](concepts/model_granularity_sensitivity.md) — Modeling, Systems Engineering, Optimization
+- [[Model Scaling Laws for Tool Use]](concepts/model_scaling_laws_for_tool_use.md) — Model Evaluation, Scaling Laws, Artificial Intelligence
 - [[Model-Aware, Data-Anchored Design]](concepts/model-aware_data-anchored_design.md) — Systems Engineering, Control Theory
 - [[Monte Carlo Dropout]](concepts/monte_carlo_dropout.md) — Machine Learning, Regularization
+- [[Morphological Computation]](concepts/morphological_computation.md) — Robotics, Control Theory
+- [[Multi-Agent Orchestration for Wireless Resource Allocation]](concepts/multi-agent_orchestration_for_wireless_resource_allocation.md) — Wireless Communication, Multi-Agent Systems, Network Optimization
+- [[Multi-Agent System (MAS) Independence]](concepts/multi-agent_system_mas_independence.md) — Multi-Agent Systems, Artificial Intelligence, Systems Architecture
+- [[Multi-Indicator Feature Engineering]](concepts/multi-indicator_feature_engineering.md) — Quantitative Finance, Feature Engineering, Machine Learning
 - [[Multi-Objective Model Predictive Control (MOMPC)]](concepts/multi-objective_model_predictive_control_mompc.md) — Control Theory, Optimization, Automation
+- [[Multi-timescale Learning]](concepts/multi-timescale_learning.md) — Machine Learning, Continual Learning
 - [[Nadir-CHIM Method]](concepts/nadir-chim_method.md) — Optimization, Control Theory, Multi-objective Optimization
 - [[Neural Tangent Kernel (NTK) in Diffusion Models]](concepts/neural_tangent_kernel_ntk_in_diffusion_models.md) — Deep Learning Theory, Optimization, Diffusion Models
 - [[Neural Warm-Starting]](concepts/neural_warm-starting.md) — Optimization, Neural Networks, Trajectory Planning
+- [[NeuroAI]](concepts/neuroai.md) — Artificial Intelligence, Neuroscience, Cognitive Architecture
+- [[Neurosymbolic AI]](concepts/neurosymbolic_ai.md) — AI Paradigms, Reasoning, Reliability
 - [[Node-Link Abstractions]](concepts/node-link_abstractions.md) — Operations Research, Network Theory
+- [[Nominal Group Technique (NGT)]](concepts/nominal_group_technique_ngt.md) — Communication Topology, Multi-Agent Systems, Collaborative Problem Solving
 - [[Nonlinear Programming (NLP) for Trajectory Planning]](concepts/nonlinear_programming_nlp_for_trajectory_planning.md) — Operations Research, Aviation, Optimization
+- [[OMAC (Optimization Framework for Multi-Agent Collaboration)]](concepts/omac_optimization_framework_for_multi-agent_collaboration.md) — LLM Optimization, Multi-Agent Systems, System Engineering
+- [[OMAC (Optimization of Multi-Agent Collaboration)]](concepts/omac_optimization_of_multi-agent_collaboration.md) — Artificial Intelligence, Multi-Agent Systems, Prompt Engineering, Model Optimization
+- [[OMAC (Optimization of Multi-Agent Communication)]](concepts/omac_optimization_of_multi-agent_communication.md) — Multi-Agent Systems, Meta-Learning, Prompt Engineering
 - [[Offline Reinforcement Learning Brittleness]](concepts/offline_reinforcement_learning_brittleness.md) — Reinforcement Learning, Generalization
 - [[Operator Learning]](concepts/operator_learning.md) — Scientific Machine Learning, Control Theory, Neural Networks
 - [[Optimization as Dynamical Systems]](concepts/optimization_as_dynamical_systems.md) — Optimization Theory, Control Theory
+- [[Optimized Multi-Agent Collaboration (OMAC)]](concepts/optimized_multi-agent_collaboration_omac.md) — Multi-Agent Systems, Artificial Intelligence, System Design
 - [[Oracle-based Stochastic Gradient Descent (ALOE)]](concepts/oracle-based_stochastic_gradient_descent_aloe.md) — Optimization, Machine Learning, Stochastic Calculus
 - [[Ordered Tokens]](concepts/ordered_tokens.md) — Autoregressive Models, Tokenization, Reasoning
 - [[Overconfidence]](concepts/overconfidence.md) — Model Reliability, Failure Analysis
@@ -139,19 +246,35 @@
 - [[Pontryagin-type Minimum Principle in Optimization]](concepts/pontryagin-type_minimum_principle_in_optimization.md) — Optimization Theory, Control Theory, Mathematical Foundations
 - [[Positive Orthant Stability]](concepts/positive_orthant_stability.md) — Stability Theory, Control Systems
 - [[Predict-then-Optimize (PtO)]](concepts/predict-then-optimize_pto.md) — Machine Learning, Mathematical Optimization, Decision Science
+- [[Predictive Context in Agentic Workflows]](concepts/predictive_context_in_agentic_workflows.md) — Agentic Workflows, Human-Computer Interaction
+- [[Predictive Processing]](concepts/predictive_processing.md) — Neuroscience, Machine Learning
 - [[Probing Episodes]](concepts/probing_episodes.md) — Exploration Strategies, Model Monitoring
+- [[Process-Oriented Agent Evaluation]](concepts/process-oriented_agent_evaluation.md) — AI Agents, Evaluation Frameworks, System Architecture
 - [[Product-Box Decomposition]](concepts/product-box_decomposition.md) — Optimization, Constraint Satisfaction, Algorithms
 - [[Progressive Learning Strategy]](concepts/progressive_learning_strategy.md) — Deep Learning, Transfer Learning, Scaling Laws
 - [[Progressive Scaling]](concepts/progressive_scaling.md) — Machine Learning, Training Methodology, Scaling Laws
+- [[Provenance Visualization]](concepts/provenance_visualization.md) — AI Transparency, Software Quality Assurance
 - [[PyEPO]](concepts/pyepo.md) — Software Engineering, Machine Learning Frameworks, Mathematical Programming
+- [[QTMRL]](concepts/qtmrl.md) — Agentic AI, Frameworks, Dynamic Modeling
+- [[QTMRL (Multi-Indicator Guided Reinforcement Learning)]](concepts/qtmrl_multi-indicator_guided_reinforcement_learning.md) — Quantitative Finance, Reinforcement Learning, Algorithmic Trading
+- [[QTMRL (Quantized Time-Series Machine Reinforcement Learning)]](concepts/qtmrl_quantized_time-series_machine_reinforcement_learning.md) — Reinforcement Learning, Algorithmic Trading, Time-Series Analysis
 - [[QuantCode-Bench]](concepts/quantcode-bench.md) — Artificial Intelligence, Quantitative Finance, Benchmarking
 - [[Reality Gap Correction in Agent Modeling]](concepts/reality_gap_correction_in_agent_modeling.md) — Reinforcement Learning, Robotics, Sim-to-Real Transfer
+- [[Reason-Invoke-Observe-Critique (RIOC) Loop]](concepts/reason-invoke-observe-critique_rioc_loop.md) — Agentic Reasoning, Multi-Agent Collaboration
 - [[Reasoning Model for Mission Planning]](concepts/reasoning_model_for_mission_planning.md) — Large Language Models, Agentic AI, Task Planning
 - [[Reasoning Path Redundancy]](concepts/reasoning_path_redundancy.md) — Artificial Intelligence, Model Efficiency, Computer Vision
+- [[Reasoning-class vs. Instruction-tuned Models]](concepts/reasoning-class_vs_instruction-tuned_models.md) — LLM Architectures, Inference Strategies
+- [[Reflection-Driven Self-Optimization]](concepts/reflection-driven_self-optimization.md) — AI for Networks, 6G Research, Autonomous Systems
+- [[Reflector Pattern]](concepts/reflector_pattern.md) — Agentic AI, Optimization, System Architecture
+- [[Reliability-Accuracy Decoupling]](concepts/reliability-accuracy_decoupling.md) — AI Strategy, Evaluation Metrics, Agentic AI
 - [[Reparameterization Trick]](concepts/reparameterization_trick.md) — Deep Learning, Optimization, Stochastic Calculus
+- [[Reverse Curriculum Learning]](concepts/reverse_curriculum_learning.md) — Machine Learning Training, Curriculum Learning
+- [[Reverse Curriculum Reinforcement Learning]](concepts/reverse_curriculum_reinforcement_learning.md) — Reinforcement Learning, Machine Learning Training Paradigms, TKGQA
 - [[Reversed MDP]](concepts/reversed_mdp.md) — Reinforcement Learning, Algorithm Design, Optimization
 - [[Reversed MDP Optimization]](concepts/reversed_mdp_optimization.md) — Optimization, Operations Research, Mathematical Programming
 - [[Riccati Bottleneck]](concepts/riccati_bottleneck.md) — Computational Complexity, Real-time Control
+- [[Role Alignment]](concepts/role_alignment.md) — Multi-Agent Systems, Governance, Operational Monitoring
+- [[Role-Based Persona Collapse]](concepts/role-based_persona_collapse.md) — Prompt Engineering, Multi-Agent Systems, Human-Agent Interaction
 - [[SDE-based Optimization]](concepts/sde-based_optimization.md) — Optimization, Stochastic Processes, Machine Learning
 - [[SPGM (Sequential Proximal Gradient Method)]](concepts/spgm_sequential_proximal_gradient_method.md) — Optimization, Machine Learning Algorithms, Mathematical Optimization
 - [[SPGM (Stochastic Proximal Gradient Method)]](concepts/spgm_stochastic_proximal_gradient_method.md) — Optimization Algorithms, Machine Learning Theory, Mathematical Optimization
@@ -160,9 +283,15 @@
 - [[SPO+ (Smart Predict-then-Optimize)]](concepts/spo_smart_predict-then-optimize.md) — Machine Learning, Combinatorial Optimization, Predict-then-Optimize
 - [[Saddle-point Equilibrium]](concepts/saddle-point_equilibrium.md) — Game Theory, Control Theory
 - [[Safety-Critical Robotics Reasoning]](concepts/safety-critical_robotics_reasoning.md) — Robotics, Safety-Critical Systems, Formal Methods
+- [[Scaling Relationship (Agent Performance)]](concepts/scaling_relationship_agent_performance.md) — Artificial Intelligence Research, Scaling Laws, Reinforcement Learning
 - [[Search Lyapunov Function (SLF)]](concepts/search_lyapunov_function_slf.md) — Dynamical Systems, Optimization Theory
+- [[Selection Bias in AI Adoption]](concepts/selection_bias_in_ai_adoption.md) — AI Adoption, Behavioral Economics, Causal Inference
+- [[Selective State Space Models (Mamba)]](concepts/selective_state_space_models_mamba.md) — Machine Learning, Sequence Modeling
 - [[Self-Bounding Analysis]](concepts/self-bounding_analysis.md) — Optimization, Hyperparameter Tuning, Machine Learning Methodology
 - [[Self-Bounding Optimization]](concepts/self-bounding_optimization.md) — Optimization, Hyperparameter Tuning, Machine Learning Infrastructure
+- [[Semantic Initialization]](concepts/semantic_initialization.md) — Optimization, Prompt Engineering
+- [[Semantic Output Validation]](concepts/semantic_output_validation.md) — AI Safety, Enterprise LLM Deployment, Agent Frameworks
+- [[Semantic Provenance]](concepts/semantic_provenance.md) — AI Governance, Software Engineering, Auditability
 - [[Semi-DCNLP]](concepts/semi-dcnlp.md) — Numerical Analysis, Control Theory, Computational Mathematics
 - [[Semi-DCNLP (Semi-Direct Collocation with Nonlinear Programming)]](concepts/semi-dcnlp_semi-direct_collocation_with_nonlinear_programming.md) — Optimal Control, Differential Games, Numerical Optimization
 - [[Semilinear Dynamic Programming]](concepts/semilinear_dynamic_programming.md) — Optimal Control, Stochastic Optimization, Dynamic Programming
@@ -170,24 +299,46 @@
 - [[Sequential Convex Programming (SCP)]](concepts/sequential_convex_programming_scp.md) — Control Theory, Optimization, Astrodynamics
 - [[Sequential Convex Programming (SCP) in Space Guidance]](concepts/sequential_convex_programming_scp_in_space_guidance.md) — Control Theory, Orbital Mechanics, Optimization
 - [[Shooting Methods]](concepts/shooting_methods.md) — Numerical Analysis, Optimal Control
+- [[Simulation-in-the-Loop Workflows]](concepts/simulation-in-the-loop_workflows.md) — Network Engineering, Systems Design
+- [[Single-pass Agent Architecture]](concepts/single-pass_agent_architecture.md) — Architecture Design, AI Limitations
+- [[Skill Interference]](concepts/skill_interference.md) — Machine Learning, Agentic Systems, Lifelong Learning
+- [[Skill Library Orchestration]](concepts/skill_library_orchestration.md) — Agentic Workflows, AI Orchestration
+- [[Skill Library Patching]](concepts/skill_library_patching.md) — Reinforcement Learning, Self-Correction, Continuous Learning
+- [[Skill-Based Workflow Orchestration]](concepts/skill-based_workflow_orchestration.md) — Agentic Workflows, System Design
+- [[SkillFlow]](concepts/skillflow.md) — Artificial Intelligence, Agentic Reasoning, Machine Learning Benchmarks
 - [[Slack Variables]](concepts/slack_variables.md) — Optimization, Constrained Optimization
 - [[Smart Predict-then-Optimize (SPO+)]](concepts/smart_predict-then-optimize_spo.md) — Optimization, Machine Learning, Differentiable Programming
+- [[SpecAgent]](concepts/specagent.md) — Software Engineering, Retrieval-Augmented Generation, Autonomous Agents
+- [[Speculative Indexing]](concepts/speculative_indexing.md) — Information Retrieval, Machine Learning Infrastructure
 - [[Stabilizability in Positive Orthants]](concepts/stabilizability_in_positive_orthants.md) — Control Theory, Stability Analysis
 - [[Stackelberg Equilibrium]](concepts/stackelberg_equilibrium.md) — Control Theory, Game Theory, Optimization
 - [[Stackelberg Equilibrium in Differential Games]](concepts/stackelberg_equilibrium_in_differential_games.md) — Control Theory, Game Theory, Differential Games
 - [[Stackelberg Framework]](concepts/stackelberg_framework.md) — Optimization, Multi-Agent Systems, Control Theory
 - [[Stackelberg Game Framework]](concepts/stackelberg_game_framework.md) — Game Theory, Multi-Agent Systems, Optimization
+- [[State-Space Branching]](concepts/state-space_branching.md) — Development Workflows, Software Engineering
 - [[Stochastic Constraint Optimization]](concepts/stochastic_constraint_optimization.md) — Stochastic Optimization, Artificial Intelligence, Formal Verification
 - [[Stochastic Control for Optimization]](concepts/stochastic_control_for_optimization.md) — Optimization, Stochastic Control, Machine Learning
 - [[Stochastic Uncertainty in Constraint Solving]](concepts/stochastic_uncertainty_in_constraint_solving.md) — Stochastic Optimization, Formal Verification, AI
+- [[Stub-Based Evaluation]](concepts/stub-based_evaluation.md) — Software Engineering, Benchmarking, Research Methodology
 - [[Subgame Perfect Gradient Method]](concepts/subgame_perfect_gradient_method.md) — Optimization, Machine Learning Theory, Convex Optimization
 - [[Subgame Perfect Gradient Method (SPGM)]](concepts/subgame_perfect_gradient_method_spgm.md) — Optimization, Game Theory, Machine Learning Theory
+- [[Subgroup Topology]](concepts/subgroup_topology.md) — Network Topology, Multi-Agent Systems, System Design
 - [[Successor Features]](concepts/successor_features.md) — Reinforcement Learning, Representation Learning
+- [[Synthetic Curriculum Learning]](concepts/synthetic_curriculum_learning.md) — Reinforcement Learning, Agent Development, Machine Learning Infrastructure
+- [[Task-Routing Strategy]](concepts/task-routing_strategy.md) — LLM Orchestration, Agentic Workflows, Inference
+- [[Temp-R1]](concepts/temp-r1.md) — Temporal Knowledge Graph Question Answering, Reinforcement Learning, Natural Language Processing
+- [[Temporal Knowledge Graph Question Answering (TKGQA)]](concepts/temporal_knowledge_graph_question_answering_tkgqa.md) — Knowledge Graphs, Information Retrieval, Temporal Reasoning
 - [[Terminal Maneuvering Area (TMA) Scheduling]](concepts/terminal_maneuvering_area_tma_scheduling.md) — Aviation, Logistics, Control Theory
 - [[Test-Time Reinforcement Learning]](concepts/test-time_reinforcement_learning.md) — Reinforcement Learning, Inference Optimization, Machine Learning
 - [[Test-Time Search]](concepts/test-time_search.md) — AI Agents, Inference Optimization, Generative Models
 - [[Test-time Scaling]](concepts/test-time_scaling.md) — Inference Optimization, LLM Scaling Laws, Agentic Workflows
+- [[The Linearity Trap]](concepts/the_linearity_trap.md) — Software Engineering, AI Usability
 - [[Thought Collapse]](concepts/thought_collapse.md) — Natural Language Processing, Reasoning Architectures
+- [[Time Series Augmented Generation (TSAG)]](concepts/time_series_augmented_generation_tsag.md) — Artificial Intelligence, Financial Technology, Retrieval-Augmented Generation
+- [[Tool Orchestration]](concepts/tool_orchestration.md) — Agentic AI, Natural Language Processing, Function Calling
+- [[Tool Orchestration (Agentic Systems)]](concepts/tool_orchestration_agentic_systems.md) — AI Engineering, Agentic Frameworks, System Design
+- [[Tool Surface Limitation]](concepts/tool_surface_limitation.md) — AI Agents, Tool-Use, Retrieval-Augmented Generation
+- [[Topological Overfitting]](concepts/topological_overfitting.md) — Machine Learning, Multi-Agent Systems, Generalization
 - [[Training Horizon Control]](concepts/training_horizon_control.md) — Continual Learning, Training Heuristics
 - [[Training-Free Generative Modeling]](concepts/training-free_generative_modeling.md) — Generative Modeling, Probabilistic Machine Learning
 - [[Training-free Generation]](concepts/training-free_generation.md) — Generative AI, Inference Optimization, Agentic Workflows
@@ -197,10 +348,13 @@
 - [[Truncation Argument]](concepts/truncation_argument.md) — Robust Optimization, Deep Learning
 - [[Two-Phase Sequencing and Trajectory Planning]](concepts/two-phase_sequencing_and_trajectory_planning.md) — Operations Research, Air Traffic Management, Optimization
 - [[Uncertainty Estimation in AI]](concepts/uncertainty_estimation_in_ai.md) — Bayesian Statistics, Explainable AI, Machine Learning Reliability
+- [[Uncertainty-Aware Agentic Workflows]](concepts/uncertainty-aware_agentic_workflows.md) — Agentic AI, LLM Reliability, Decision Theory
 - [[Unlearn-and-Reinvent Pipeline]](concepts/unlearn-and-reinvent_pipeline.md) — Machine Learning, Model Evaluation, Algorithmic Synthesis
+- [[Utility Gap]](concepts/utility_gap.md) — LLM Evaluation, Agent Engineering
 - [[VAE-based Transition Modeling]](concepts/vae-based_transition_modeling.md) — Generative Modeling, Offline RL
 - [[Variational Inference]](concepts/variational_inference.md) — Bayesian Statistics, Optimization
 - [[Variational Inference (VI)]](concepts/variational_inference_vi.md) — Probabilistic Machine Learning, Optimization, Inference
+- [[Vendi Score]](concepts/vendi_score.md) — Evaluation Metrics, Machine Learning, Natural Language Processing
 - [[Visual Normal Vector (Control)]](concepts/visual_normal_vector_control.md) — Control Systems, Computational Geometry, Numerical Stability
 - [[Visual Normal Vectoring]](concepts/visual_normal_vectoring.md) — Numerical Analysis, Optimization
 - [[Wasserstein Space Optimization]](concepts/wasserstein_space_optimization.md) — Optimal Transport, Stochastic Analysis, Optimization
@@ -208,8 +362,9 @@
 - [[Wind Uncertainty Modeling]](concepts/wind_uncertainty_modeling.md) — Aerospace Engineering, Robust Optimization, Flight Dynamics
 - [[k-SPGM]](concepts/k-spgm.md) — Computational Optimization, Memory-Efficient Algorithms
 
-## Sources (1 pages)
+## Sources (2 pages)
 
+- [Research Digest 2026-04-22](sources/digest_2026-04-22.md) — 2026-04-23
 - [Research Digest 2026-04-21](sources/digest_2026-04-21.md) — 2026-04-22
 
 ## Saved Queries (0 pages)
