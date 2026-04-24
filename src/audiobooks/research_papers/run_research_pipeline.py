@@ -15,8 +15,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from google import genai
-
 from research_papers.email_parser import ArxivHFEmailParser
 from research_papers.paper_downloader import PaperContentDownloader
 from research_papers.paper_scorer import EmbeddingPaperScorer
@@ -83,6 +81,21 @@ def load_config(config_path="config.ini"):
             ),
             "arxiv_delay_seconds": config.getint(
                 "ResearchPapers", "ARXIV_DELAY_SECONDS", fallback=3
+            ),
+            "wiki_auto_commit": config.getboolean(
+                "Wiki", "AUTO_COMMIT", fallback=False
+            ),
+            "wiki_model": config.get(
+                "Wiki", "WIKI_MODEL", fallback=config.get("Gemini", "GENERATION_MODEL")
+            ),
+            "wiki_backup_api_key": config.get(
+                "Wiki", "BACKUP_API_KEY", fallback=config.get("Gemini", "BACKUP_API_KEY", fallback=None)
+            ),
+            "wiki_paid_api_key": config.get(
+                "Wiki", "PAID_API_KEY", fallback=config.get("Gemini", "PAID_API_KEY", fallback=None)
+            ),
+            "wiki_paid_model": config.get(
+                "Wiki", "PAID_MODEL", fallback=config.get("Gemini", "PAID_GENERATION_MODEL", fallback=None)
             ),
         }
     except KeyError as e:
@@ -205,12 +218,14 @@ def main():
     )
 
     wiki_dir = os.path.join(script_dir, "wiki")
-    wiki_llm_client = genai.Client(api_key=config["gemini_api_key"])
     wiki_engine = WikiIngestionEngine(
         wiki_dir=wiki_dir,
-        llm_client=wiki_llm_client,
-        model_name=config["generation_model"],
-        auto_commit=True,
+        api_key=config["gemini_api_key"],
+        model_name=config["wiki_model"],
+        backup_api_key=config["wiki_backup_api_key"],
+        paid_api_key=config["wiki_paid_api_key"],
+        paid_model_name=config["wiki_paid_model"],
+        auto_commit=config["wiki_auto_commit"],
     )
 
     # Run pipeline for each date
