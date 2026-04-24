@@ -13,6 +13,12 @@ from .classifier import TranscriptClassifier, split_transcript_into_sections
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
 from .utils import load_prompt, slugify, format_page
+try:
+    from ..gemini_client import GeminiClientWithFallback
+except ImportError:
+    # When wiki_engine is imported as a top-level package (e.g. in tests that
+    # add research_papers/ directly to sys.path) the relative import fails.
+    from research_papers.gemini_client import GeminiClientWithFallback
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +69,12 @@ class WikiIngestionEngine:
     def __init__(
         self,
         wiki_dir: str,
+        api_key: str | None = None,
         llm_client=None,
         model_name: str = "gemini-3.1-flash-lite-preview",
+        backup_api_key: str | None = None,
+        paid_api_key: str | None = None,
+        paid_model_name: str | None = None,
         classifier: Optional[TranscriptClassifier] = None,
         index_builder: Optional[IndexBuilder] = None,
         git_manager: Optional[WikiGitManager] = None,
@@ -75,9 +85,20 @@ class WikiIngestionEngine:
         self.wiki_dir = Path(wiki_dir)
         self.sources_dir = self.wiki_dir / "sources"
         self.concepts_dir = self.wiki_dir / "concepts"
-        self.llm_client = llm_client
         self.model_name = model_name
-        self.classifier = classifier or TranscriptClassifier(llm_client, model_name)
+        # Prefer api_key to build a fallback-capable client; fall back to bare
+        # llm_client for backward compatibility (e.g. in tests).
+        if api_key:
+            self.llm_client = GeminiClientWithFallback(
+                api_key=api_key,
+                model_name=model_name,
+                backup_api_key=backup_api_key,
+                paid_api_key=paid_api_key,
+                paid_model_name=paid_model_name,
+            )
+        else:
+            self.llm_client = llm_client
+        self.classifier = classifier or TranscriptClassifier(self.llm_client, model_name)
         self.index_builder = index_builder or IndexBuilder(str(self.wiki_dir))
         self.auto_commit = auto_commit
         self.rebuild_index = rebuild_index
@@ -88,6 +109,24 @@ class WikiIngestionEngine:
         )
         self._extract_prompt = load_prompt(PROMPTS_DIR, "extract_concepts_system.txt", _EXTRACT_CONCEPTS_FALLBACK)
         self._update_prompt = load_prompt(PROMPTS_DIR, "update_concept_system.txt", _UPDATE_CONCEPT_FALLBACK)
+
+    def _llm_generate(self, user_prompt: str, system_prompt: str | None = None) -> str | None:
+        """Call the LLM, routing through the fallback client when available."""
+        if self.llm_client is None:
+            return None
+        # GeminiClientWithFallback exposes .generate(); legacy bare clients do not.
+        try:
+            from ..gemini_client import GeminiClientWithFallback
+        except ImportError:
+            from research_papers.gemini_client import GeminiClientWithFallback
+        if isinstance(self.llm_client, GeminiClientWithFallback):
+            return self.llm_client.generate(user_prompt, system_prompt)
+        response = self.llm_client.models.generate_content(
+            model=self.model_name,
+            contents=user_prompt,
+            config={"system_instruction": system_prompt} if system_prompt else {},
+        )
+        return response.text
 
     def ingest_transcript(self, transcript_path: str, date_str: str) -> dict:
         """Ingest a daily transcript into the wiki.
@@ -166,12 +205,10 @@ class WikiIngestionEngine:
             return []
 
         try:
-            response = self.llm_client.models.generate_content(
-                model=self.model_name,
-                contents=section.text[:8000],
-                config={"system_instruction": self._extract_prompt},
-            )
-            result_text = response.text.strip()
+            result_text = self._llm_generate(section.text[:8000], self._extract_prompt)
+            if result_text is None:
+                return []
+            result_text = result_text.strip()
             if result_text.startswith("```"):
                 result_text = result_text.split("\n", 1)[1]
                 result_text = result_text.rsplit("```", 1)[0]
@@ -278,11 +315,10 @@ class WikiIngestionEngine:
         )
 
         try:
-            response = self.llm_client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-            )
-            result_text = response.text.strip()
+            result_text = self._llm_generate(prompt)
+            if result_text is None:
+                return self._simple_append(existing_content, concept, datetime.now().strftime("%Y-%m-%d"))
+            result_text = result_text.strip()
             if result_text.startswith("```"):
                 result_text = result_text.split("\n", 1)[1]
                 result_text = result_text.rsplit("```", 1)[0]
