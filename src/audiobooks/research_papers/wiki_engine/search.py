@@ -101,9 +101,10 @@ class WikiSearch:
 
         for md_file in self.wiki_dir.rglob("*.md"):
             try:
-                content = md_file.read_text(encoding="utf-8").lower()
+                original = md_file.read_text(encoding="utf-8")
+                content_lower = original.lower()
                 # Score by keyword frequency
-                score = sum(content.count(kw) for kw in keywords)
+                score = sum(content_lower.count(kw) for kw in keywords)
                 if score > 0:
                     # Extract title from frontmatter or filename
                     title = self._extract_title(md_file)
@@ -111,7 +112,7 @@ class WikiSearch:
                         title=title,
                         path=str(md_file.relative_to(self.wiki_dir)),
                         score=float(score),
-                        snippet=content[:200],
+                        snippet=original[:200],
                     ))
             except Exception:
                 continue
