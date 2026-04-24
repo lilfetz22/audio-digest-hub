@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mcp import McpError
 
 from wiki_engine.mcp_server import WikiMcpServer
 from wiki_engine.search import WikiSearchResult
@@ -116,20 +117,19 @@ class TestWikiGetPage:
         result = server.handle_wiki_get_page({"path": "concepts/attention.md"})
         assert result == "# Attention\nsome content"
 
-    def test_not_found_returns_error(self, server: WikiMcpServer):
-        result = server.handle_wiki_get_page({"path": "concepts/nonexistent.md"})
-        assert result.startswith("Error:")
-        assert "not found" in result.lower()
+    def test_not_found_raises_mcp_error(self, server: WikiMcpServer):
+        with pytest.raises(McpError) as exc_info:
+            server.handle_wiki_get_page({"path": "concepts/nonexistent.md"})
+        assert "not found" in str(exc_info.value).lower()
 
     def test_path_traversal_rejected(self, server: WikiMcpServer, wiki_dir: Path):
         # Create a file outside wiki_dir to attempt to read
         secret = wiki_dir.parent / "secrets.txt"
         secret.write_text("top secret", encoding="utf-8")
-        result = server.handle_wiki_get_page({"path": "../../secrets.txt"})
-        assert "Error" in result
-        assert "traversal" in result.lower() or "not found" in result.lower()
-        # Most importantly — the secret content must NOT be returned
-        assert "top secret" not in result
+        with pytest.raises(McpError) as exc_info:
+            server.handle_wiki_get_page({"path": "../../secrets.txt"})
+        # Most importantly — the secret content must NOT appear in the error
+        assert "top secret" not in str(exc_info.value)
 
     def test_empty_path_returns_error(self, server: WikiMcpServer):
         result = server.handle_wiki_get_page({"path": ""})
