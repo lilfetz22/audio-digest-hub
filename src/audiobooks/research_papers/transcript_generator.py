@@ -6,11 +6,7 @@ import time
 from pathlib import Path
 from typing import List, Tuple
 
-import httpx
-from google import genai
-from google.genai import errors as genai_errors
-from google.genai import types
-
+from .gemini_client import GeminiClientWithFallback
 from .interfaces import TranscriptGenerator
 from .models import PaperContent
 
@@ -32,11 +28,6 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
     with rate limiting to stay within the free tier (15 RPM, 1M TPM).
     """
 
-    FALLBACK_MODELS = [
-        "gemini-3-flash-preview",
-        "gemini-2.5-pro",
-    ]
-
     def __init__(
         self,
         api_key: str,
@@ -45,15 +36,16 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         paid_api_key: str | None = None,
         paid_model_name: str | None = None,
     ):
-        self.api_key = api_key
         self.model_name = model_name
-        self.backup_api_key = backup_api_key
-        self.paid_api_key = paid_api_key
-        self.paid_model_name = paid_model_name
+        self._fallback_client = GeminiClientWithFallback(
+            api_key=api_key,
+            model_name=model_name,
+            backup_api_key=backup_api_key,
+            paid_api_key=paid_api_key,
+            paid_model_name=paid_model_name,
+        )
         self._request_timestamps: List[float] = []
         self._token_usage: List[tuple] = []  # (timestamp, token_count)
-        self._resolved_model: str | None = None
-        self._resolved_client: genai.Client | None = None
 
     def generate(
         self,
@@ -76,7 +68,6 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
 
         deep_dive_transcripts: List[str] = []
         titles: List[str] = []
-        client = genai.Client(api_key=self.api_key)
         if deep_dive_papers:
             for i, paper in enumerate(deep_dive_papers):
                 prompt = self._build_single_paper_prompt(paper, date_str)
@@ -90,9 +81,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                     f"Generating transcript for paper {i + 1}/{len(deep_dive_papers)}: "
                     f"{paper.title}"
                 )
-                transcript = self._generate_realtime(
-                    client, system_prompt, prompt
-                )
+                transcript = self._fallback_client.generate(prompt, system_prompt)
                 deep_dive_transcripts.append(transcript)
                 titles.append(paper.title)
 
@@ -117,7 +106,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                 + ", ".join(f'"{t}"' for t, _ in sampled)
             )
             interrogator_section = self._generate_interrogator_episode(
-                client, sampled, date_str
+                sampled, date_str
             )
 
         parts = [t.strip() for t in deep_dive_transcripts]
@@ -139,14 +128,12 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
 
     def _generate_interrogator_episode(
         self,
-        client: genai.Client,
         sampled: List[Tuple[str, str]],
         date_str: str,
     ) -> str:
         """Generate the Interrogator Q&A episode from 5 sampled transcripts.
 
         Args:
-            client: Gemini client (already authenticated).
             sampled: List of (title, transcript) pairs.
             date_str: Date string for the episode.
 
@@ -166,7 +153,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         self._wait_for_rate_limit(estimated_input_tokens)
 
         logger.info("Generating Interrogator episode...")
-        result = self._generate_realtime(client, system_prompt, user_prompt)
+        result = self._fallback_client.generate(user_prompt, system_prompt)
 
         estimated_output_tokens = len(result) // CHARS_PER_TOKEN
         self._record_usage(estimated_input_tokens + estimated_output_tokens)
@@ -187,174 +174,6 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
             f"Full Text:\n{paper.full_text}\n",
         ]
         return "\n".join(sections)
-
-    def _generate_realtime(
-        self, client: genai.Client, system_prompt: str, user_prompt: str
-    ) -> str:
-        """Generate transcript using realtime API, with retries and model fallback.
-
-        On the first call the full model chain is tried (10 retries each).
-        Whichever model succeeds is locked in for all subsequent calls.
-        If the locked-in model later fails, the full chain is re-entered.
-
-        When a 429 quota-exhausted error is hit on a free-tier API key, the
-        backup API key is tried with the same model chain before falling back
-        to the paid key.
-        """
-        # If a model was already resolved, try it first; on failure reset and
-        # fall through to the full fallback chain.
-        if self._resolved_model is not None:
-            try:
-                return self._try_model(
-                    self._resolved_client, self._resolved_model,
-                    system_prompt, user_prompt,
-                )
-            except genai_errors.ClientError as e:
-                if getattr(e, "code", None) == 429:
-                    logger.warning(
-                        f"Quota exhausted (429) for locked-in model "
-                        f"{self._resolved_model}. Re-entering fallback chain..."
-                    )
-                else:
-                    logger.warning(
-                        f"Client error for locked-in model "
-                        f"{self._resolved_model}: {e}. Re-entering fallback chain..."
-                    )
-                self._resolved_model = None
-                self._resolved_client = None
-            except (genai_errors.ServerError, httpx.ReadError, httpx.ConnectError,
-                    httpx.RemoteProtocolError, ConnectionError, OSError):
-                logger.warning(
-                    f"Locked-in model {self._resolved_model} failed. "
-                    f"Re-entering full fallback chain..."
-                )
-                self._resolved_model = None
-                self._resolved_client = None
-
-        free_models = [self.model_name] + [
-            m for m in self.FALLBACK_MODELS if m != self.model_name
-        ]
-
-        # Build ordered list of (api_key, models_to_try) tiers
-        api_key_tiers: List[Tuple[str, List[str]]] = [
-            (self.api_key, free_models),
-        ]
-        if self.backup_api_key:
-            api_key_tiers.append((self.backup_api_key, free_models))
-
-        for tier_idx, (key, models) in enumerate(api_key_tiers):
-            tier_client = genai.Client(api_key=key)
-            key_label = "primary" if tier_idx == 0 else "backup"
-
-            for model_idx, model in enumerate(models):
-                try:
-                    result = self._try_model(
-                        tier_client, model, system_prompt, user_prompt
-                    )
-                    self._resolved_model = model
-                    self._resolved_client = tier_client
-                    logger.info(
-                        f"Locked in model: {model} ({key_label} API key)"
-                    )
-                    return result
-                except genai_errors.ClientError as e:
-                    if getattr(e, "code", None) == 429:
-                        logger.warning(
-                            f"Quota exhausted (429) for {model} on "
-                            f"{key_label} API key. "
-                            f"Switching to next API key tier..."
-                        )
-                        break  # skip remaining models on this key
-                    raise
-                except (genai_errors.ServerError, httpx.ReadError,
-                        httpx.ConnectError, httpx.RemoteProtocolError,
-                        ConnectionError, OSError):
-                    if model_idx < len(models) - 1:
-                        next_model = models[model_idx + 1]
-                        logger.warning(
-                            f"All retries exhausted for {model}. "
-                            f"Falling back to {next_model}..."
-                        )
-                    else:
-                        logger.warning(
-                            f"All retries exhausted for {model} "
-                            f"(last free model on {key_label} key)."
-                        )
-
-        # Last resort: paid API key + paid model
-        if self.paid_api_key and self.paid_model_name:
-            logger.warning(
-                f"All free models/keys failed. Falling back to paid model "
-                f"{self.paid_model_name}..."
-            )
-            paid_client = genai.Client(api_key=self.paid_api_key)
-            result = self._try_model(
-                paid_client, self.paid_model_name, system_prompt, user_prompt
-            )
-            self._resolved_model = self.paid_model_name
-            self._resolved_client = paid_client
-            logger.info(f"Locked in paid model: {self.paid_model_name}")
-            return result
-
-        raise RuntimeError(
-            "All free models/keys failed and no paid API key configured."
-        )
-
-    def _try_model(
-        self,
-        client: genai.Client,
-        model: str,
-        system_prompt: str,
-        user_prompt: str,
-    ) -> str:
-        """Try generating with a single model, retrying up to 10 times with exponential backoff.
-
-        Raises genai_errors.ClientError immediately on 429 (quota exhausted)
-        so the caller can swap API keys without wasting retries.
-        """
-        max_retries = 10
-        base_delay = 30  # seconds; doubles each attempt, capped at max_delay
-        max_delay = 600  # 10 minutes
-
-        for attempt in range(max_retries):
-            try:
-                response = client.models.generate_content(
-                    model=model,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        temperature=0.7,
-                    ),
-                )
-                return response.text
-            except genai_errors.ClientError as e:
-                # 429 quota exhausted — bubble up immediately for API key swap
-                if getattr(e, "code", None) == 429:
-                    raise
-                raise
-            except genai_errors.ServerError as e:
-                is_retryable = getattr(e, "code", None) == 503
-                if is_retryable and attempt < max_retries - 1:
-                    delay = min(base_delay * (2 ** attempt), max_delay)
-                    logger.warning(
-                        f"Gemini API unavailable (503) for {model}. "
-                        f"Retrying in {delay}s "
-                        f"(attempt {attempt + 1}/{max_retries})..."
-                    )
-                    time.sleep(delay)
-                else:
-                    raise
-            except (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError, ConnectionError, OSError) as e:
-                if attempt < max_retries - 1:
-                    delay = min(base_delay * (2 ** attempt), max_delay)
-                    logger.warning(
-                        f"Network error for {model}: {e}. "
-                        f"Retrying in {delay}s "
-                        f"(attempt {attempt + 1}/{max_retries})..."
-                    )
-                    time.sleep(delay)
-                else:
-                    raise
 
     def _wait_for_rate_limit(self, estimated_tokens: int) -> None:
         """Block until sending another request would stay within free-tier limits."""
