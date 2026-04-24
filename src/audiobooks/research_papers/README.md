@@ -569,7 +569,7 @@ Add this block to your `claude_desktop_config.json` (`%APPDATA%\Claude\claude_de
     "llm-wiki": {
       "command": "python",
       "args": ["-m", "wiki_engine.mcp_server"],
-      "cwd": "C:\\Users\\cindy\\Documents\\audio-digest-hub\\src\\audiobooks\\research_papers"
+      "cwd": "src\\audiobooks\\research_papers"
     }
   }
 }
@@ -584,9 +584,9 @@ Restart Claude Desktop and the wiki tools will appear in the tool palette.
 ```powershell
 cd src\audiobooks\research_papers
 python -c "
-from wiki_engine.ingestion import WikiIngestionPipeline
-p = WikiIngestionPipeline(wiki_dir='wiki', auto_commit=True)
-p.ingest('raw_content/research_digest_2026-04-20.txt')
+from wiki_engine.ingestion import WikiIngestionEngine
+p = WikiIngestionEngine(wiki_dir='wiki', auto_commit=True)
+p.ingest_transcript('raw_content/research_digest_2026-04-20.txt', '2026-04-20')
 "
 ```
 
