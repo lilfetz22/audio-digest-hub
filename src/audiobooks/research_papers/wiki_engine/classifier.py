@@ -45,18 +45,34 @@ class TranscriptClassifier:
             results.append(classified)
         return results
 
+    def _llm_generate(self, user_prompt: str, system_prompt: str) -> str | None:
+        """Call the LLM, routing through the fallback client when available."""
+        if self.llm_client is None:
+            return None
+        # GeminiClientWithFallback exposes .generate(); legacy bare clients do not.
+        try:
+            from ..gemini_client import GeminiClientWithFallback
+        except ImportError:
+            from research_papers.gemini_client import GeminiClientWithFallback
+        if isinstance(self.llm_client, GeminiClientWithFallback):
+            return self.llm_client.generate(user_prompt, system_prompt)
+        response = self.llm_client.models.generate_content(
+            model=self.model_name,
+            contents=user_prompt,
+            config={"system_instruction": system_prompt},
+        )
+        return response.text
+
     def _classify_single(self, text: str) -> ClassifiedSection:
         """Classify a single section of text."""
         if not self.llm_client:
             return ClassifiedSection(text=text, category="Other", title="Unclassified")
 
         try:
-            response = self.llm_client.models.generate_content(
-                model=self.model_name,
-                contents=text[:4000],  # Limit input size
-                config={"system_instruction": self._classify_prompt},
-            )
-            result_text = response.text.strip()
+            result_text = self._llm_generate(text[:4000], self._classify_prompt)
+            if result_text is None:
+                return ClassifiedSection(text=text, category="Other", title="Unclassified")
+            result_text = result_text.strip()
             # Strip markdown code fences if present
             if result_text.startswith("```"):
                 result_text = result_text.split("\n", 1)[1]
