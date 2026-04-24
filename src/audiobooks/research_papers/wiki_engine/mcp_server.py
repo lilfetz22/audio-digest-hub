@@ -21,8 +21,18 @@ from typing import ClassVar, List, Optional
 
 import yaml
 
+try:
+    from mcp import McpError
+    from mcp.types import ErrorData
+except ImportError:  # pragma: no cover
+    McpError = None  # type: ignore[assignment,misc]
+    ErrorData = None  # type: ignore[assignment,misc]
+
 from .query_saver import QuerySaver
 from .search import WikiSearch
+
+# JSON-RPC application error range: -32000 to -32099
+_NOT_FOUND_CODE = -32002
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +170,11 @@ class WikiMcpServer:
         return json.dumps(data, indent=2)
 
     def handle_wiki_get_page(self, arguments: dict) -> str:
-        """Return the raw Markdown content of a wiki page."""
+        """Return the raw Markdown content of a wiki page.
+
+        Raises:
+            McpError: (NOT_FOUND) if the path does not exist or escapes the wiki dir.
+        """
         raw_path = arguments.get("path", "")
         if not raw_path:
             return "Error: 'path' argument is required"
@@ -174,12 +188,10 @@ class WikiMcpServer:
         try:
             target.relative_to(self.wiki_dir)
         except ValueError:
-            return "Error: path traversal not allowed"
+            raise McpError(ErrorData(code=_NOT_FOUND_CODE, message="path traversal not allowed"))
 
-        if not target.exists():
-            return f"Error: page not found: {raw_path}"
-        if not target.is_file():
-            return f"Error: path is not a file: {raw_path}"
+        if not target.exists() or not target.is_file():
+            raise McpError(ErrorData(code=_NOT_FOUND_CODE, message=f"page not found: {raw_path}"))
 
         return target.read_text(encoding="utf-8")
 
@@ -216,6 +228,10 @@ class WikiMcpServer:
         """Save a Q&A exchange to wiki/queries/ and return the file path."""
         question = arguments.get("question", "")
         answer = arguments.get("answer", "")
+        if not isinstance(question, str) or not question.strip():
+            return "Error: 'question' must be a non-empty string"
+        if not isinstance(answer, str) or not answer.strip():
+            return "Error: 'answer' must be a non-empty string"
         sources = arguments.get("sources") or []
         saved_path = self.query_saver.save(
             question=question, answer=answer, sources=list(sources)
@@ -239,6 +255,8 @@ class WikiMcpServer:
             return f"Error: unknown tool '{tool_name}'"
         try:
             return handler(arguments)
+        except McpError:
+            raise  # propagate MCP-typed errors to the transport layer
         except Exception as exc:
             logger.exception("Tool '%s' raised an unhandled error", tool_name)
             return f"Error: {exc}"
