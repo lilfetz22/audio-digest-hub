@@ -223,7 +223,10 @@ def main():
             continue
 
         transcript_path = os.path.join(output_dir, f"research_digest_{date_str}.txt")
-        if os.path.exists(transcript_path):
+        source_page_path = os.path.join(wiki_dir, "sources", f"digest_{date_str}.md")
+        if os.path.exists(source_page_path):
+            logger.info(f"Wiki already ingested for {date_str}, skipping.")
+        elif os.path.exists(transcript_path):
             try:
                 result = wiki_engine.ingest_transcript(transcript_path, date_str)
                 logger.info(
