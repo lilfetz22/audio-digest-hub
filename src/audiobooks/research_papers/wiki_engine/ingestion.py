@@ -81,6 +81,10 @@ class WikiIngestionEngine:
         auto_commit: bool = False,
         rebuild_index: bool = True,
         repo_root: Optional[str] = None,
+        parent_root: Optional[str] = None,
+        branch: str = "main",
+        auto_push: bool = False,
+        push_parent: bool = False,
     ):
         self.wiki_dir = Path(wiki_dir)
         self.sources_dir = self.wiki_dir / "sources"
@@ -106,6 +110,10 @@ class WikiIngestionEngine:
         self.git_manager = git_manager or WikiGitManager(
             repo_root=str(repo_path),
             wiki_dir=str(self.wiki_dir),
+            parent_root=parent_root,
+            branch=branch,
+            auto_push=auto_push,
+            push_parent=push_parent,
         )
         self._extract_prompt = load_prompt(PROMPTS_DIR, "extract_concepts_system.txt", _EXTRACT_CONCEPTS_FALLBACK)
         self._update_prompt = load_prompt(PROMPTS_DIR, "update_concept_system.txt", _UPDATE_CONCEPT_FALLBACK)
