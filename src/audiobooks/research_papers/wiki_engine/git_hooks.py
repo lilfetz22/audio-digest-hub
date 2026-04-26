@@ -51,7 +51,7 @@ class WikiGitManager:
         commit:
 
         1. Ensure the submodule is on ``self.branch`` (not detached HEAD), then
-           commit the markdown changes inside the submodule repo
+           stage and commit the markdown changes inside the submodule repo
            (``cwd=self.repo_root``).
         2. Advance the submodule pointer commit in the parent repository
            (``cwd=self.parent_root``).
@@ -67,43 +67,45 @@ class WikiGitManager:
             to commit.
         """
         try:
-            # ── Step 1: commit inside the submodule / wiki repo ──────────────
             if self.parent_root is not None:
-                # Submodule mode — repo_root IS the wiki folder.
+                # Submodule mode — repo_root IS the wiki submodule's git root.
                 self._ensure_on_branch(cwd=self.repo_root)
-                porcelain = self._run_git(
-                    ["status", "--porcelain"], cwd=self.repo_root, check=False
-                )
-                if not porcelain.stdout.strip():
-                    logger.info("No wiki changes to commit (submodule)")
-                    return False
-                self._run_git(["add", "."], cwd=self.repo_root)
-            else:
-                # Legacy mode — repo_root is the parent; add by relative path.
-                wiki_rel = self.wiki_dir.relative_to(self.repo_root)
-                porcelain = self._run_git(
-                    ["status", "--porcelain", str(wiki_rel)],
-                    cwd=self.repo_root,
-                    check=False,
-                )
-                if not porcelain.stdout.strip():
-                    logger.info("No wiki changes to commit (legacy)")
-                    return False
-                self._run_git(["add", str(wiki_rel)], cwd=self.repo_root)
 
-            self._run_git(["commit", "-m", message], cwd=self.repo_root)
+            # ── Step 1: Stage all changes (check=True so failures are loud) ──
+            if self.parent_root is not None:
+                self._run_git(["add", "."], cwd=self.repo_root, check=True)
+            else:
+                # Legacy mode — add only the wiki subtree by relative path.
+                wiki_rel = self.wiki_dir.relative_to(self.repo_root)
+                self._run_git(
+                    ["add", str(wiki_rel)], cwd=self.repo_root, check=True
+                )
+
+            # ── Step 2: Verify something was actually staged after the add ───
+            porcelain = self._run_git(
+                ["status", "--porcelain"], cwd=self.repo_root, check=False
+            )
+            if not porcelain.stdout.strip():
+                logger.info("Nothing staged after git add — no changes to commit")
+                return False
+
+            # ── Step 3: Commit inside the submodule / wiki repo ──────────────
+            self._run_git(["commit", "-m", message], cwd=self.repo_root, check=True)
             logger.info(f"Wiki committed ({self.repo_root}): {message}")
 
-            # ── Optional push of submodule branch ─────────────────────────────
+            # ── Step 4: Optional push of submodule branch ─────────────────────
             if self.auto_push and self.parent_root is not None:
                 self._run_git(
                     ["push", "origin", self.branch], cwd=self.repo_root
                 )
                 logger.info(f"Wiki pushed to origin/{self.branch}")
 
-            # ── Step 2: advance the submodule pointer in the parent repo ──────
+            # ── Step 5 & 6: Advance the submodule pointer in the parent repo ──
             if self.parent_root is not None:
                 submodule_rel = self.repo_root.relative_to(self.parent_root)
+                self._run_git(
+                    ["add", str(submodule_rel)], cwd=self.parent_root, check=True
+                )
                 parent_porcelain = self._run_git(
                     ["status", "--porcelain", str(submodule_rel)],
                     cwd=self.parent_root,
@@ -111,15 +113,12 @@ class WikiGitManager:
                 )
                 if parent_porcelain.stdout.strip():
                     self._run_git(
-                        ["add", str(submodule_rel)], cwd=self.parent_root
-                    )
-                    self._run_git(
-                        ["commit", "-m", "chore: advance wiki submodule pointer"],
+                        ["commit", "-m", "chore: update wiki submodule"],
                         cwd=self.parent_root,
+                        check=True,
                     )
                     logger.info("Parent submodule pointer advanced")
 
-                    # ── Optional push of parent pointer commit ─────────────────
                     if self.auto_push and self.push_parent:
                         self._run_git(["push"], cwd=self.parent_root)
                         logger.info("Parent submodule pointer pushed")
