@@ -10,6 +10,7 @@ import re
 import logging
 import subprocess
 import time
+import socket
 import glob
 from pathlib import Path
 
@@ -251,6 +252,25 @@ def authenticate_gmail(token_file, credentials_file):
     return creds
 
 
+def _execute_with_retry(request_obj, max_retries=3, backoff_base=2):
+    """Execute a Google API request, retrying on transient network errors."""
+    for attempt in range(max_retries):
+        try:
+            return request_obj.execute()
+        except (TimeoutError, socket.timeout, ConnectionResetError, OSError) as exc:
+            if attempt < max_retries - 1:
+                wait = backoff_base ** attempt
+                logger.warning(
+                    f"Network error on attempt {attempt + 1}/{max_retries}: {exc}. "
+                    f"Retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            else:
+                raise
+        except HttpError:
+            raise  # HTTP-level errors (4xx/5xx) are not transient; propagate immediately
+
+
 def remove_markdown_links(text):
     return re.sub(r"\[([^\]]+)\]\(.*?\)", r"\1", text)
 
@@ -405,9 +425,9 @@ def process_emails(service, sources, target_date_str):
     query = f"({sender_query}) after:{after_date} before:{before_date}"
     logger.info(f"Using Gmail query: {query}")
     try:
-        results = service.users().messages().list(userId="me", q=query).execute()
+        results = _execute_with_retry(service.users().messages().list(userId="me", q=query))
         messages = results.get("messages", [])
-    except HttpError as error:
+    except (HttpError, TimeoutError, OSError) as error:
         logger.error(f"An error occurred fetching emails: {error}", exc_info=True)
         return "", []
     if not messages:
@@ -417,7 +437,16 @@ def process_emails(service, sources, target_date_str):
         s["sender_email"].lower(): s["custom_name"] for s in sources
     }
     for msg_info in reversed(messages):
-        msg = service.users().messages().get(userId="me", id=msg_info["id"]).execute()
+        try:
+            msg = _execute_with_retry(
+                service.users().messages().get(userId="me", id=msg_info["id"])
+            )
+        except (HttpError, TimeoutError, OSError) as exc:
+            logger.error(
+                f"Failed to fetch email {msg_info['id']} after retries: {exc}. Skipping.",
+                exc_info=True,
+            )
+            continue
         if "UNREAD" in msg.get("labelIds", []):
             try:
                 subject = next(
@@ -431,10 +460,12 @@ def process_emails(service, sources, target_date_str):
                 logger.info(
                     f"Marking email as read: '{subject[:50]}...' (ID: {msg_info['id']})"
                 )
-                service.users().messages().modify(
-                    userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
-                ).execute()
-            except HttpError as e:
+                _execute_with_retry(
+                    service.users().messages().modify(
+                        userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
+                    )
+                )
+            except (HttpError, TimeoutError, OSError) as e:
                 logger.warning(
                     f"Could not mark email {msg_info['id']} as read. Error: {e}. Continuing."
                 )

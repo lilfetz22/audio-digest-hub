@@ -60,7 +60,7 @@ class TestPromptConstruction:
 class TestPerPaperGeneration:
     """Tests for per-paper deep dive generation."""
 
-    @patch("research_papers.transcript_generator.genai")
+    @patch("research_papers.gemini_client.genai")
     def test_each_paper_gets_own_llm_call(
         self, mock_genai, generator, deep_dive_papers
     ):
@@ -74,10 +74,10 @@ class TestPerPaperGeneration:
 
         result = generator.generate(deep_dive_papers, "2026-03-14")
 
-        # Should be called once per deep-dive paper (2 papers = 2 calls)
-        assert mock_client.models.generate_content.call_count == len(deep_dive_papers)
+        # Should be called once per deep-dive paper plus once for interrogator episode
+        assert mock_client.models.generate_content.call_count == len(deep_dive_papers) + 1
 
-    @patch("research_papers.transcript_generator.genai")
+    @patch("research_papers.gemini_client.genai")
     def test_empty_deep_dive_returns_empty_string(
         self, mock_genai, generator
     ):
@@ -90,7 +90,7 @@ class TestPerPaperGeneration:
         mock_client.models.generate_content.assert_not_called()
         assert result == ""
 
-    @patch("research_papers.transcript_generator.genai")
+    @patch("research_papers.gemini_client.genai")
     def test_output_concatenates_deep_dives(
         self, mock_genai, generator, deep_dive_papers
     ):
@@ -98,10 +98,11 @@ class TestPerPaperGeneration:
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
 
-        # Return different transcripts for each paper
+        # Return different transcripts for each paper, plus one for the interrogator
         mock_client.models.generate_content.side_effect = [
             MagicMock(text="Deep dive on Agent-Based Optimization."),
             MagicMock(text="Deep dive on Foundation Model for Code."),
+            MagicMock(text="Interrogator episode text."),
         ]
 
         result = generator.generate(deep_dive_papers, "2026-03-14")
@@ -110,7 +111,7 @@ class TestPerPaperGeneration:
         assert "Deep dive on Agent-Based Optimization" in result
         assert "Deep dive on Foundation Model for Code" in result
 
-    @patch("research_papers.transcript_generator.genai")
+    @patch("research_papers.gemini_client.genai")
     def test_handles_api_error(
         self, mock_genai, generator, deep_dive_papers
     ):
@@ -161,7 +162,7 @@ class TestRateLimiting:
 class TestOutputFormatting:
     """Tests for output formatting."""
 
-    @patch("research_papers.transcript_generator.genai")
+    @patch("research_papers.gemini_client.genai")
     def test_output_is_clean_text(
         self, mock_genai, generator, deep_dive_papers
     ):
