@@ -220,6 +220,7 @@ def main():
     wiki_dir = os.path.join(script_dir, "wiki")
     wiki_engine = WikiIngestionEngine(
         wiki_dir=wiki_dir,
+        repo_root=wiki_dir,  # wiki is its own git repo (submodule); commit inside it
         api_key=config["gemini_api_key"],
         model_name=config["wiki_model"],
         backup_api_key=config["wiki_backup_api_key"],

@@ -126,7 +126,7 @@ class WikiGitManager:
             return True
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Git auto-commit failed: {e}")
+            logger.error(f"Git auto-commit failed: {e}\nstderr: {e.stderr}")
             return False
 
     def has_changes(self) -> bool:
