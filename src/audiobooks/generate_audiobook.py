@@ -127,13 +127,37 @@ def verify_authentication(api_url, api_key):
         return False
 
 
+def _requests_get_with_retry(url, headers, timeout=30, max_retries=3, backoff_base=2):
+    """
+    Performs a GET request with exponential-backoff retries on transient network errors
+    (ConnectionError, Timeout). HTTP-level errors (4xx/5xx) are not retried.
+    Raises the last exception if all retries are exhausted.
+    """
+    for attempt in range(max_retries):
+        try:
+            # Use a fresh Session per attempt to avoid reusing a stale pooled connection.
+            with requests.Session() as session:
+                response = session.get(url, headers=headers, timeout=timeout)
+            return response
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            if attempt < max_retries - 1:
+                wait = backoff_base ** attempt
+                logger.warning(
+                    f"Transient network error on attempt {attempt + 1}/{max_retries}: {exc}. "
+                    f"Retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            else:
+                raise
+
+
 def fetch_sources(api_url, api_key):
     """Fetches newsletter sources from the Supabase Edge Function."""
     logger.info("Fetching newsletter sources from Web App...")
     headers = {"Authorization": f"Bearer {api_key}"}
     url = f"{api_url}/sources"
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = _requests_get_with_retry(url, headers, timeout=30)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -148,7 +172,7 @@ def find_last_upload_date(api_url, api_key):
     url = f"{api_url}/audiobooks"
 
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = _requests_get_with_retry(url, headers, timeout=30)
 
         if response.status_code != 200:
             logger.warning(
@@ -206,7 +230,7 @@ def check_existing_audiobook(api_url, api_key, title):
 
     try:
         # Get all audiobooks for the user
-        response = requests.get(url, headers=headers, timeout=30)
+        response = _requests_get_with_retry(url, headers, timeout=30)
 
         if response.status_code != 200:
             logger.warning(
