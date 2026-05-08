@@ -85,6 +85,12 @@ def load_config(config_path="config.ini"):
             "wiki_auto_commit": config.getboolean(
                 "Wiki", "AUTO_COMMIT", fallback=False
             ),
+            "wiki_auto_push": config.getboolean(
+                "Wiki", "AUTO_PUSH", fallback=False
+            ),
+            "wiki_push_parent": config.getboolean(
+                "Wiki", "PUSH_PARENT", fallback=False
+            ),
             "wiki_model": config.get(
                 "Wiki", "WIKI_MODEL", fallback=config.get("Gemini", "GENERATION_MODEL")
             ),
@@ -218,15 +224,21 @@ def main():
     )
 
     wiki_dir = os.path.join(script_dir, "wiki")
+    # parent_root is the audio-digest-hub repo root (3 levels above script_dir:
+    # research_papers/ -> audiobooks/ -> src/ -> audio-digest-hub/)
+    parent_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
     wiki_engine = WikiIngestionEngine(
         wiki_dir=wiki_dir,
         repo_root=wiki_dir,  # wiki is its own git repo (submodule); commit inside it
+        parent_root=parent_root,
         api_key=config["gemini_api_key"],
         model_name=config["wiki_model"],
         backup_api_key=config["wiki_backup_api_key"],
         paid_api_key=config["wiki_paid_api_key"],
         paid_model_name=config["wiki_paid_model"],
         auto_commit=config["wiki_auto_commit"],
+        auto_push=config["wiki_auto_push"],
+        push_parent=config["wiki_push_parent"],
     )
 
     # Run pipeline for each date
