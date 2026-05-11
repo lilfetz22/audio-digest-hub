@@ -201,7 +201,13 @@ Scores **Arxiv papers only** (HuggingFace papers bypass scoring entirely). Uses 
 
 Generates the final podcast transcript using sequential Gemini API calls with rate limiting:
 
-**Deep-dive papers** — each paper gets its **own individual LLM call** with the full paper text, producing a thorough standalone narration segment.
+**Deep-dive papers** — each paper gets its **own individual LLM call** with the full paper text, producing a thorough standalone narration segment. Each section is prefixed with a machine-readable HTML comment:
+
+```
+<!-- WIKI_SOURCE_URL: https://arxiv.org/abs/2501.12345 -->
+```
+
+This marker lets the wiki ingestion engine reliably associate the original paper URL with the concepts it extracts, without asking the LLM to re-discover URLs from prose text.
 
 **Summary papers** — formatted as **plain text without any LLM call**. Papers are grouped by Arxiv category with human-readable headings (e.g., "Computer Science", "Statistics") and listed with title + abstract. This section is appended after the deep-dive transcripts.
 
@@ -446,10 +452,18 @@ pytest tests/test_feedback.py -v
 |-----------|----------|
 | `test_email_parser.py` | Arxiv HTML + plain-text parsing, HuggingFace parsing, category extraction, deduplication, edge cases |
 | `test_paper_downloader.py` | Arxiv PDF extraction, HuggingFace page extraction, text cleaning, rate limiting, size limits, error handling |
-| `test_paper_scorer.py` | Scoring logic, tiering, batch processing, preference profile injection, HuggingFace bypass, JSON parsing, error fallback |
+| `test_paper_scorer.py` | Scoring logic, tiering, batch processing, preference profile injection, HuggingFace bypass, JSON parsing, error fallback; embedding scorer (similarity mapping, MagicMock stubs for optional deps) |
 | `test_transcript_generator.py` | Prompt construction, per-paper generation, batch mode, summary text assembly, category grouping |
 | `test_pipeline.py` | Full end-to-end orchestration, per-category selection, idempotency, Supabase metadata push, error scenarios |
 | `test_feedback.py` | Profile loading/writing, interest extraction, growth capping, FeedbackClient API calls |
+| `test_wiki_classifier.py` | Section classification, `split_transcript_into_sections`, `extract_source_urls_from_section` (arXiv/HF markers, deduplication, malformed markers) |
+| `test_wiki_ingestion.py` | Source page creation, concept extraction, upsert, index rebuild, auto-commit, WIKI_SOURCE_URL marker preservation in concept frontmatter |
+| `test_wiki_e2e.py` | Full ingestion pipeline, index rebuild, search, query save/find, lint |
+| `test_wiki_git_hooks.py` | WikiGitManager auto-commit on new/modified files, change detection |
+| `test_wiki_mcp_server.py` | Tool listing, `wiki_search`, `wiki_get_page`, `wiki_list_pages`, `wiki_save_query`, dispatch/error resilience |
+| `test_wiki_linter.py` | Orphan detection, contradiction finding, implicit concept extraction, lint report, auto-commit |
+| `test_wiki_query_saver.py` | Query save, YAML frontmatter, naming, collision handling, index rebuild |
+| `test_wiki_search.py` | BM25 fallback search, relevance ranking, qmd availability detection |
 
 ---
 
@@ -592,6 +606,8 @@ p.ingest_transcript('raw_content/research_digest_2026-04-20.txt', '2026-04-20')
 
 After ingestion, `wiki/index.md` is rebuilt and a git commit is created automatically if `auto_commit=True`.
 
+**Source URL injection (Python-side, no LLM):** `ingest_transcript` parses `<!-- WIKI_SOURCE_URL: ... -->` markers embedded by the transcript generator and injects the original arXiv / Hugging Face URLs directly into concept page `sources:` frontmatter. This guarantees reliable URL provenance — the LLM is only involved in concept extraction, not URL retrieval.
+
 ---
 
 ## Dependencies
@@ -629,12 +645,36 @@ research_papers/
 ├── prompts/
 │   ├── narrator_system.txt      # System prompt for deep-dive narration
 │   └── scorer_system.txt        # System prompt for relevance scoring
+├── wiki_engine/
+│   ├── __init__.py
+│   ├── classifier.py        # Section classification + extract_source_urls_from_section
+│   ├── ingestion.py         # WikiIngestionEngine (transcript → concept/source pages)
+│   ├── index_builder.py     # Rebuilds wiki/index.md
+│   ├── git_hooks.py         # WikiGitManager (auto-commit wiki changes)
+│   ├── linter.py            # Orphan/contradiction/implicit-concept detection
+│   ├── models.py            # WikiPageMeta, ExtractedConcept, ClassifiedSection
+│   ├── mcp_server.py        # MCP stdio server (4 tools)
+│   ├── query_saver.py       # Saves Q&A exchanges to wiki/queries/
+│   ├── search.py            # BM25 + qmd hybrid search
+│   ├── utils.py             # load_prompt, slugify, format_page
+│   └── prompts/
+│       ├── extract_concepts_system.txt
+│       └── update_concept_system.txt
 └── tests/
     ├── __init__.py
+    ├── conftest.py              # sys.path setup; pytest_configure stubs for optional deps
     ├── test_email_parser.py
     ├── test_paper_downloader.py
     ├── test_paper_scorer.py
     ├── test_transcript_generator.py
     ├── test_pipeline.py
-    └── test_feedback.py
+    ├── test_feedback.py
+    ├── test_wiki_classifier.py
+    ├── test_wiki_ingestion.py
+    ├── test_wiki_e2e.py
+    ├── test_wiki_git_hooks.py
+    ├── test_wiki_mcp_server.py
+    ├── test_wiki_linter.py
+    ├── test_wiki_query_saver.py
+    └── test_wiki_search.py
 ```
