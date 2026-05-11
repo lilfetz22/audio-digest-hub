@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import List
 
@@ -93,6 +94,33 @@ class TranscriptClassifier:
         except Exception:
             logger.exception("Unexpected error during classification")
             return ClassifiedSection(text=text, category="Other", title="Unclassified")
+
+
+# Matches markers written by the transcript generator, e.g.:
+#   <!-- WIKI_SOURCE_URL: https://arxiv.org/abs/2501.12345 -->
+_WIKI_SOURCE_URL_RE = re.compile(
+    r"<!--\s*WIKI_SOURCE_URL:\s*(https?://\S+?)\s*-->"
+)
+
+
+def extract_source_urls_from_section(text: str) -> List[str]:
+    """Return paper URLs embedded by the transcript generator as HTML comments.
+
+    This is purely Python — no LLM is involved.  The transcript generator
+    writes ``<!-- WIKI_SOURCE_URL: <url> -->`` before every paper section;
+    this function parses those markers so the ingestion engine can inject
+    the original arXiv / Hugging Face URL into wiki concept pages directly.
+
+    Args:
+        text: A single transcript section (may contain zero or more markers).
+
+    Returns:
+        Ordered, deduplicated list of URLs found in the section.
+    """
+    seen: dict[str, None] = {}
+    for url in _WIKI_SOURCE_URL_RE.findall(text):
+        seen[url] = None
+    return list(seen.keys())
 
 
 def split_transcript_into_sections(transcript_text: str) -> List[str]:
