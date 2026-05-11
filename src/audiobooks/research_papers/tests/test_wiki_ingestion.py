@@ -254,3 +254,48 @@ class TestWikiIngestionEngine:
         assert WikiIngestionEngine._slugify("Mixture of Experts") == "mixture_of_experts"
         assert WikiIngestionEngine._slugify("State Space Models") == "state_space_models"
         assert WikiIngestionEngine._slugify("GPT-4 Architecture") == "gpt-4_architecture"
+
+    def test_wiki_source_url_marker_preserved_in_concept(
+        self, tmp_wiki, tmp_path, mock_llm_client
+    ):
+        """WIKI_SOURCE_URL markers written by the transcript generator are
+        parsed by Python and injected into concept page sources — the LLM is
+        not involved in URL extraction."""
+        paper_url = "https://arxiv.org/abs/2501.99999"
+
+        # Simulate a transcript that already has the URL marker embedded by
+        # GeminiTranscriptGenerator.generate().
+        transcript = tmp_path / "research_digest_2026-05-01.txt"
+        transcript.write_text(
+            f"<!-- WIKI_SOURCE_URL: {paper_url} -->\n"
+            "Today we explore Mixture of Experts architectures. "
+            "The key idea is that not all parameters need to be active for every input. "
+            "By routing tokens to specialized sub-networks, we can scale model capacity "
+            "without proportionally increasing compute costs.\n\n"
+            "In contrast, State Space Models offer an alternative to attention mechanisms. "
+            "They provide linear-time sequence modeling through structured state transitions, "
+            "which is particularly beneficial for very long sequences where quadratic "
+            "attention becomes prohibitive.",
+            encoding="utf-8",
+        )
+
+        engine = WikiIngestionEngine(
+            wiki_dir=str(tmp_wiki),
+            llm_client=mock_llm_client,
+        )
+        engine.ingest_transcript(str(transcript), "2026-05-01")
+
+        # At least one concept page should contain the original paper URL.
+        concept_files = list((tmp_wiki / "concepts").glob("*.md"))
+        assert concept_files, "No concept pages were created"
+
+        all_sources: list[str] = []
+        for f in concept_files:
+            content = f.read_text(encoding="utf-8")
+            parts = content.split("---", 2)
+            meta = yaml.safe_load(parts[1])
+            all_sources.extend(meta.get("sources", []))
+
+        assert paper_url in all_sources, (
+            f"Expected '{paper_url}' in concept sources but got: {all_sources}"
+        )
