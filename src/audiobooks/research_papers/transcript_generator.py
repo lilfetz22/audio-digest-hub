@@ -109,12 +109,18 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
                 sampled, date_str
             )
 
-        parts = [t.strip() for t in deep_dive_transcripts]
+        # Prepend a machine-readable URL marker to each section so the wiki
+        # ingestion engine can associate the original paper URL with the
+        # concepts it extracts — without relying on the LLM to re-find URLs.
+        annotated_parts = []
+        for paper, transcript in zip(deep_dive_papers, deep_dive_transcripts):
+            marker = f"<!-- WIKI_SOURCE_URL: {paper.url} -->"
+            annotated_parts.append(f"{marker}\n{transcript.strip()}")
         if interrogator_section:
-            parts.append(
+            annotated_parts.append(
                 f"=== THE INTERROGATOR ===\n\n{interrogator_section.strip()}"
             )
-        return "\n\n".join(parts)
+        return "\n\n".join(annotated_parts)
 
     def _load_system_prompt(self) -> str:
         """Load the narrator system prompt."""
