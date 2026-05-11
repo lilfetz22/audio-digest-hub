@@ -233,19 +233,26 @@ class TestEmbeddingPaperScorer:
 
     @staticmethod
     def _mock_embeddings(n_papers: int):
-        """Return a simple list of zero vectors usable as mock encode() output."""
-        import torch
-        return torch.zeros(n_papers + 1, 384)
+        """Return a list of zero vectors usable as mock encode() output.
+
+        Uses plain Python lists so torch is not required in the test environment.
+        The production code only indexes/slices this value; actual vector math is
+        handled by the mocked cos_sim, so content doesn't matter.
+        A MagicMock supports any attribute/method call, so if the production code
+        ever calls tensor methods the test will fail at the assertion rather than
+        silently passing with wrong data.
+        """
+        stub_embedding = MagicMock(name="embedding_vector")
+        return [stub_embedding] * (n_papers + 1)
 
     # --- Basic correctness ---
 
     @patch("sentence_transformers.util.cos_sim")
     def test_returns_list_of_scored_papers(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Should return one ScoredPaper per input paper."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        mock_cos_sim.return_value = torch.tensor([[0.8]])
+        mock_cos_sim.return_value = 0.8
 
         result = scorer.score(sample_arxiv_papers)
 
@@ -255,10 +262,9 @@ class TestEmbeddingPaperScorer:
     @patch("sentence_transformers.util.cos_sim")
     def test_scores_are_in_range_1_to_10(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Scores must be in [1, 10] for all similarity values."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        mock_cos_sim.return_value = torch.tensor([[0.5]])
+        mock_cos_sim.return_value = 0.5
 
         result = scorer.score(sample_arxiv_papers)
 
@@ -268,10 +274,9 @@ class TestEmbeddingPaperScorer:
     @patch("sentence_transformers.util.cos_sim")
     def test_similarity_zero_maps_to_score_1(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Cosine similarity of 0.0 should map to score 1.0."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        mock_cos_sim.return_value = torch.tensor([[0.0]])
+        mock_cos_sim.return_value = 0.0
 
         result = scorer.score(sample_arxiv_papers)
 
@@ -280,10 +285,9 @@ class TestEmbeddingPaperScorer:
     @patch("sentence_transformers.util.cos_sim")
     def test_similarity_one_maps_to_score_10(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Cosine similarity of 1.0 should map to score 10.0."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        mock_cos_sim.return_value = torch.tensor([[1.0]])
+        mock_cos_sim.return_value = 1.0
 
         result = scorer.score(sample_arxiv_papers)
 
@@ -294,15 +298,11 @@ class TestEmbeddingPaperScorer:
     @patch("sentence_transformers.util.cos_sim")
     def test_top_n_papers_get_deep_dive_tier(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Top top_n papers (by score) should be deep_dive, rest summary."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        # Return distinct similarities per call so papers sort deterministically
-        mock_cos_sim.side_effect = [
-            torch.tensor([[0.9]]),
-            torch.tensor([[0.5]]),
-            torch.tensor([[0.2]]),
-        ]
+        # Return distinct similarities per call so papers sort deterministically.
+        # side_effect iterates the list: first call → 0.9, second → 0.5, third → 0.2
+        mock_cos_sim.side_effect = [0.9, 0.5, 0.2]
 
         result = scorer.score(sample_arxiv_papers)
 
@@ -314,14 +314,10 @@ class TestEmbeddingPaperScorer:
     @patch("sentence_transformers.util.cos_sim")
     def test_result_is_sorted_by_score_descending(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Result list should be sorted highest score first."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        mock_cos_sim.side_effect = [
-            torch.tensor([[0.3]]),
-            torch.tensor([[0.9]]),
-            torch.tensor([[0.6]]),
-        ]
+        # side_effect iterates the list: first call → 0.3, second → 0.9, third → 0.6
+        mock_cos_sim.side_effect = [0.3, 0.9, 0.6]
 
         result = scorer.score(sample_arxiv_papers)
 
@@ -354,10 +350,9 @@ class TestEmbeddingPaperScorer:
     @patch("sentence_transformers.util.cos_sim")
     def test_reasoning_contains_similarity_value(self, mock_cos_sim, scorer, sample_arxiv_papers):
         """Reasoning field should document the embedding similarity score."""
-        import torch
         scorer._model = MagicMock()
         scorer._model.encode.return_value = self._mock_embeddings(len(sample_arxiv_papers))
-        mock_cos_sim.return_value = torch.tensor([[0.75]])
+        mock_cos_sim.return_value = 0.75
 
         result = scorer.score(sample_arxiv_papers)
 
