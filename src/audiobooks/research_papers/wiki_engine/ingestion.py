@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import yaml
 
 from .models import WikiPageMeta, ExtractedConcept, ClassifiedSection
-from .classifier import TranscriptClassifier, split_transcript_into_sections
+from .classifier import TranscriptClassifier, split_transcript_into_sections, extract_source_urls_from_section
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
 from .utils import load_prompt, slugify, format_page
@@ -165,6 +165,16 @@ class WikiIngestionEngine:
         sections = split_transcript_into_sections(transcript_text)
         classified = self.classifier.classify(sections)
 
+        # Inject Python-extracted source URLs into each classified section.
+        # This is intentionally done by Python code, not the LLM, so that the
+        # original arXiv / Hugging Face URLs reliably make it into wiki pages.
+        for cs in classified:
+            python_urls = extract_source_urls_from_section(cs.text)
+            if python_urls:
+                # Python URLs come first; deduplicate while preserving order.
+                merged = list(dict.fromkeys(python_urls + cs.paper_urls))
+                cs.paper_urls = merged
+
         # Step 3: Extract concepts from each section
         for section in classified:
             concepts = self._extract_concepts(section)
@@ -235,7 +245,14 @@ class WikiIngestionEngine:
                     confidence=item.get("confidence", 0.5),
                     categories=item.get("categories", [section.category]),
                     related_concepts=item.get("related_concepts", []),
-                    sources=item.get("sources", section.paper_urls),
+                    # Always include Python-extracted paper URLs; supplement
+                    # with any sources the LLM also identified.  dict.fromkeys
+                    # preserves insertion order and removes duplicates.
+                    sources=list(
+                        dict.fromkeys(
+                            section.paper_urls + item.get("sources", [])
+                        )
+                    ),
                 )
                 concepts.append(concept)
             return concepts
