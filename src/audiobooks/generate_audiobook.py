@@ -10,6 +10,7 @@ import re
 import logging
 import subprocess
 import time
+import socket
 import glob
 from pathlib import Path
 
@@ -126,13 +127,37 @@ def verify_authentication(api_url, api_key):
         return False
 
 
+def _requests_get_with_retry(url, headers, timeout=30, max_retries=3, backoff_base=2):
+    """
+    Performs a GET request with exponential-backoff retries on transient network errors
+    (ConnectionError, Timeout). HTTP-level errors (4xx/5xx) are not retried.
+    Raises the last exception if all retries are exhausted.
+    """
+    for attempt in range(max_retries):
+        try:
+            # Use a fresh Session per attempt to avoid reusing a stale pooled connection.
+            with requests.Session() as session:
+                response = session.get(url, headers=headers, timeout=timeout)
+            return response
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            if attempt < max_retries - 1:
+                wait = backoff_base ** attempt
+                logger.warning(
+                    f"Transient network error on attempt {attempt + 1}/{max_retries}: {exc}. "
+                    f"Retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            else:
+                raise
+
+
 def fetch_sources(api_url, api_key):
     """Fetches newsletter sources from the Supabase Edge Function."""
     logger.info("Fetching newsletter sources from Web App...")
     headers = {"Authorization": f"Bearer {api_key}"}
     url = f"{api_url}/sources"
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = _requests_get_with_retry(url, headers, timeout=30)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -147,7 +172,7 @@ def find_last_upload_date(api_url, api_key):
     url = f"{api_url}/audiobooks"
 
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = _requests_get_with_retry(url, headers, timeout=30)
 
         if response.status_code != 200:
             logger.warning(
@@ -205,7 +230,7 @@ def check_existing_audiobook(api_url, api_key, title):
 
     try:
         # Get all audiobooks for the user
-        response = requests.get(url, headers=headers, timeout=30)
+        response = _requests_get_with_retry(url, headers, timeout=30)
 
         if response.status_code != 200:
             logger.warning(
@@ -249,6 +274,25 @@ def authenticate_gmail(token_file, credentials_file):
         with open(token_file, "w") as token:
             token.write(creds.to_json())
     return creds
+
+
+def _execute_with_retry(request_obj, max_retries=3, backoff_base=2):
+    """Execute a Google API request, retrying on transient network errors."""
+    for attempt in range(max_retries):
+        try:
+            return request_obj.execute()
+        except (TimeoutError, socket.timeout, ConnectionResetError, OSError) as exc:
+            if attempt < max_retries - 1:
+                wait = backoff_base ** attempt
+                logger.warning(
+                    f"Network error on attempt {attempt + 1}/{max_retries}: {exc}. "
+                    f"Retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            else:
+                raise
+        except HttpError:
+            raise  # HTTP-level errors (4xx/5xx) are not transient; propagate immediately
 
 
 def remove_markdown_links(text):
@@ -405,9 +449,9 @@ def process_emails(service, sources, target_date_str):
     query = f"({sender_query}) after:{after_date} before:{before_date}"
     logger.info(f"Using Gmail query: {query}")
     try:
-        results = service.users().messages().list(userId="me", q=query).execute()
+        results = _execute_with_retry(service.users().messages().list(userId="me", q=query))
         messages = results.get("messages", [])
-    except HttpError as error:
+    except (HttpError, TimeoutError, OSError) as error:
         logger.error(f"An error occurred fetching emails: {error}", exc_info=True)
         return "", []
     if not messages:
@@ -417,7 +461,16 @@ def process_emails(service, sources, target_date_str):
         s["sender_email"].lower(): s["custom_name"] for s in sources
     }
     for msg_info in reversed(messages):
-        msg = service.users().messages().get(userId="me", id=msg_info["id"]).execute()
+        try:
+            msg = _execute_with_retry(
+                service.users().messages().get(userId="me", id=msg_info["id"])
+            )
+        except (HttpError, TimeoutError, OSError) as exc:
+            logger.error(
+                f"Failed to fetch email {msg_info['id']} after retries: {exc}. Skipping.",
+                exc_info=True,
+            )
+            continue
         if "UNREAD" in msg.get("labelIds", []):
             try:
                 subject = next(
@@ -431,10 +484,12 @@ def process_emails(service, sources, target_date_str):
                 logger.info(
                     f"Marking email as read: '{subject[:50]}...' (ID: {msg_info['id']})"
                 )
-                service.users().messages().modify(
-                    userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
-                ).execute()
-            except HttpError as e:
+                _execute_with_retry(
+                    service.users().messages().modify(
+                        userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
+                    )
+                )
+            except (HttpError, TimeoutError, OSError) as e:
                 logger.warning(
                     f"Could not mark email {msg_info['id']} as read. Error: {e}. Continuing."
                 )

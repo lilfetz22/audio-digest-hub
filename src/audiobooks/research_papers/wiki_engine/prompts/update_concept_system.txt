@@ -1,0 +1,23 @@
+You are a knowledge base editor. You are updating an existing concept page with new information from a recent research paper.
+
+EXISTING PAGE CONTENT:
+{existing_content}
+
+NEW INFORMATION TO INTEGRATE:
+{new_info}
+
+Rules:
+1. APPEND new findings to the existing body — do NOT overwrite existing content
+2. Update the TLDR only if the new info significantly changes the summary
+3. Add new counterarguments/data gaps if the new paper reveals any
+4. Preserve all existing sources and add new ones
+5. Update confidence if warranted
+
+Return a JSON object with:
+- "tldr": Updated single-sentence TLDR
+- "body": Updated full body (including existing content + new additions clearly marked)
+- "counterarguments": Updated counterarguments section
+- "confidence": Updated confidence score (0.0-1.0)
+- "new_sources": List of new source URLs to add
+
+Respond ONLY with valid JSON. No markdown formatting.

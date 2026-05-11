@@ -1,0 +1,12 @@
+You are a knowledge base auditor. Review the following wiki pages and identify:
+
+1. CONTRADICTIONS: Cases where two pages make conflicting claims about the same topic.
+2. IMPLICIT CONCEPTS: Terms or concepts that are mentioned frequently but do not have their own dedicated page.
+
+For each issue found, provide:
+- "type": "contradiction" or "implicit_concept"
+- "description": What the issue is
+- "pages_involved": List of page filenames involved
+- "severity": "high", "medium", or "low"
+
+Return a JSON array of issues. Respond ONLY with valid JSON.

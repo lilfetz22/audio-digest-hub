@@ -201,7 +201,13 @@ Scores **Arxiv papers only** (HuggingFace papers bypass scoring entirely). Uses 
 
 Generates the final podcast transcript using sequential Gemini API calls with rate limiting:
 
-**Deep-dive papers** — each paper gets its **own individual LLM call** with the full paper text, producing a thorough standalone narration segment.
+**Deep-dive papers** — each paper gets its **own individual LLM call** with the full paper text, producing a thorough standalone narration segment. Each section is prefixed with a machine-readable HTML comment:
+
+```
+<!-- WIKI_SOURCE_URL: https://arxiv.org/abs/2501.12345 -->
+```
+
+This marker lets the wiki ingestion engine reliably associate the original paper URL with the concepts it extracts, without asking the LLM to re-discover URLs from prose text.
 
 **Summary papers** — formatted as **plain text without any LLM call**. Papers are grouped by Arxiv category with human-readable headings (e.g., "Computer Science", "Statistics") and listed with title + abstract. This section is appended after the deep-dive transcripts.
 
@@ -446,10 +452,161 @@ pytest tests/test_feedback.py -v
 |-----------|----------|
 | `test_email_parser.py` | Arxiv HTML + plain-text parsing, HuggingFace parsing, category extraction, deduplication, edge cases |
 | `test_paper_downloader.py` | Arxiv PDF extraction, HuggingFace page extraction, text cleaning, rate limiting, size limits, error handling |
-| `test_paper_scorer.py` | Scoring logic, tiering, batch processing, preference profile injection, HuggingFace bypass, JSON parsing, error fallback |
+| `test_paper_scorer.py` | Scoring logic, tiering, batch processing, preference profile injection, HuggingFace bypass, JSON parsing, error fallback; embedding scorer (similarity mapping, MagicMock stubs for optional deps) |
 | `test_transcript_generator.py` | Prompt construction, per-paper generation, batch mode, summary text assembly, category grouping |
 | `test_pipeline.py` | Full end-to-end orchestration, per-category selection, idempotency, Supabase metadata push, error scenarios |
 | `test_feedback.py` | Profile loading/writing, interest extraction, growth capping, FeedbackClient API calls |
+| `test_wiki_classifier.py` | Section classification, `split_transcript_into_sections`, `extract_source_urls_from_section` (arXiv/HF markers, deduplication, malformed markers) |
+| `test_wiki_ingestion.py` | Source page creation, concept extraction, upsert, index rebuild, auto-commit, WIKI_SOURCE_URL marker preservation in concept frontmatter |
+| `test_wiki_e2e.py` | Full ingestion pipeline, index rebuild, search, query save/find, lint |
+| `test_wiki_git_hooks.py` | WikiGitManager auto-commit on new/modified files, change detection |
+| `test_wiki_mcp_server.py` | Tool listing, `wiki_search`, `wiki_get_page`, `wiki_list_pages`, `wiki_save_query`, dispatch/error resilience |
+| `test_wiki_linter.py` | Orphan detection, contradiction finding, implicit concept extraction, lint report, auto-commit |
+| `test_wiki_query_saver.py` | Query save, YAML frontmatter, naming, collision handling, index rebuild |
+| `test_wiki_search.py` | BM25 fallback search, relevance ranking, qmd availability detection |
+
+---
+
+---
+
+## LLM Wiki & MCP Server
+
+The wiki pipeline transforms daily transcripts into a versioned knowledge base and exposes it to LLM agents (GitHub Copilot, Claude Desktop, etc.) via a local MCP (Model Context Protocol) server.
+
+### Wiki Structure
+
+```
+wiki/
+├── index.md          # Auto-rebuilt on every ingestion run
+├── sources/          # One page per daily transcript
+├── concepts/         # Synthesized concept pages (upserted, never overwritten)
+└── queries/          # Saved Q&A exchanges
+```
+
+### MCP Tools Available to Agents
+
+| Tool | What it does |
+|------|-------------|
+| `wiki_search` | Hybrid BM25+semantic search over all wiki pages |
+| `wiki_get_page` | Read full Markdown content of a specific page |
+| `wiki_list_pages` | List all pages, optionally filtered by type (`concept`, `source`, `query-result`) |
+| `wiki_save_query` | Persist a Q&A exchange to `wiki/queries/` so it survives beyond the chat session |
+
+---
+
+### Installation
+
+Install the MCP Python SDK (one-time):
+
+```powershell
+cd src\audiobooks
+pip install mcp
+```
+
+---
+
+### Smoke Testing the MCP Server
+
+#### 1. Unit tests (no server process needed)
+
+```powershell
+cd src\audiobooks\research_papers
+python -m pytest tests/test_wiki_mcp_server.py -v
+```
+
+All 19 tests exercise the tool handlers in isolation with mocked dependencies — no real wiki files or network calls required.
+
+#### 2. JSON-RPC smoke test (raw stdio)
+
+Verify the server starts and responds to a `tools/list` request:
+
+```powershell
+cd src\audiobooks\research_papers
+python tests/smoke_test_mcp_server.py
+```
+
+A valid response looks like:
+```
+OK — server returned 4 tool(s):
+  • wiki_search
+  • wiki_get_page
+  • wiki_list_pages
+  • wiki_save_query
+```
+
+> **Note:** The MCP protocol requires an `initialize` → `notifications/initialized` handshake
+> before any tool calls. Piping a bare `tools/list` message directly to the server will fail
+> with *"Received request before initialization was complete"* — the helper script above
+> performs the full handshake automatically.
+
+#### 3. MCP Inspector (browser UI — recommended)
+
+The inspector lets you call each tool manually and inspect inputs/outputs:
+
+```powershell
+# One-time install
+npm install -g @modelcontextprotocol/inspector
+
+# Launch — opens a browser tab automatically
+npx @modelcontextprotocol/inspector python -m wiki_engine.mcp_server
+```
+
+From the browser UI you can:
+- Click **List Tools** to confirm all 4 tools appear
+- Enter a query and call `wiki_search` directly
+- Browse pages via `wiki_list_pages`
+- Read a specific page via `wiki_get_page`
+
+---
+
+### Running in Production (VS Code Copilot)
+
+The `.vscode/mcp.json` file at the project root registers the server with VS Code automatically.
+
+1. Open the workspace in VS Code
+2. Open the **GitHub Copilot Chat** panel
+3. Click the **Tools** icon (plug icon) in the chat input bar — you should see `llm-wiki` listed with all 4 tools
+4. In a chat, ask Copilot to use the tools, e.g.:
+   - *"Search the wiki for information about attention mechanisms"*
+   - *"List all concept pages in the wiki"*
+   - *"Save this answer about LoRA to the wiki"*
+
+The server process is started automatically by VS Code when a tool call is needed and shut down when the session ends. No manual process management required.
+
+#### Running in Production (Claude Desktop)
+
+Add this block to your `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "llm-wiki": {
+      "command": "python",
+      "args": ["-m", "wiki_engine.mcp_server"],
+      "cwd": "src\\audiobooks\\research_papers"
+    }
+  }
+}
+```
+
+Restart Claude Desktop and the wiki tools will appear in the tool palette.
+
+---
+
+### Ingesting a New Transcript into the Wiki
+
+```powershell
+cd src\audiobooks\research_papers
+python -c "
+from wiki_engine.ingestion import WikiIngestionEngine
+p = WikiIngestionEngine(wiki_dir='wiki', auto_commit=True)
+p.ingest_transcript('raw_content/research_digest_2026-04-20.txt', '2026-04-20')
+"
+```
+
+After ingestion, `wiki/index.md` is rebuilt and a git commit is created automatically if `auto_commit=True`.
+
+**Source URL injection (Python-side, no LLM):** `ingest_transcript` parses `<!-- WIKI_SOURCE_URL: ... -->` markers embedded by the transcript generator and injects the original arXiv / Hugging Face URLs directly into concept page `sources:` frontmatter. This guarantees reliable URL provenance — the LLM is only involved in concept extraction, not URL retrieval.
 
 ---
 
@@ -488,12 +645,36 @@ research_papers/
 ├── prompts/
 │   ├── narrator_system.txt      # System prompt for deep-dive narration
 │   └── scorer_system.txt        # System prompt for relevance scoring
+├── wiki_engine/
+│   ├── __init__.py
+│   ├── classifier.py        # Section classification + extract_source_urls_from_section
+│   ├── ingestion.py         # WikiIngestionEngine (transcript → concept/source pages)
+│   ├── index_builder.py     # Rebuilds wiki/index.md
+│   ├── git_hooks.py         # WikiGitManager (auto-commit wiki changes)
+│   ├── linter.py            # Orphan/contradiction/implicit-concept detection
+│   ├── models.py            # WikiPageMeta, ExtractedConcept, ClassifiedSection
+│   ├── mcp_server.py        # MCP stdio server (4 tools)
+│   ├── query_saver.py       # Saves Q&A exchanges to wiki/queries/
+│   ├── search.py            # BM25 + qmd hybrid search
+│   ├── utils.py             # load_prompt, slugify, format_page
+│   └── prompts/
+│       ├── extract_concepts_system.txt
+│       └── update_concept_system.txt
 └── tests/
     ├── __init__.py
+    ├── conftest.py              # sys.path setup; pytest_configure stubs for optional deps
     ├── test_email_parser.py
     ├── test_paper_downloader.py
     ├── test_paper_scorer.py
     ├── test_transcript_generator.py
     ├── test_pipeline.py
-    └── test_feedback.py
+    ├── test_feedback.py
+    ├── test_wiki_classifier.py
+    ├── test_wiki_ingestion.py
+    ├── test_wiki_e2e.py
+    ├── test_wiki_git_hooks.py
+    ├── test_wiki_mcp_server.py
+    ├── test_wiki_linter.py
+    ├── test_wiki_query_saver.py
+    └── test_wiki_search.py
 ```
