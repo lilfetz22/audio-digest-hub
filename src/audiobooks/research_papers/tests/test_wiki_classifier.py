@@ -8,6 +8,7 @@ import pytest
 from wiki_engine.classifier import (
     TranscriptClassifier,
     split_transcript_into_sections,
+    extract_source_urls_from_section,
     _chunk_text,
 )
 from wiki_engine.models import ClassifiedSection
@@ -123,3 +124,50 @@ class TestSplitTranscript:
         for chunk in chunks:
             # Allow some overflow due to paragraph boundaries
             assert len(chunk) < 1500
+
+
+class TestExtractSourceUrls:
+    """Tests for extract_source_urls_from_section (Python-owned URL extraction)."""
+
+    def test_extracts_single_arxiv_url(self):
+        """Detects a single arXiv URL from a WIKI_SOURCE_URL marker."""
+        text = "<!-- WIKI_SOURCE_URL: https://arxiv.org/abs/2501.12345 -->\nSome transcript content."
+        urls = extract_source_urls_from_section(text)
+        assert urls == ["https://arxiv.org/abs/2501.12345"]
+
+    def test_extracts_huggingface_url(self):
+        """Detects a Hugging Face paper URL."""
+        text = "<!-- WIKI_SOURCE_URL: https://huggingface.co/papers/2501.99999 -->\nContent here."
+        urls = extract_source_urls_from_section(text)
+        assert urls == ["https://huggingface.co/papers/2501.99999"]
+
+    def test_extracts_multiple_markers(self):
+        """Returns all URLs when multiple markers are present in a section."""
+        text = (
+            "<!-- WIKI_SOURCE_URL: https://arxiv.org/abs/2501.00001 -->\n"
+            "First paper content.\n\n"
+            "<!-- WIKI_SOURCE_URL: https://arxiv.org/abs/2501.00002 -->\n"
+            "Second paper content."
+        )
+        urls = extract_source_urls_from_section(text)
+        assert "https://arxiv.org/abs/2501.00001" in urls
+        assert "https://arxiv.org/abs/2501.00002" in urls
+
+    def test_deduplicates_repeated_marker(self):
+        """Same URL appearing twice is returned only once."""
+        url = "https://arxiv.org/abs/2501.12345"
+        text = f"<!-- WIKI_SOURCE_URL: {url} -->\n<!-- WIKI_SOURCE_URL: {url} -->\nContent."
+        urls = extract_source_urls_from_section(text)
+        assert urls.count(url) == 1
+
+    def test_returns_empty_for_no_markers(self):
+        """Returns an empty list when the section has no WIKI_SOURCE_URL markers."""
+        text = "No markers here. Just plain transcript text about MoE architectures."
+        urls = extract_source_urls_from_section(text)
+        assert urls == []
+
+    def test_ignores_malformed_marker(self):
+        """Does not extract from a marker that lacks a valid http URL."""
+        text = "<!-- WIKI_SOURCE_URL: not-a-url -->\nContent."
+        urls = extract_source_urls_from_section(text)
+        assert urls == []
