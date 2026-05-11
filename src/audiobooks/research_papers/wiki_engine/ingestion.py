@@ -169,11 +169,9 @@ class WikiIngestionEngine:
         # This is intentionally done by Python code, not the LLM, so that the
         # original arXiv / Hugging Face URLs reliably make it into wiki pages.
         for cs in classified:
-            python_urls = extract_source_urls_from_section(cs.text)
-            if python_urls:
-                # Python URLs come first; deduplicate while preserving order.
-                merged = list(dict.fromkeys(python_urls + cs.paper_urls))
-                cs.paper_urls = merged
+            cs.paper_urls = self._merge_source_urls(
+                extract_source_urls_from_section(cs.text), cs.paper_urls
+            )
 
         # Step 3: Extract concepts from each section
         for section in classified:
@@ -197,6 +195,11 @@ class WikiIngestionEngine:
             )
 
         return result
+
+    @staticmethod
+    def _merge_source_urls(priority_urls: List[str], existing_urls: List[str]) -> List[str]:
+        """Merge two URL lists, priority_urls first, deduplicating while preserving order."""
+        return list(dict.fromkeys(priority_urls + (existing_urls or [])))
 
     def _create_source_page(self, transcript_text: str, date_str: str) -> Path:
         """Create a source page for the daily transcript."""
