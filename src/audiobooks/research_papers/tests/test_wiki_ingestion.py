@@ -293,6 +293,7 @@ class TestWikiIngestionEngine:
         for f in concept_files:
             content = f.read_text(encoding="utf-8")
             parts = content.split("---", 2)
+            assert len(parts) > 1, f"Missing frontmatter in {f}"
             meta = yaml.safe_load(parts[1])
             all_sources.extend(meta.get("sources", []))
 
