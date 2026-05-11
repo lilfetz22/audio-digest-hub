@@ -117,10 +117,7 @@ def extract_source_urls_from_section(text: str) -> List[str]:
     Returns:
         Ordered, deduplicated list of URLs found in the section.
     """
-    seen: dict[str, None] = {}
-    for url in _WIKI_SOURCE_URL_RE.findall(text):
-        seen[url] = None
-    return list(seen.keys())
+    return list(dict.fromkeys(_WIKI_SOURCE_URL_RE.findall(text)))
 
 
 def split_transcript_into_sections(transcript_text: str) -> List[str]:
