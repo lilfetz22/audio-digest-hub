@@ -3,6 +3,7 @@
 import logging
 import random
 import time
+from itertools import zip_longest
 from pathlib import Path
 from typing import List, Tuple
 
@@ -113,7 +114,9 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         # ingestion engine can associate the original paper URL with the
         # concepts it extracts — without relying on the LLM to re-find URLs.
         annotated_parts = []
-        for paper, transcript in zip(deep_dive_papers, deep_dive_transcripts):
+        for paper, transcript in zip_longest(deep_dive_papers, deep_dive_transcripts, fillvalue=None):
+            if paper is None or transcript is None:
+                raise ValueError("Expected equal counts of deep dive papers and transcripts")
             marker = f"<!-- WIKI_SOURCE_URL: {paper.url} -->"
             annotated_parts.append(f"{marker}\n{transcript.strip()}")
         if interrogator_section:
