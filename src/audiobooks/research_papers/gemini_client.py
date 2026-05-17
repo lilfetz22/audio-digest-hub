@@ -37,7 +37,7 @@ class GeminiClientWithFallback:
     def __init__(
         self,
         api_key: str,
-        model_name: str = "gemini-3.1-flash-lite-preview",
+        model_name: str = "gemini-3.1-flash-lite",
         backup_api_key: str | None = None,
         paid_api_key: str | None = None,
         paid_model_name: str | None = None,
