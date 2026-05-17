@@ -11,6 +11,7 @@ Usage examples:
 """
 import argparse
 import configparser
+import gc
 import json
 import logging
 import math
@@ -213,6 +214,8 @@ def split_and_upload_chunks(
         )
 
         success = upload_single_file(api_url, api_key, chunk_filename, metadata)
+        del chunk
+        gc.collect()
         if not success:
             logger.error("Upload failed for chunk %s. Stopping further uploads.", i + 1)
             return False
