@@ -103,7 +103,7 @@ Uses existing `config.ini` pattern. New section:
 ```ini
 [wiki]
 gemini_api_key = %(gemini_api_key)s
-model_name = gemini-3.1-flash-lite-preview
+model_name = gemini-3.1-flash-lite
 wiki_dir = wiki
 transcript_dir = raw_content
 auto_commit = true
