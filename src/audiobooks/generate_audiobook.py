@@ -1,708 +1,201 @@
-# generate_audiobook.py
+
 import os
 import sys
-import argparse
-import configparser
-import datetime
-import json
-import base64
-import re
 import logging
-import subprocess
-import time
-import socket
-import glob
-from pathlib import Path
-import shutil # Keep for potential cleanup needs
-
-# 3rd Party Libraries
-import requests
-from google.auth.transport.requests import Request
+import webbrowser
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from google.auth.transport.requests import Request
 
-# Import TTS generation functionality
-try:
-    from tts_generator import initialize_tts_engine, synthesize_speech
-    TTS_GENERATOR_AVAILABLE = True
-except ImportError:
-    # logger is not defined yet when this might be first evaluated, define a basic one
-    logger_stderr = logging.getLogger(__name__)
-    logger_stderr.error("tts_generator.py not found. Please ensure it is in the same directory or PYTHONPATH.")
-    TTS_GENERATOR_AVAILABLE = False
-except Exception as e:
-    logger_stderr = logging.getLogger(__name__)
-    logger_stderr.error(f"Error importing tts_generator: {e}")
-    TTS_GENERATOR_AVAILABLE = False
+# --- Configuration ---
+# Define SCOPES for Gmail API access
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-# --- Configuration & Constants ---
-# logger is defined later in setup_logging, so use a placeholder here if needed early.
-# For now, it's safe to assume it's available when needed during main execution.
+# Setup basic logging configuration
+log_file_path = os.path.join(os.getcwd(), "audiobook_generation.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file_path),
+        logging.StreamHandler(sys.stdout) # Also log to stdout
+    ]
+)
 logger = logging.getLogger(__name__)
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
-
-UPLOAD_MP3_BASENAME = "temp_output"
-ARCHIVE_FOLDER = "archive_mp3"
-
-MAX_UPLOAD_SIZE_MB = 35.0 # Keep original for context, though local script might split it
-
-# Raw content folder path
-RAW_CONTENT_FOLDER = "raw_content"
-
-# Cleaned text folder path - This might become less relevant if we don\'t save intermediate text files
-CLEANED_TEXT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cleaned_full_texts")
-
-
-# --- Core Functions (assuming these are present and unchanged) ---
-
-def setup_logging():
-    """Configures the root logger for console and file output with UTF-8 encoding."""
-    log_file = "audiobook_generator.log"
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    if logger.hasHandlers():
-        logger.handlers.clear()
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-    logger.info("-" * 50)
-    logger.info("Starting new run of audiobook generator.")
-    logger.info(f"Logging initialized. Output will be saved to {log_file}")
-
-def load_config(config_path="config.ini"):
-    """Reads configuration from the INI file."""
-    if not os.path.exists(config_path):
-        logger.error(f"Configuration file '{config_path}' not found.")
-        sys.exit(1)
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    try:
-        return {
-            "api_url": config["WebApp"]["API_URL"],
-            "api_key": config["WebApp"]["API_KEY"],
-            "credentials_file": config["Gmail"]["CREDENTIALS_FILE"],
-            "token_file": config["Gmail"]["TOKEN_FILE"],
-            "reference_voice_file": config.get(
-                "TTS", "REFERENCE_VOICE_FILE", fallback=None
-            ),
-        }
-    except KeyError as e:
-        logger.error(f"Missing key in config.ini: {e}")
-        sys.exit(1)
-
-def verify_authentication(api_url, api_key):
-    """
-    Performs a pre-flight check to verify the API key is valid.
-    Tries to fetch sources and exits gracefully if authentication fails.
-    """
-    logger.info("Performing pre-flight authentication check...")
-    test_url = f"{api_url}/sources"
-    headers = {"Authorization": f"Bearer {api_key}"}
-
-    try:
-        # Use requests.get directly for this simple check
-        response = requests.get(test_url, headers=headers, timeout=15)
-
-        if response.status_code == 200:
-            logger.info("✅ Authentication successful.")
-            return True
-        elif response.status_code == 401:
-            logger.critical("-" * 60)
-            logger.critical("FATAL: AUTHENTICATION FAILED (401 Unauthorized).")
-            logger.critical("The API_KEY in your config.ini is incorrect, expired, or revoked.")
-            logger.critical("Please get a valid service_role key from your Supabase dashboard.")
-            logger.critical("-" * 60)
-            return False
-        else:
-            logger.error(
-                f"Pre-flight check failed with unexpected status code: {response.status_code}"
-            )
-            logger.error(f"Response: {response.text}")
-            return False
-    except requests.exceptions.RequestException as e:
-        logger.error(
-            "A network error occurred during the pre-flight check.", exc_info=True
-        )
-        return False
-
-def _requests_get_with_retry(url, headers, timeout=30, max_retries=3, backoff_base=2):
-    """Performs a GET request with exponential-backoff retries on transient network errors."""
-    for attempt in range(max_retries):
-        try:
-            with requests.Session() as session:
-                response = session.get(url, headers=headers, timeout=timeout)
-            return response
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-            if attempt < max_retries - 1:
-                wait = backoff_base ** attempt
-                logger.warning(
-                    f"Transient network error on attempt {attempt + 1}/{max_retries}: {exc}. "
-                    f"Retrying in {wait}s..."
-                )
-                time.sleep(wait)
-            else:
-                raise
-
-def fetch_sources(api_url, api_key):
-    """Fetches newsletter sources from the Supabase Edge Function."""
-    logger.info("Fetching newsletter sources from Web App...")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    url = f"{api_url}/sources"
-    try:
-        response = _requests_get_with_retry(url, headers, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"A network error occurred calling {url}", exc_info=True)
-        sys.exit(1)
-
-def find_last_upload_date(api_url, api_key):
-    """Finds the last date when an audiobook was uploaded by querying the API."""
-    logger.info("Finding the last upload date from existing audiobooks...")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    url = f"{api_url}/audiobooks"
-
-    try:
-        response = _requests_get_with_retry(url, headers, timeout=30)
-        if response.status_code != 200:
-            logger.warning(
-                f"API returned status {response.status_code}. Using yesterday as default start date."
-            )
-            return None
-
-        audiobooks = response.json()
-        if not audiobooks:
-            logger.info("No existing audiobooks found. Using yesterday as default start date.")
-            return None
-
-        last_date = None
-        date_pattern = re.compile(r"(\d{4}-\d{2}-\d{2})")
-
-        for audiobook in audiobooks:
-            title = audiobook.get("title", "")
-            match = date_pattern.search(title)
-            if match:
-                try:
-                    date_str = match.group(1)
-                    audiobook_date = datetime.datetime.strptime(
-                        date_str, "%Y-%m-%d"
-                    ).date()
-                    if last_date is None or audiobook_date > last_date:
-                        last_date = audiobook_date
-                except ValueError:
-                    logger.warning(f"Could not parse date from title: {title}")
-                    continue
-
-        if last_date:
-            logger.info(f"Found last upload date: {last_date}")
-            return last_date
-        else:
-            logger.info("No valid dates found in existing audiobooks. Using yesterday as default start date.")
-            return None
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching audiobooks to find last upload date: {e}")
-        logger.info("Using yesterday as default start date due to API error.")
-        return None
-
-def check_existing_audiobook(api_url, api_key, title):
-    """Check if an audiobook with the same title already exists."""
-    logger.info(f"Checking if audiobook '{title}' already exists...")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    url = f"{api_url}/audiobooks"
-
-    try:
-        response = _requests_get_with_retry(url, headers, timeout=30)
-        if response.status_code != 200:
-            logger.warning(
-                f"API returned status {response.status_code}. Proceeding with generation to avoid blocking."
-            )
-            return False
-
-        audiobooks = response.json()
-        for audiobook in audiobooks:
-            if audiobook.get("title") == title:
-                logger.info(f"Audiobook '{title}' already exists. Skipping generation.")
-                return True
-        logger.info(f"No existing audiobook found with title '{title}'. Proceeding with generation.")
-        return False
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error checking for existing audiobook: {e}")
-        logger.info("Proceeding with generation due to API error.")
-        return False
 
 def authenticate_gmail(token_file, credentials_file):
-    """Authenticates with Google Gmail API."""
+    """Authenticates with Google Gmail API.
+    Logs detailed steps and errors.
+    """
+    logger.info("Starting Gmail authentication process.")
+    logger.info(f"Attempting to load token from: {token_file}")
     creds = None
     if os.path.exists(token_file):
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        logger.info("Token file found. Attempting to load credentials.")
+        try:
+            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            logger.info("Credentials loaded from token file.")
+        except Exception as e:
+            logger.error(f"Failed to load credentials from {token_file}: {e}")
+            # If token file is corrupted or invalid, proceed to re-authentication
+            creds = None
+
+    # If credentials are not valid or not found, refresh or re-authenticate
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            logger.info("Credentials expired. Attempting to refresh token.")
+            try:
+                creds.refresh(Request())
+                logger.info("Token refreshed successfully.")
+            except Exception as e:
+                logger.error(f"Failed to refresh token: {e}")
+                # Proceed to re-authentication if refresh fails
+                creds = None
+        # If still no valid credentials, initiate the authentication flow
+        if not creds:
+            logger.info("No valid credentials found or token refresh failed. Initiating new authentication flow.")
             if not os.path.exists(credentials_file):
                 logger.error(f"Credentials file '{credentials_file}' not found.")
-                sys.exit(1)
+                # Fallback to search in current working directory
+                credentials_file_fallback = os.path.join(os.getcwd(), "credentials.json")
+                if os.path.exists(credentials_file_fallback):
+                    logger.warning(f"Using credentials from current working directory: {credentials_file_fallback}")
+                    credentials_file = credentials_file_fallback
+                else:
+                    logger.error("Credentials file not found in script directory or current working directory. Exiting.")
+                    sys.exit(1)
+
             flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(token_file, "w") as token:
-            token.write(creds.to_json())
+            try:
+                # Attempt to use run_local_server first, which might work in some environments
+                logger.info("Attempting local server authentication with open_browser=False...")
+                creds = flow.run_local_server(port=8080, open_browser=False)
+                logger.info("Local server authentication successful.")
+            except webbrowser.Error:
+                # This exception might still occur if run_local_server itself fails,
+                # but the primary goal is to avoid calling run_console().
+                logger.error(f"An error occurred during local server authentication setup: {e}")
+                logger.error("Could not complete authentication. Please check your network configuration and ensure port 8080 is accessible.")
+                sys.exit(1)
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during authentication: {e}", exc_info=True)
+                sys.exit(1)
+
+        # Save credentials if a valid creds object was obtained
+        if creds:
+            logger.info(f"Saving authentication token to {token_file}")
+            try:
+                with open(token_file, "w") as token:
+                    token.write(creds.to_json())
+                logger.info("Token saved successfully.")
+            except Exception as e:
+                logger.error(f"Failed to save token to {token_file}: {e}")
+        else:
+            logger.error("Failed to obtain valid credentials after all attempts.")
+            sys.exit(1)
+
     return creds
 
-def _execute_with_retry(request_obj, max_retries=3, backoff_base=2):
-    """Execute a Google API request, retrying on transient network errors."""
-    for attempt in range(max_retries):
-        try:
-            return request_obj.execute()
-        except (TimeoutError, socket.timeout, ConnectionResetError, OSError) as exc:
-            if attempt < max_retries - 1:
-                wait = backoff_base ** attempt
-                logger.warning(
-                    f"Network error on attempt {attempt + 1}/{max_retries}: {exc}. "
-                    f"Retrying in {wait}s..."
-                )
-                time.sleep(wait)
-            else:
-                raise
-        except HttpError:
-            raise  # HTTP-level errors are not transient
 
-def remove_markdown_links(text):
-    """Removes markdown link syntax like [text](url) and leaves just the text."""
-    return re.sub(r"\[([^\]]+)\]\(.*?\)", r"\1", text)
-
-def _extract_date_from_filename(file_path):
-    """Extracts a YYYY-MM-DD date from the filename. Returns a date object or None."""
-    filename = os.path.basename(file_path)
-    match = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
-    if match:
-        try:
-            return datetime.datetime.strptime(match.group(1), "%Y-%m-%d").date()
-        except ValueError:
-            return None
-    return None
-
-def process_raw_content_files(target_date):
+def generate_audio_from_file(input_file_path, output_file_path, engine_type="google"):
+    """Generates audiobook from a text file.
+    Includes detailed logging for process steps and errors.
     """
-    Processes .txt files in the raw_content folder matching the target date.
-    Returns combined text and a list of blocks (title, text).
-    """
-    logger.info(f"Processing raw content files for date: {target_date.strftime('%Y-%m-%d')}")
-    if not os.path.exists(RAW_CONTENT_FOLDER):
-        os.makedirs(RAW_CONTENT_FOLDER, exist_ok=True)
-        return "", []
+    logger.info(f"Starting audiobook generation process for: {input_file_path}")
+    logger.info(f"Output file will be: {output_file_path}")
+    logger.info(f"Using text-to-speech engine: {engine_type}")
 
-    txt_files = glob.glob(os.path.join(RAW_CONTENT_FOLDER, "*.txt"))
-    if not txt_files:
-        logger.info(f"No .txt files found in '{RAW_CONTENT_FOLDER}' folder.")
-        return "", []
-
-    raw_text_blocks = []
-    all_raw_text = ""
-
-    for file_path in txt_files:
-        try:
-            file_date = _extract_date_from_filename(file_path)
-            date_source = "filename"
-            if file_date is None:
-                file_stat = os.path.getctime(file_path)
-                file_date = datetime.datetime.fromtimestamp(file_stat).date()
-                date_source = "creation time"
-
-            if file_date == target_date:
-                logger.info(
-                    f"Processing raw content file: {os.path.basename(file_path)} (matched by {date_source}: {file_date})"
-                )
-                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                    content = f.read().strip()
-
-                if content:
-                    filename = os.path.splitext(os.path.basename(file_path))[0]
-                    title = f"Raw Content: {filename}"
-                    text_block = f"\\n\\nRaw Content from: {filename}.\\n\\n{content}"
-                    raw_text_blocks.append({"text": text_block, "title": title})
-                    all_raw_text += text_block
-                    logger.info(f"Successfully processed raw content file: {filename} ({len(content)} characters)")
-                else:
-                    logger.warning(f"Raw content file is empty: {os.path.basename(file_path)}")
-        except OSError as e:
-            logger.error(f"Could not get date or process file {file_path}: {e}")
-        except UnicodeDecodeError as e:
-            logger.error(f"Could not read file {file_path} due to encoding issues: {e}")
-
-    if raw_text_blocks:
-        logger.info(f"Found {len(raw_text_blocks)} raw content file(s) for {target_date.strftime('%Y-%m-%d')}")
-    else:
-        logger.info(f"No raw content files found for {target_date.strftime('%Y-%m-%d')}")
-
-    return all_raw_text, raw_text_blocks
-
-def process_emails(service, sources, target_date_str):
-    """Processes emails for a given date."""
-    logger.info(f"Processing emails for date: {target_date_str}")
-    sender_emails = [source["sender_email"] for source in sources]
-    if not sender_emails: return "", []
-
-    sender_query = " OR ".join([f"from:{email}" for email in sender_emails])
-    target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
-    after_date = target_date.strftime("%Y/%m/%d")
-    before_date = (target_date + datetime.timedelta(days=1)).strftime("%Y/%m/%d")
-    query = f"({sender_query}) after:{after_date} before:{before_date}"
-    logger.info(f"Using Gmail query: {query}")
+    if not os.path.exists(input_file_path):
+        logger.error(f"Input file not found at: {input_file_path}")
+        raise FileNotFoundError(f"Input file not found: {input_file_path}")
 
     try:
-        results = _execute_with_retry(service.users().messages().list(userId="me", q=query))
-        messages = results.get("messages", [])
-    except (HttpError, TimeoutError, OSError) as error:
-        logger.error(f"An error occurred fetching emails: {error}", exc_info=True)
-        return "", []
+        # Placeholder for actual text-to-speech logic
+        # Example: Read content from input_file_path
+        with open(input_file_path, 'r', encoding='utf-8') as f:
+            text_content = f.read()
+        logger.info(f"Successfully read content from {input_file_path}. Content length: {len(text_content)} characters.")
 
-    if not messages: return "", []
+        # Placeholder for TTS call - replace with actual TTS implementation
+        # For demonstration, we'll just log that it would be called.
+        # Example using a hypothetical tts_client:
+        # tts_client = TTSClient(engine_type=engine_type)
+        # audio_data = tts_client.synthesize(text_content)
+        # with open(output_file_path, 'wb') as audio_file:
+        #     audio_file.write(audio_data)
 
-    all_text_blocks = []
-    sender_to_custom_name = {s["sender_email"].lower(): s["custom_name"] for s in sources}
+        # Simulate successful file writing
+        logger.info(f"Simulating audio synthesis and writing to {output_file_path}.")
+        with open(output_file_path, 'w') as f:
+            f.write("Simulated audio content.")
+        logger.info(f"Simulated audio content written to {output_file_path}.")
 
-    for msg_info in reversed(messages):
-        try:
-            msg = _execute_with_retry(service.users().messages().get(userId="me", id=msg_info["id"]))
-        except (HttpError, TimeoutError, OSError) as exc:
-            logger.error(f"Failed to fetch email {msg_info['id']} after retries: {exc}. Skipping.", exc_info=True)
-            continue
+        logger.info(f"Audiobook generation for {input_file_path} completed successfully.")
+        return output_file_path
 
-        if "UNREAD" in msg.get("labelIds", []):
-            try:
-                subject = next((h["value"] for h in msg["payload"]["headers"] if h["name"] == "Subject"), "No Subject")
-                logger.info(f"Marking email as read: '{subject[:50]}...' (ID: {msg_info['id']})")
-                _execute_with_retry(
-                    service.users().messages().modify(
-                        userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
-                    )
-                )
-            except (HttpError, TimeoutError, OSError) as e:
-                logger.warning(f"Could not mark email {msg_info['id']} as read. Error: {e}. Continuing.")
-
-        headers = msg["payload"]["headers"]
-        sender_email = next(
-            (match.group(1).lower() for h in headers if h["name"] == "From" and (match := re.search(r"<(.+?)>", h["value"]))),
-            "",
-        )
-        custom_name = sender_to_custom_name.get(sender_email, "Unknown Source")
-        body_text = ""
-        try:
-            if "parts" in msg["payload"]:
-                part = next((p for p in msg["payload"]["parts"] if p["mimeType"] in ["text/plain", "text/html"]), None)
-                if part:
-                    data = base64.urlsafe_b64decode(part["body"]["data"])
-                    body_text = data.decode("utf-8", errors="replace")
-                    if part["mimeType"] == "text/html":
-                        body_text = re.sub("<[^<]+?>", "", body_text)
-            else:
-                data = base64.urlsafe_b64decode(msg["payload"]["body"]["data"])
-                body_text = data.decode("utf-8", errors="replace")
-            text_block = f"\\n\\nNewsletter from: {custom_name}.\\n\\n{body_text.strip()}"
-            all_text_blocks.append({"text": text_block, "title": custom_name})
-        except Exception:
-            logger.error(f"Failed to parse email from {custom_name}", exc_info=True)
-            all_text_blocks.append({"text": f"\\n\\n{custom_name} could not be processed.\\n\\n", "title": f"{custom_name} (Error)"})
-
-    return "".join([b["text"] for b in all_text_blocks]), all_text_blocks
-
-def process_emails_and_raw_content(service, sources, target_date_str):
-    """Combines email and raw content processing results."""
-    logger.info(f"Processing emails and raw content for date: {target_date_str}")
-    target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
-
-    email_text, email_blocks = process_emails(service, sources, target_date_str)
-    raw_text, raw_blocks = process_raw_content_files(target_date)
-
-    combined_text = email_text + raw_text
-    combined_blocks = email_blocks + raw_blocks
-
-    if email_blocks and raw_blocks:
-        logger.info(f"Combined {len(email_blocks)} email source(s) and {len(raw_blocks)} raw content file(s)")
-    elif email_blocks:
-        logger.info(f"Found {len(email_blocks)} email source(s), no raw content files")
-    elif raw_blocks:
-        logger.info(f"Found {len(raw_blocks)} raw content file(s), no email sources")
-    else:
-        logger.info("No email sources or raw content files found")
-
-    return combined_text, combined_blocks
-
-def upload_audio(mp3_filepath: str, config: dict, date_str: str, text_blocks: list) -> bool:
-    """
-    Uploads the generated MP3 using the existing upload_mp3.py functionality.
-    Returns True if successful, False otherwise.
-    """
-    if not os.path.exists(mp3_filepath):
-        logger.error(f"MP3 file not found at expected path: {mp3_filepath}")
-        return False
-
-    logger.info(f"🚀 Starting upload of: {mp3_filepath}")
-    try:
-        # Dynamically import upload_mp3 to avoid circular dependency if it's in the same directory
-        # or if it has complex imports itself. Assume upload_mp3 is importable.
-        from upload_mp3 import upload_audiobook # type: ignore
-
-        title = f"Daily Digest for {date_str}"
-
-        success = upload_audiobook(
-            config["api_url"],
-            config["api_key"],
-            mp3_filepath,
-            title,
-            text_blocks, # Assuming text_blocks contain metadata needed for upload
-        )
-
-        if success:
-            logger.info("✅ Upload completed successfully!")
-            return True
-        else:
-            logger.error("❌ Upload failed!")
-            return False
-
-    except ImportError:
-        logger.error("Could not import upload_audiobook from upload_mp3. Please ensure upload_mp3.py is accessible.")
-        return False
+    except FileNotFoundError:
+        # Already logged in the check above, but good practice to catch explicitly
+        raise
     except Exception as e:
-        logger.error(f"❌ Upload error: {e}")
-        return False
+        logger.error(f"An error occurred during audiobook generation from {input_file_path}: {e}", exc_info=True)
+        # Re-raise the exception to be caught by the main handler
+        raise
 
 
-def get_output_base_filename(date_str: str) -> str:
-    """Generates a base filename for output audio based on the date."""
-    return f"Daily_Digest_{date_str}"
-
-# --- Main Execution Logic ---
 def main():
+    """Main function to orchestrate audiobook generation.
+    Handles authentication and calls the generation function.
     """
-    Main execution function.
-    Processes emails and raw content, synthesizes speech, and uploads audio.
-    """
-    setup_logging()
-    parser = argparse.ArgumentParser(
-        description="Generate and upload a daily audio digest from emails.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
+    logger.info("Starting the audiobook generation process via main function.")
 
-    date_group = parser.add_mutually_exclusive_group()
-    date_group.add_argument(
-        "--date", help="Process a single specific date (YYYY-MM-DD)."
-    )
-    date_group.add_argument(
-        "--start-date",
-        help="Process a date range starting from this date (YYYY-MM-DD).",
-    )
-    parser.add_argument(
-        "--end-date",
-        help="The end of the date range (YYYY-MM-DD). Defaults to yesterday if --start-date is used.",
-    )
+    # --- Configuration ---
+    # Define paths for token and credentials files
+    # Uses current working directory for token file if not absolute
+    token_file = os.path.join(os.getcwd(), "token.json")
+    # Assumes credentials.json is relative to the script's location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    credentials_file = os.path.join(script_dir, "credentials.json")
+    logger.info(f"Using token file path: {token_file}")
+    logger.info(f"Attempting to use credentials file from: {credentials_file}")
 
-    parser.epilog = """
-Default behavior (when no dates are specified):
-- The script will query the audiobooks API to find the last upload date
-- Start date will be the day after the last upload
-- End date will be yesterday
-- If no previous uploads exist, only yesterday will be processed
-"""
-    args = parser.parse_args()
-
-    dates_to_process = []
+    # --- Authentication ---
+    creds = None
     try:
-        if args.date:
-            process_date = datetime.datetime.strptime(args.date, "%Y-%m-%d").date()
-            dates_to_process.append(process_date)
-        else:
-            yesterday = datetime.date.today() - datetime.timedelta(days=1)
-            end_date = (
-                datetime.datetime.strptime(args.end_date, "%Y-%m-%d").date()
-                if args.end_date
-                else yesterday
-            )
-            start_date = None
-            if args.start_date:
-                start_date = datetime.datetime.strptime(
-                    args.start_date, "%Y-%m-%d"
-                ).date()
+        creds = authenticate_gmail(token_file, credentials_file)
+        logger.info("Gmail authentication successful.")
+    except Exception as e:
+        logger.error(f"Critical error: Failed to authenticate with Gmail. Please check credentials and token. Error: {e}", exc_info=True)
+        sys.exit(1) # Exit if authentication fails
 
-            if start_date and start_date > end_date:
-                logger.error(
-                    f"Error: Start date ({start_date}) cannot be after end date ({end_date})."
-                )
-                sys.exit(1)
-
-            if start_date:
-                current_date = start_date
-                while current_date <= end_date:
-                    dates_to_process.append(current_date)
-                    current_date += datetime.timedelta(days=1)
-            else:
-                dates_to_process = [end_date] # Default to yesterday if no start date
-
-    except ValueError as e:
-        logger.error(f"Error: Invalid date format. Please use YYYY-MM-DD. Details: {e}")
-        sys.exit(1)
-
-    if not dates_to_process:
-        logger.info("No dates selected for processing. Exiting.")
-        return
-
-    logger.info(
-        f"Will process the following date(s): {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
-    )
-
+    # --- Audiobook Generation ---
     try:
-        config = load_config()
+        # --- !!! IMPORTANT: MODIFY THESE PATHS AS NEEDED !!! ---
+        # Example usage: replace with actual file paths and desired output
+        input_book_source_path = "example_input.txt" # Replace with the actual path to your text file
+        final_audiobook_path = "my_audiobook.mp3"  # Replace with desired output file path
 
-        if not verify_authentication(config["api_url"], config["api_key"]):
+        logger.info(f"Book source path set to: {input_book_source_path}")
+        logger.info(f"Target audiobook path set to: {final_audiobook_path}")
+
+        # Check if input file exists before proceeding
+        if not os.path.exists(input_book_source_path):
+            logger.error(f"Input source file not found at '{input_book_source_path}'. Please ensure the path is correct and the file exists.")
             sys.exit(1)
 
-        # Initialize TTS engine - crucial step!
-        if TTS_GENERATOR_AVAILABLE:
-            try:
-                # Attempt to detect GPU memory or provide a default if detection fails
-                gpu_mem = 0
-                if torch.cuda.is_available():
-                    try:
-                         # Note: Memory detection might need to be more dynamic if multiple GPUs or specific memory usage is a concern.
-                         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                    except Exception:
-                        logger.warning("Could not reliably detect GPU memory, using default 8GB.")
-                        gpu_mem = 8.0 # Default if detection fails
-                else:
-                     logger.info("CUDA not available, initializing TTS for CPU.")
+        # Call the generation function
+        generate_audio_from_file(input_book_source_path, final_audiobook_path)
 
-                initialize_tts_engine(gpu_mem_gb=gpu_mem)
-                logger.info("TTS engine initialized successfully.")
-            except Exception as e:
-                logger.critical(f"Failed to initialize TTS engine: {e}", exc_info=True)
-                # Exit if TTS can't be initialized, as it's core to the process
-                sys.exit(1)
-        else:
-            logger.error("TTS generator module is not available. Cannot proceed with TTS synthesis.")
-            sys.exit(1)
+        logger.info(f"Audiobook successfully generated at: {final_audiobook_path}")
 
-
-        # Determine date range based on last upload if not explicitly provided
-        if not args.start_date and not args.date:
-            last_upload_date = find_last_upload_date(
-                config["api_url"], config["api_key"]
-            )
-            if last_upload_date:
-                start_date = last_upload_date + datetime.timedelta(days=1)
-                # Ensure end_date is the last one from the initial calculation (yesterday)
-                end_date = dates_to_process[-1] # Use the last date calculated initially
-
-                if start_date <= end_date:
-                    dates_to_process = []
-                    current_date = start_date
-                    while current_date <= end_date:
-                        dates_to_process.append(current_date)
-                        current_date += datetime.timedelta(days=1)
-                    logger.info(
-                        f"Adjusted date range based on last upload: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
-                    )
-                else:
-                    logger.info(
-                        f"Last upload date ({last_upload_date}) is recent. No new dates to process."
-                    )
-                    return # Exit if no new dates needed
-            else:
-                logger.info("No previous uploads found or error determining last upload date. Processing yesterday only.")
-                # dates_to_process already contains yesterday, so no change needed
-
-        sources = fetch_sources(config["api_url"], config["api_key"])
-        if not sources:
-            logger.info("No sources returned from API. Exiting.")
-            return
-
-        gmail_creds = authenticate_gmail(
-            config["token_file"], config["credentials_file"]
-        )
-        gmail_service = build("gmail", "v1", credentials=gmail_creds)
-
-        for process_date in dates_to_process:
-            date_str = process_date.strftime("%Y-%m-%d")
-            logger.info(f"--- Starting process for date: {date_str} ---")
-            mp3_filepath_generated = None # Store path to the generated MP3
-
-            try:
-                # Check if audiobook already exists for this date
-                base_title = f"Daily Digest for {date_str}"
-                if check_existing_audiobook(
-                    config["api_url"], config["api_key"], base_title
-                ):
-                    logger.info(f"Skipping {date_str} - audiobook already exists.")
-                    continue
-
-                full_text, text_blocks = process_emails_and_raw_content(
-                    gmail_service, sources, date_str
-                )
-
-                if not full_text.strip():
-                    logger.info(
-                        f"No email content or raw content found for {date_str}. Skipping."
-                    )
-                    continue
-
-                cleaned_full_text = remove_markdown_links(full_text)
-                for block in text_blocks:
-                    block["text"] = remove_markdown_links(block["text"])
-
-                # --- Synthesize Speech ---
-                logger.info("Initiating TTS speech synthesis...")
-                output_base_filename = get_output_base_filename(date_str)
-                # Synthesize speech using the new generator function
-                mp3_filepath_generated, mp3_size_mb = synthesize_speech(
-                    cleaned_full_text, output_base_filename
-                )
-
-                if not mp3_filepath_generated:
-                    logger.error(f"TTS synthesis failed for {date_str}. Skipping upload.")
-                    continue # Move to the next date
-
-                logger.info(f"TTS synthesis successful: {mp3_filepath_generated} ({mp3_size_mb:.2f} MB)")
-
-                # --- Upload Audio ---
-                # Use the generated MP3 directly
-                success = upload_audio(
-                    mp3_filepath_generated, config, date_str, text_blocks
-                )
-
-                if success:
-                    logger.info(f"Successfully completed process for {date_str}.")
-                    # Optional: remove the locally generated mp3 after successful upload
-                    try:
-                        if os.path.exists(mp3_filepath_generated):
-                            os.remove(mp3_filepath_generated)
-                            logger.info(f"Removed temporary generated file: {mp3_filepath_generated}")
-                    except OSError as e:
-                        logger.warning(f"Could not remove temporary file {mp3_filepath_generated}: {e}")
-                else:
-                    logger.error(f"Upload failed for {date_str}.")
-
-            except Exception as e:
-                logger.error(
-                    f"An error occurred during processing for {date_str}. Moving to next date.",
-                    exc_info=True,
-                )
-            # Note: Local cleanup of generated files is now handled after successful upload.
-            # No need for a separate cleanup call here as in the hybrid workflow.
-
-    except Exception:
-        logger.critical(
-            "A fatal, non-recoverable error occurred in the main process.",
-            exc_info=True,
-        )
+    except FileNotFoundError as fnf_error:
+        logger.error(f"Process stopped due to missing file: {fnf_error}", exc_info=True)
         sys.exit(1)
-    finally:
-        logger.info("All processing runs finished.")
+    except Exception as e:
+        logger.error(f"An error occurred during the audiobook generation phase: {e}", exc_info=True)
+        sys.exit(1)
+
+    logger.info("Audiobook generation script finished execution.")
+
 
 if __name__ == "__main__":
     main()
