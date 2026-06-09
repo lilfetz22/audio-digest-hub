@@ -25,6 +25,9 @@ from googleapiclient.errors import HttpError
 # Import upload functionality from upload_mp3.py
 from upload_mp3 import upload_audiobook, _create_chapter_list, _create_metadata
 
+# Local CPU-based TTS generation (replaces the Colab handoff workflow)
+from generate_tts_audio import generate_audio_from_text
+
 # --- Configuration & Constants ---
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
@@ -535,111 +538,17 @@ def process_emails(service, sources, target_date_str):
     return "".join([b["text"] for b in all_text_blocks]), all_text_blocks
 
 
-def notify_user_of_full_text_readiness(text_content: str, date_str: str) -> str:
+def save_cleaned_text(text_content: str, date_str: str) -> str:
     """
-    Saves cleaned text to file and notifies user to upload to Google Drive.
-    Returns the path to the saved text file.
+    Archive the cleaned text to disk for debugging / audit. Returns the path.
     """
-    # Create the folder if it doesn't exist
     os.makedirs(CLEANED_TEXT_FOLDER, exist_ok=True)
-
-    # Save the cleaned text
     text_filename = f"digest_{date_str}_cleaned.txt"
     text_filepath = os.path.join(CLEANED_TEXT_FOLDER, text_filename)
-
     with open(text_filepath, "w", encoding="utf-8") as f:
         f.write(text_content)
-
-    logger.info(f"✅ Cleaned text saved to: {text_filepath}")
-    logger.info("� Next steps:")
-    logger.info("   1. Drag the text file to your Google Drive TTS_Input folder")
-    logger.info("   2. Run the TTS Colab notebook")
-    logger.info("   3. Download the generated MP3 to archive_mp3 folder")
-
+    logger.info(f"Cleaned text archived to: {text_filepath}")
     return text_filepath
-
-
-def send_notification_email(service, date_str: str, expected_filename: str) -> None:
-    """
-    Sends an email notification to the authenticated Gmail user (self)
-    indicating that the script is ready for TTS processing.
-    """
-    try:
-        profile = service.users().getProfile(userId="me").execute()
-        user_email = profile["emailAddress"]
-
-        subject = f"🎧 Ready for TTS: Daily Digest {date_str}"
-        body = (
-            f"The audiobook pipeline has finished processing content for {date_str} "
-            f"and is now waiting for the TTS-generated MP3.\n\n"
-            f"Next steps:\n"
-            f"  1. Open the TTS Generation Colab notebook\n"
-            f"  2. Run it to generate the audio\n"
-            f"  3. Download the output file: {expected_filename}\n\n"
-            f"The script will automatically detect the file in your Downloads folder."
-        )
-
-        from email.mime.text import MIMEText
-        message = MIMEText(body)
-        message["to"] = user_email
-        message["from"] = user_email
-        message["subject"] = subject
-
-        raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-        service.users().messages().send(
-            userId="me", body={"raw": raw}
-        ).execute()
-
-        logger.info(f"📧 Notification email sent to {user_email}")
-    except Exception as e:
-        logger.warning(f"Could not send notification email: {e}. Continuing anyway.")
-
-
-def request_user_feedback(date_str: str, gmail_service=None) -> str | None:
-    """
-    Waits for TTS processing to complete by polling the Downloads folder every 5 minutes.
-    Checks Downloads folder for the specific MP3 file and moves it to archive_mp3.
-    Returns the path to the MP3 file when found, or None if the move fails.
-    """
-    logger.info("⏳ Waiting for TTS processing to complete...")
-
-    downloads_folder = Path.home() / "Downloads"
-    expected_filename = f"digest_{date_str}_cleaned_generated_audio.mp3"
-    logger.info(f"📂 Looking for: {expected_filename} in Downloads folder")
-    logger.info("🔄 Will check every 5 minutes...")
-
-    # Send email notification so user knows it's time to run the Colab notebook
-    if gmail_service:
-        send_notification_email(gmail_service, date_str, expected_filename)
-
-    poll_interval_seconds = 300  # 5 minutes
-
-    while True:
-        source_mp3_path = downloads_folder / expected_filename
-
-        if source_mp3_path.exists():
-            logger.info(f"✅ Found MP3 file: {expected_filename}")
-            break
-
-        logger.info(f"⏳ File not found yet. Checking again in 5 minutes...")
-        time.sleep(poll_interval_seconds)
-
-    # Ensure archive folder exists
-    archive_path = Path(ARCHIVE_FOLDER)
-    archive_path.mkdir(parents=True, exist_ok=True)
-
-    # Move the file to archive folder
-    destination_mp3_path = archive_path / expected_filename
-    try:
-        import shutil
-
-        shutil.move(str(source_mp3_path), str(destination_mp3_path))
-        logger.info(f"✅ Moved MP3 from Downloads to: {destination_mp3_path}")
-    except Exception as e:
-        logger.error(f"❌ Failed to move MP3 file: {e}")
-        return None
-
-    return str(destination_mp3_path)
 
 
 def upload_audio(
@@ -675,37 +584,37 @@ def upload_audio(
         return False
 
 
-def generate_and_upload_audio_hybrid(
-    text_content: str, text_blocks: list, config: dict, date_str: str, gmail_service=None
+def generate_and_upload_audio(
+    text_content: str, text_blocks: list, config: dict, date_str: str
 ) -> list:
     """
-    Hybrid workflow: Save text locally, wait for Colab TTS, then upload.
+    Generate the MP3 with local Kokoro TTS (CPU) and upload it.
     Returns a list of file paths created for cleanup.
     """
     if not text_content.strip():
         logger.warning("No text content to process.")
         return []
 
-    logger.info("🔄 Starting hybrid TTS workflow...")
+    logger.info("🎙️ Starting local TTS generation...")
 
-    # Step 1: Save cleaned text and notify user
-    text_filepath = notify_user_of_full_text_readiness(text_content, date_str)
+    save_cleaned_text(text_content, date_str)
 
-    # Step 2: Wait for user to complete TTS in Colab and move file from Downloads
-    mp3_filepath = request_user_feedback(date_str, gmail_service=gmail_service)
+    mp3_filename = f"digest_{date_str}_cleaned_generated_audio.mp3"
+    mp3_filepath = os.path.join(ARCHIVE_FOLDER, mp3_filename)
 
-    if not mp3_filepath:
-        logger.error("❌ No MP3 file found. Workflow aborted.")
+    try:
+        generate_audio_from_text(text_content, mp3_filepath)
+    except Exception as e:
+        logger.error(f"❌ TTS generation failed: {e}", exc_info=True)
         return []
 
-    # Step 3: Upload the generated MP3
     success = upload_audio(mp3_filepath, config, date_str, text_blocks)
 
     if success:
-        logger.info("🎉 Hybrid workflow completed successfully!")
-        return [mp3_filepath]  # Return for cleanup if needed
+        logger.info("🎉 Audio generation and upload completed successfully!")
+        return [mp3_filepath]
     else:
-        logger.error("❌ Hybrid workflow failed during upload.")
+        logger.error("❌ Workflow failed during upload.")
         return []
 
 
@@ -967,8 +876,8 @@ Default behavior (when no dates are specified):
                 for block in text_blocks:
                     block["text"] = remove_markdown_links(block["text"])
 
-                files_created = generate_and_upload_audio_hybrid(
-                    cleaned_full_text, text_blocks, config, date_str, gmail_service=gmail_service
+                files_created = generate_and_upload_audio(
+                    cleaned_full_text, text_blocks, config, date_str
                 )
                 logger.info(f"Successfully completed process for {date_str}.")
 

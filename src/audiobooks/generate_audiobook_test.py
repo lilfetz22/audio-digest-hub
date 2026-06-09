@@ -431,75 +431,78 @@ class TestAudioAndMetadata:
         }
         assert chapters_dict == expected_chapters
 
-    def test_generate_and_upload_audio_hybrid_empty_text(self, caplog):
-        """Test that hybrid workflow returns empty list for blank text."""
+    def test_generate_and_upload_audio_empty_text(self, caplog):
+        """Returns empty list for blank text."""
         with caplog.at_level(logging.WARNING):
-            files = ga.generate_and_upload_audio_hybrid("   ", [], {}, "d")
+            files = ga.generate_and_upload_audio("   ", [], {}, "d")
         assert "No text content to process." in caplog.text
         assert files == []
 
     @patch("generate_audiobook.upload_audio")
-    @patch("generate_audiobook.request_user_feedback")
-    @patch("generate_audiobook.notify_user_of_full_text_readiness")
-    def test_generate_and_upload_audio_hybrid_success(
-        self, mock_notify, mock_feedback, mock_upload, caplog
+    @patch("generate_audiobook.generate_audio_from_text")
+    @patch("generate_audiobook.save_cleaned_text")
+    def test_generate_and_upload_audio_success(
+        self, mock_save, mock_tts, mock_upload, caplog
     ):
-        mock_notify.return_value = "/path/to/text.txt"
-        mock_feedback.return_value = "/path/to/audio.mp3"
+        mock_save.return_value = "/path/to/text.txt"
         mock_upload.return_value = True
         config = {"api_url": "url", "api_key": "key"}
         text_blocks = [{"title": "t", "text": "t"}]
+        expected_mp3 = os.path.join(
+            ga.ARCHIVE_FOLDER, "digest_2023-01-01_cleaned_generated_audio.mp3"
+        )
 
         with caplog.at_level(logging.INFO):
-            files = ga.generate_and_upload_audio_hybrid(
+            files = ga.generate_and_upload_audio(
                 "some text", text_blocks, config, "2023-01-01"
             )
 
-        mock_notify.assert_called_once_with("some text", "2023-01-01")
-        mock_feedback.assert_called_once_with("2023-01-01")
+        mock_save.assert_called_once_with("some text", "2023-01-01")
+        mock_tts.assert_called_once_with("some text", expected_mp3)
         mock_upload.assert_called_once_with(
-            "/path/to/audio.mp3", config, "2023-01-01", text_blocks
+            expected_mp3, config, "2023-01-01", text_blocks
         )
-        assert files == ["/path/to/audio.mp3"]
-        assert "Hybrid workflow completed successfully" in caplog.text
+        assert files == [expected_mp3]
+        assert "Audio generation and upload completed successfully" in caplog.text
 
     @patch("generate_audiobook.upload_audio")
-    @patch("generate_audiobook.request_user_feedback")
-    @patch("generate_audiobook.notify_user_of_full_text_readiness")
-    def test_generate_and_upload_audio_hybrid_no_mp3(
-        self, mock_notify, mock_feedback, mock_upload, caplog
+    @patch(
+        "generate_audiobook.generate_audio_from_text",
+        side_effect=RuntimeError("kokoro boom"),
+    )
+    @patch("generate_audiobook.save_cleaned_text")
+    def test_generate_and_upload_audio_tts_failure(
+        self, mock_save, mock_tts, mock_upload, caplog
     ):
-        mock_notify.return_value = "/path/to/text.txt"
-        mock_feedback.return_value = None
+        mock_save.return_value = "/path/to/text.txt"
         config = {"api_url": "url", "api_key": "key"}
 
         with caplog.at_level(logging.ERROR):
-            files = ga.generate_and_upload_audio_hybrid(
+            files = ga.generate_and_upload_audio(
                 "some text", [{"title": "t", "text": "t"}], config, "2023-01-01"
             )
 
         assert files == []
         mock_upload.assert_not_called()
-        assert "No MP3 file found" in caplog.text
+        assert "TTS generation failed" in caplog.text
 
     @patch("generate_audiobook.upload_audio")
-    @patch("generate_audiobook.request_user_feedback")
-    @patch("generate_audiobook.notify_user_of_full_text_readiness")
-    def test_generate_and_upload_audio_hybrid_upload_failure(
-        self, mock_notify, mock_feedback, mock_upload, caplog
+    @patch("generate_audiobook.generate_audio_from_text")
+    @patch("generate_audiobook.save_cleaned_text")
+    def test_generate_and_upload_audio_upload_failure(
+        self, mock_save, mock_tts, mock_upload, caplog
     ):
-        mock_notify.return_value = "/path/to/text.txt"
-        mock_feedback.return_value = "/path/to/audio.mp3"
+        mock_save.return_value = "/path/to/text.txt"
         mock_upload.return_value = False
         config = {"api_url": "url", "api_key": "key"}
 
         with caplog.at_level(logging.ERROR):
-            files = ga.generate_and_upload_audio_hybrid(
+            files = ga.generate_and_upload_audio(
                 "some text", [{"title": "t", "text": "t"}], config, "2023-01-01"
             )
 
         assert files == []
-        assert "Hybrid workflow failed during upload" in caplog.text
+        assert "Workflow failed during upload" in caplog.text
 
 
 class TestMainExecution:
@@ -526,7 +529,7 @@ class TestMainExecution:
             return_value=("text", [{"text": "block"}]),
         )
         self.mock_gen_upload = mocker.patch(
-            "generate_audiobook.generate_and_upload_audio_hybrid",
+            "generate_audiobook.generate_and_upload_audio",
             return_value=["file1.mp3"],
         )
         self.mock_cleanup = mocker.patch("generate_audiobook.cleanup")
@@ -976,16 +979,16 @@ class TestProcessEmailsAndRawContent:
 
 
 class TestNotifyAndUpload:
-    def test_notify_user_of_full_text_readiness(self, tmp_path, monkeypatch, caplog):
+    def test_save_cleaned_text(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr(ga, "CLEANED_TEXT_FOLDER", str(tmp_path))
 
         with caplog.at_level(logging.INFO):
-            result = ga.notify_user_of_full_text_readiness("test content", "2023-01-01")
+            result = ga.save_cleaned_text("test content", "2023-01-01")
 
         assert os.path.exists(result)
         with open(result, "r", encoding="utf-8") as f:
             assert f.read() == "test content"
-        assert "Cleaned text saved to" in caplog.text
+        assert "Cleaned text archived to" in caplog.text
         assert "digest_2023-01-01_cleaned.txt" in result
 
     @patch("generate_audiobook.upload_audiobook")
@@ -1023,46 +1026,6 @@ class TestNotifyAndUpload:
 
         assert result is False
         assert "Upload error" in caplog.text
-
-    @patch("shutil.move")
-    @patch("generate_audiobook.time.sleep")
-    def test_request_user_feedback_found_immediately(
-        self, mock_sleep, mock_move, tmp_path, monkeypatch
-    ):
-        downloads = tmp_path / "Downloads"
-        downloads.mkdir()
-        expected = downloads / "digest_2023-01-01_cleaned_generated_audio.mp3"
-        expected.write_text("mp3")
-
-        archive_dir = tmp_path / "archive"
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        monkeypatch.setattr(ga, "ARCHIVE_FOLDER", str(archive_dir))
-
-        result = ga.request_user_feedback("2023-01-01")
-
-        mock_sleep.assert_not_called()
-        assert result is not None
-
-    @patch("shutil.move", side_effect=Exception("move failed"))
-    @patch("generate_audiobook.time.sleep")
-    def test_request_user_feedback_move_failure(
-        self, mock_sleep, mock_move, tmp_path, monkeypatch, caplog
-    ):
-        downloads = tmp_path / "Downloads"
-        downloads.mkdir()
-        expected = downloads / "digest_2023-01-01_cleaned_generated_audio.mp3"
-        expected.write_text("mp3")
-
-        archive_dir = tmp_path / "archive"
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        monkeypatch.setattr(ga, "ARCHIVE_FOLDER", str(archive_dir))
-
-        with caplog.at_level(logging.ERROR):
-            result = ga.request_user_feedback("2023-01-01")
-
-        assert result is None
-        assert "Failed to move MP3 file" in caplog.text
-
 
 class TestAdditionalGmailCoverage:
     @patch("generate_audiobook.Credentials.from_authorized_user_file")
@@ -1218,7 +1181,7 @@ class TestMainDefaultDateLogic:
             return_value=("text", [{"text": "block"}]),
         )
         self.mock_gen_upload = mocker.patch(
-            "generate_audiobook.generate_and_upload_audio_hybrid",
+            "generate_audiobook.generate_and_upload_audio",
             return_value=["file1.mp3"],
         )
         mocker.patch("generate_audiobook.cleanup")
@@ -1287,7 +1250,7 @@ class TestMainEdgeCases:
             return_value=("text", [{"text": "block"}]),
         )
         mocker.patch(
-            "generate_audiobook.generate_and_upload_audio_hybrid", return_value=[]
+            "generate_audiobook.generate_and_upload_audio", return_value=[]
         )
         mocker.patch("generate_audiobook.cleanup")
         mocker.patch(
