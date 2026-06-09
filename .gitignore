@@ -51,3 +51,7 @@ src/audiobooks/cleaned_full_texts/*
 next_task_instructions.md
 src/audiobooks/research_papers/seen_papers.csv
 archive/*
+config.ini
+src/audiobooks/.venv/
+src/audiobooks/credentials.json.save
+token.json
