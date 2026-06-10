@@ -29,14 +29,14 @@ class WikiGitManager:
         repo_root: str,
         wiki_dir: str,
         parent_root: Optional[str] = None,
-        branch: str = "main",
+        branch: list[str] = ["main"], # Change to list[str] and default to ["main"]
         auto_push: bool = False,
         push_parent: bool = False,
     ):
         self.repo_root = Path(repo_root)
         self.wiki_dir = Path(wiki_dir)
         self.parent_root = Path(parent_root) if parent_root else None
-        self.branch = branch
+        self.allowed_branches = branch if isinstance(branch, list) else [branch]
         self.auto_push = auto_push
         self.push_parent = push_parent
 
@@ -156,7 +156,7 @@ class WikiGitManager:
     # ------------------------------------------------------------------
 
     def _ensure_on_branch(self, cwd: Path) -> None:
-        """Guarantee the repo at *cwd* is on ``self.branch``, not detached HEAD.
+        """Guarantee the repo at *cwd* is on one of the allowed branches, not detached HEAD.
 
         ``git symbolic-ref --short HEAD`` exits non-zero when HEAD is detached.
         In that case ``git checkout <branch>`` is run to reattach before any
@@ -165,13 +165,17 @@ class WikiGitManager:
         result = self._run_git(
             ["symbolic-ref", "--short", "HEAD"], cwd=cwd, check=False
         )
-        if result.returncode != 0 or result.stdout.strip() != self.branch:
+        current_branch = result.stdout.strip() or "detached"
+        if result.returncode != 0 or current_branch not in self.allowed_branches:
+            # Try to checkout the first allowed branch if not already on one of them
+            target_branch = self.allowed_branches[0] if self.allowed_branches else "main" # Default to main if list is empty
             logger.warning(
-                "Wiki repo is not on branch '%s' (HEAD=%s) — checking out.",
-                self.branch,
-                result.stdout.strip() or "detached",
+                "Wiki repo is not on one of the allowed branches %s (HEAD=%s) — checking out '%s'.",
+                self.allowed_branches,
+                current_branch,
+                target_branch,
             )
-            self._run_git(["checkout", self.branch], cwd=cwd)
+            self._run_git(["checkout", target_branch], cwd=cwd)
 
     def _run_git(
         self, args: list, cwd: Optional[Path] = None, check: bool = True

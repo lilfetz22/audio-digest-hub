@@ -25,7 +25,7 @@ class QuerySaver:
         rebuild_index: bool = True,
         repo_root: Optional[str] = None,
         parent_root: Optional[str] = None,
-        branch: str = "main",
+        branch: list[str] = ["main", "feat/kokoro-cpu-tts"], # Updated to include the new branch
         auto_push: bool = False,
         push_parent: bool = False,
     ):
@@ -102,5 +102,3 @@ class QuerySaver:
     def _slugify(text: str) -> str:
         """Convert question text to a filesystem-safe slug."""
         return slugify(text)[:60]
-
-

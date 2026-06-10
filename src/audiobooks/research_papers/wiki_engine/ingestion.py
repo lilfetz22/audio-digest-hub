@@ -111,7 +111,7 @@ class WikiIngestionEngine:
             repo_root=str(repo_path),
             wiki_dir=str(self.wiki_dir),
             parent_root=parent_root,
-            branch=branch,
+            branch=["main", "feat/kokoro-cpu-tts"], # Updated to include the new branch
             auto_push=auto_push,
             push_parent=push_parent,
         )
