@@ -12,7 +12,7 @@ Public API:
 
 CLI:
     python generate_tts_audio.py path/to/digest.txt
-    python generate_tts_audio.py path/to/digest.txt --output-dir archive_mp3 \\
+    python generate_tts_audio.py path/to/digest.txt --output-dir archive_mp3 \
         --voice af_heart --bitrate 64k
 
 System dependency:
@@ -33,6 +33,7 @@ import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
 from tqdm.auto import tqdm
+import torch # Import torch for no_grad
 
 logger = logging.getLogger(__name__)
 
@@ -167,13 +168,15 @@ def generate_audio_from_text(
     start = time.time()
     audio_chunks: List[np.ndarray] = []
     failed = 0
-    for chunk in tqdm(chunks, desc="TTS", unit="chunk"):
-        try:
-            audio_chunks.append(_synthesize_chunk(pipeline, chunk, voice, speed))
-        except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
-            logger.error("Chunk failed (%s): %.80s", exc, chunk)
-            audio_chunks.append(np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32))
-            failed += 1
+    # Wrap the synthesis loop in torch.no_grad() to prevent gradient accumulation
+    with torch.no_grad():
+        for chunk in tqdm(chunks, desc="TTS", unit="chunk"):
+            try:
+                audio_chunks.append(_synthesize_chunk(pipeline, chunk, voice, speed))
+            except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
+                logger.error("Chunk failed (%s): %.80s", exc, chunk)
+                audio_chunks.append(np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32))
+                failed += 1
     synth_seconds = time.time() - start
     logger.info(
         "Synthesis complete in %.1fs (%d chunks, %d failed)",

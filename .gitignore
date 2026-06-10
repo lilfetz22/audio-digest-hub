@@ -12,26 +12,21 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# Ignore local config and sensitive files
+config.ini
+*.save
 
 # Supabase CLI ephemeral state (env-specific URLs, versions — must not be committed)
 supabase/.temp/
 
 # virtual environment
 audiogeneratorenv/
+src/audiobooks/.venv/
 src/audiobooks/config.ini
 src/audiobooks/credentials.json
-.gitignore
-src/audiobooks/token.json
+token.json
+
 src/audiobooks/token_backup.json
 
 # temp audio files

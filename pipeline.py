@@ -68,8 +68,14 @@ def run_step(name: str, argv: List[Union[str, Path]], cwd: Path) -> None:
     logger.info("$ %s   (cwd=%s)", pretty, cwd)
     result = subprocess.run([str(a) for a in argv], cwd=str(cwd))
     if result.returncode != 0:
+        signal_info = ""
+        if result.returncode < 0:
+            import signal as _signal
+            signum = -result.returncode
+            sig_name = _signal.Signals(signum).name if signum in _signal.Signals._value2member_map_ else f"signal {signum}"
+            signal_info = f" (killed by {sig_name} — likely OOM / kernel termination)"
         raise SystemExit(
-            f"{name} failed with exit code {result.returncode}; aborting pipeline."
+            f"{name} failed with exit code {result.returncode}{signal_info}; aborting pipeline."
         )
 
 
@@ -116,13 +122,13 @@ def main() -> int:
     run_step(
         "research-pipeline",
         [py, AUDIOBOOKS_DIR / "research_papers" / "run_research_pipeline.py"],
-        AUDIOBOOKS_DIR,
+        REPO_ROOT,
     )
 
     run_step(
         "generate-audiobook",
         [py, AUDIOBOOKS_DIR / "generate_audiobook.py"],
-        AUDIOBOOKS_DIR,
+        REPO_ROOT,
     )
 
     logger.info("Pipeline complete.")
