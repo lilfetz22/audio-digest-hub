@@ -25,7 +25,8 @@ import requests
 
 # Local defaults (kept small and explicit so this script is lightweight)
 CONFIG_FILE = ".\\src\\audiobooks\\config.ini"
-ARCHIVE_FOLDER = "archive_mp3"
+# Anchor archive folder to this script's directory so cwd doesn't matter.
+ARCHIVE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "archive_mp3")
 MAX_UPLOAD_SIZE_MB = 35.0
 
 

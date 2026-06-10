@@ -33,15 +33,15 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
 
 UPLOAD_MP3_BASENAME = "temp_output"
-ARCHIVE_FOLDER = "archive_mp3"
 
 MAX_UPLOAD_SIZE_MB = 35.0
 
-# Raw content folder path
-RAW_CONTENT_FOLDER = "raw_content"
-
-# Hybrid workflow folder paths
-CLEANED_TEXT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cleaned_full_texts")
+# Folder paths anchored to this script's directory so the pipeline works
+# regardless of cwd (cron, pipeline.py orchestrator, manual invocation).
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIVE_FOLDER = os.path.join(_SCRIPT_DIR, "archive_mp3")
+RAW_CONTENT_FOLDER = os.path.join(_SCRIPT_DIR, "raw_content")
+CLEANED_TEXT_FOLDER = os.path.join(_SCRIPT_DIR, "cleaned_full_texts")
 
 
 # --- Core Functions (No changes in this section) ---
