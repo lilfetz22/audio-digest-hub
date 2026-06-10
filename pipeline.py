@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent
 AUDIOBOOKS_DIR = REPO_ROOT / "src" / "audiobooks"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
+SEEN_PAPERS_CSV = AUDIOBOOKS_DIR / "research_papers" / "seen_papers.csv"
 
 
 def find_venv_python() -> Path:
@@ -60,6 +61,51 @@ def find_venv_python() -> Path:
         "No project venv found. Looked for:\n  - "
         + "\n  - ".join(str(c) for c in candidates)
     )
+
+
+def reset_latest_research_day() -> int:
+    """
+    Drop every row from seen_papers.csv that shares the latest date in the file.
+    Useful as a "let me retry today" reset after a downstream pipeline failure
+    has left the dedup CSV thinking today's papers are already processed.
+
+    Returns the number of rows removed.
+    """
+    import csv as _csv
+
+    if not SEEN_PAPERS_CSV.exists():
+        logger.info("No seen_papers.csv at %s — nothing to reset.", SEEN_PAPERS_CSV)
+        return 0
+
+    with open(SEEN_PAPERS_CSV, "r", newline="", encoding="utf-8") as f:
+        reader = _csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        rows = list(reader)
+
+    if not rows:
+        logger.info("seen_papers.csv has no data rows — nothing to reset.")
+        return 0
+
+    dates = [r["date"] for r in rows if r.get("date")]
+    if not dates:
+        logger.info("seen_papers.csv has no parseable date column — nothing to reset.")
+        return 0
+
+    # Dates are %Y-%m-%d, so lexicographic max == chronological max.
+    max_date = max(dates)
+    kept = [r for r in rows if r.get("date") != max_date]
+    removed = len(rows) - len(kept)
+
+    with open(SEEN_PAPERS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = _csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(kept)
+
+    logger.info(
+        "Removed %d row(s) for date %s from %s (%d row(s) kept).",
+        removed, max_date, SEEN_PAPERS_CSV, len(kept),
+    )
+    return removed
 
 
 def run_step(name: str, argv: List[Union[str, Path]], cwd: Path) -> None:
@@ -89,12 +135,27 @@ def main() -> int:
         action="store_true",
         help="Skip the Friday cleanup step even if today is Friday.",
     )
+    parser.add_argument(
+        "--reset-latest-research-day",
+        action="store_true",
+        help=(
+            "Maintenance mode: drop every row from "
+            "src/audiobooks/research_papers/seen_papers.csv that shares the "
+            "latest date in the file, then exit without running the pipeline. "
+            "Use after a downstream failure so the next run will re-score the "
+            "most recent day's papers instead of treating them as duplicates."
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
+
+    if args.reset_latest_research_day:
+        reset_latest_research_day()
+        return 0
 
     py = find_venv_python()
     logger.info("Project venv: %s", py)
