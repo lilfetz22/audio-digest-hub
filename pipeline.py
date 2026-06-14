@@ -41,6 +41,8 @@ def find_venv_python() -> Path:
     """
     Locate the project venv's interpreter. Tries the audiobooks-local venv
     first (matches the existing layout from the .bat), then common fallbacks.
+    Falls back to sys.executable when no venv is found (e.g. CI environments
+    where packages are installed directly into the system Python).
     """
     candidates = [
         # Project-local venvs under src/audiobooks/
@@ -57,10 +59,13 @@ def find_venv_python() -> Path:
     for c in candidates:
         if c.exists():
             return c
-    raise FileNotFoundError(
-        "No project venv found. Looked for:\n  - "
-        + "\n  - ".join(str(c) for c in candidates)
+    logger.warning(
+        "No project venv found; falling back to current interpreter (%s). "
+        "Looked for:\n  - %s",
+        sys.executable,
+        "\n  - ".join(str(c) for c in candidates),
     )
+    return Path(sys.executable)
 
 
 def reset_latest_research_day() -> int:
