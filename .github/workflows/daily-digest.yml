@@ -1,0 +1,146 @@
+# ============================================================================
+# daily-digest.yml
+# Runs the audio digest pipeline every day at 8:15 AM UTC on GitHub's free
+# runners (2 vCPU, 7 GB RAM — enough for Kokoro TTS without OOM).
+#
+# FIRST-TIME SETUP — add these secrets in:
+#   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+#
+#   CONFIG_INI              Full text of src/audiobooks/config.ini
+#   GOOGLE_CREDENTIALS_JSON Full text of src/audiobooks/credentials.json
+#   GOOGLE_TOKEN_JSON       Full text of src/audiobooks/token.json
+#   GH_PAT                  A GitHub Personal Access Token with the
+#                           "repo" scope (needed so the workflow can write
+#                           back the refreshed OAuth token after each run).
+#                           Create one at: GitHub → Settings → Developer settings
+#                           → Personal access tokens → Tokens (classic)
+# ============================================================================
+
+name: Daily Audio Digest
+
+on:
+  schedule:
+    # 1:30 AM EST (= 6:30 AM UTC)
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip Friday cleanup step'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  build-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write  # needed to commit seen_papers.csv back to the repo
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Source code
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Python runtime
+      # -----------------------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # -----------------------------------------------------------------------
+      # 3. System dependencies (Kokoro requires espeak-ng for phonemization)
+      # -----------------------------------------------------------------------
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends espeak-ng ffmpeg
+
+      # -----------------------------------------------------------------------
+      # 4. Python packages — install CPU-only PyTorch first to avoid pulling
+      #    in the 2 GB CUDA variant, then install the rest of requirements.txt
+      #    (pip will skip torch/torchaudio since they are already satisfied).
+      # -----------------------------------------------------------------------
+      - name: Install Python dependencies
+        run: |
+          pip install --quiet torch torchaudio \
+            --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet -r src/audiobooks/requirements.txt
+
+      # -----------------------------------------------------------------------
+      # 5. Reconstruct gitignored credential files from GitHub Secrets
+      # -----------------------------------------------------------------------
+      - name: Write credential files from secrets
+        working-directory: src/audiobooks
+        env:
+          CONFIG_INI: ${{ secrets.CONFIG_INI }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+        run: |
+          printf '%s' "$CONFIG_INI"              > config.ini
+          printf '%s' "$GOOGLE_CREDENTIALS_JSON" > credentials.json
+          printf '%s' "$GOOGLE_TOKEN_JSON"       > token.json
+
+      # -----------------------------------------------------------------------
+      # 6. Run the pipeline
+      # -----------------------------------------------------------------------
+      - name: Run pipeline
+        run: |
+          if [ "${{ github.event.inputs.skip_cleanup }}" = "true" ]; then
+            python pipeline.py --skip-cleanup
+          else
+            python pipeline.py
+          fi
+        env:
+          PYTHONUNBUFFERED: "1"
+
+      # -----------------------------------------------------------------------
+      # 7. Commit updated seen_papers.csv so dedup state persists across runs
+      #    without consuming any Actions cache storage.
+      #    [skip ci] prevents this commit from re-triggering the workflow.
+      # -----------------------------------------------------------------------
+      - name: Commit updated seen_papers.csv
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/audiobooks/research_papers/seen_papers.csv
+          git diff --cached --quiet || git commit -m "chore: update seen_papers.csv [skip ci]"
+          git push
+
+      # -----------------------------------------------------------------------
+      # 8. Write the refreshed OAuth token back to GitHub Secrets so the next
+      #    scheduled run can authenticate without a browser prompt.
+      #    Requires GH_PAT to have "repo" scope.
+      # -----------------------------------------------------------------------
+      - name: Persist refreshed OAuth token
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -n "$GH_TOKEN" ] && [ -f src/audiobooks/token.json ]; then
+            gh secret set GOOGLE_TOKEN_JSON \
+              --repo "${{ github.repository }}" \
+              --body "$(cat src/audiobooks/token.json)"
+            echo "OAuth token secret updated."
+          else
+            echo "Warning: GH_PAT not set or token.json missing — token refresh NOT persisted."
+            echo "Add a GH_PAT secret (repo scope) to fix this."
+          fi
+
+      # -----------------------------------------------------------------------
+      # 9. Upload log files so you can inspect any failures from the Actions UI
+      # -----------------------------------------------------------------------
+      - name: Upload pipeline logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs-${{ github.run_number }}
+          path: |
+            audiobook_generator.log
+            research_pipeline.log
+          if-no-files-found: ignore
+          retention-days: 7
