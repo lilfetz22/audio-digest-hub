@@ -23,20 +23,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# Import TTS generation functionality
-try:
-    from tts_generator import initialize_tts_engine, synthesize_speech
-    TTS_GENERATOR_AVAILABLE = True
-except ImportError:
-    # logger is not defined yet when this might be first evaluated, define a basic one
-    logger_stderr = logging.getLogger(__name__)
-    logger_stderr.error("tts_generator.py not found. Please ensure it is in the same directory or PYTHONPATH.")
-    TTS_GENERATOR_AVAILABLE = False
-except Exception as e:
-    logger_stderr = logging.getLogger(__name__)
-    logger_stderr.error(f"Error importing tts_generator: {e}")
-    TTS_GENERATOR_AVAILABLE = False
-
 # Local CPU-based TTS generation (replaces the Colab handoff workflow)
 from generate_tts_audio import generate_audio_from_text
 
@@ -813,32 +799,6 @@ Default behavior (when no dates are specified):
 
         if not verify_authentication(config["api_url"], config["api_key"]):
             sys.exit(1)
-
-        # Initialize TTS engine - crucial step!
-        if TTS_GENERATOR_AVAILABLE:
-            try:
-                # Attempt to detect GPU memory or provide a default if detection fails
-                gpu_mem = 0
-                if torch.cuda.is_available():
-                    try:
-                         # Note: Memory detection might need to be more dynamic if multiple GPUs or specific memory usage is a concern.
-                         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                    except Exception:
-                        logger.warning("Could not reliably detect GPU memory, using default 8GB.")
-                        gpu_mem = 8.0 # Default if detection fails
-                else:
-                     logger.info("CUDA not available, initializing TTS for CPU.")
-
-                initialize_tts_engine(gpu_mem_gb=gpu_mem)
-                logger.info("TTS engine initialized successfully.")
-            except Exception as e:
-                logger.critical(f"Failed to initialize TTS engine: {e}", exc_info=True)
-                # Exit if TTS can't be initialized, as it's core to the process
-                sys.exit(1)
-        else:
-            logger.error("TTS generator module is not available. Cannot proceed with TTS synthesis.")
-            sys.exit(1)
-
 
         # Determine date range based on last upload if not explicitly provided
         if not args.start_date and not args.date:
