@@ -78,21 +78,36 @@ def setup_logging():
     logger.info("Starting new run of audiobook generator.")
     logger.info(f"Logging initialized. Output will be saved to {log_file}")
 
-def load_config(config_path="config.ini"):
+def _resolve_config_relative_path(config_dir, path_value):
+    """Resolve config-relative paths without altering absolute paths."""
+    if not path_value:
+        return path_value
+    return path_value if os.path.isabs(path_value) else os.path.join(config_dir, path_value)
+
+
+def load_config(config_path=None):
     """Reads configuration from the INI file."""
+    if config_path is None:
+        config_path = os.path.join(_SCRIPT_DIR, "config.ini")
     if not os.path.exists(config_path):
         logger.error(f"Configuration file '{config_path}' not found.")
         sys.exit(1)
     config = configparser.ConfigParser()
     config.read(config_path)
+    config_dir = os.path.dirname(os.path.abspath(config_path))
     try:
         return {
             "api_url": config["WebApp"]["API_URL"],
             "api_key": config["WebApp"]["API_KEY"],
-            "credentials_file": config["Gmail"]["CREDENTIALS_FILE"],
-            "token_file": config["Gmail"]["TOKEN_FILE"],
-            "reference_voice_file": config.get(
-                "TTS", "REFERENCE_VOICE_FILE", fallback=None
+            "credentials_file": _resolve_config_relative_path(
+                config_dir, config["Gmail"]["CREDENTIALS_FILE"]
+            ),
+            "token_file": _resolve_config_relative_path(
+                config_dir, config["Gmail"]["TOKEN_FILE"]
+            ),
+            "reference_voice_file": _resolve_config_relative_path(
+                config_dir,
+                config.get("TTS", "REFERENCE_VOICE_FILE", fallback=None),
             ),
         }
     except KeyError as e:

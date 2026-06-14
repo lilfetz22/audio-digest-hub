@@ -113,7 +113,32 @@ class TestConfigAndSetup:
         config = ga.load_config(mock_config_file)
         assert config["api_url"] == "https://fake-api.com"
         assert config["api_key"] == "fake_api_key"
-        assert config["reference_voice_file"] == "path/to/fake_voice.wav"
+        config_dir = Path(mock_config_file).parent
+        assert config["credentials_file"] == str(config_dir / "fake_credentials.json")
+        assert config["token_file"] == str(config_dir / "fake_token.json")
+        assert config["reference_voice_file"] == str(config_dir / "path/to/fake_voice.wav")
+
+    def test_load_config_preserves_absolute_paths(self, tmp_path):
+        config = configparser.ConfigParser()
+        absolute_voice = tmp_path / "voice.wav"
+        config["WebApp"] = {
+            "API_URL": "https://fake-api.com",
+            "API_KEY": "fake_api_key",
+        }
+        config["Gmail"] = {
+            "CREDENTIALS_FILE": str(tmp_path / "credentials.json"),
+            "TOKEN_FILE": str(tmp_path / "token.json"),
+        }
+        config["TTS"] = {"REFERENCE_VOICE_FILE": str(absolute_voice)}
+        config_path = tmp_path / "config.ini"
+        with open(config_path, "w") as f:
+            config.write(f)
+
+        loaded = ga.load_config(str(config_path))
+
+        assert loaded["credentials_file"] == str(tmp_path / "credentials.json")
+        assert loaded["token_file"] == str(tmp_path / "token.json")
+        assert loaded["reference_voice_file"] == str(absolute_voice)
 
     def test_load_config_missing_file(self, caplog):
         with pytest.raises(SystemExit):
