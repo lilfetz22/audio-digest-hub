@@ -37,6 +37,9 @@ except Exception as e:
     logger_stderr.error(f"Error importing tts_generator: {e}")
     TTS_GENERATOR_AVAILABLE = False
 
+# Local CPU-based TTS generation (replaces the Colab handoff workflow)
+from generate_tts_audio import generate_audio_from_text
+
 # --- Configuration & Constants ---
 # logger is defined later in setup_logging, so use a placeholder here if needed early.
 # For now, it's safe to assume it's available when needed during main execution.
@@ -44,15 +47,15 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
 
 UPLOAD_MP3_BASENAME = "temp_output"
-ARCHIVE_FOLDER = "archive_mp3"
 
 MAX_UPLOAD_SIZE_MB = 35.0 # Keep original for context, though local script might split it
 
-# Raw content folder path
-RAW_CONTENT_FOLDER = "raw_content"
-
-# Cleaned text folder path - This might become less relevant if we don\'t save intermediate text files
-CLEANED_TEXT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cleaned_full_texts")
+# Folder paths anchored to this script's directory so the pipeline works
+# regardless of cwd (cron, pipeline.py orchestrator, manual invocation).
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIVE_FOLDER = os.path.join(_SCRIPT_DIR, "archive_mp3")
+RAW_CONTENT_FOLDER = os.path.join(_SCRIPT_DIR, "raw_content")
+CLEANED_TEXT_FOLDER = os.path.join(_SCRIPT_DIR, "cleaned_full_texts")
 
 
 # --- Core Functions (assuming these are present and unchanged) ---
@@ -435,9 +438,123 @@ def process_emails_and_raw_content(service, sources, target_date_str):
 
     return combined_text, combined_blocks
 
-def upload_audio(mp3_filepath: str, config: dict, date_str: str, text_blocks: list) -> bool:
+
+def process_emails(service, sources, target_date_str):
+    logger.info(f"Processing emails for date: {target_date_str}")
+    sender_emails = [source["sender_email"] for source in sources]
+    if not sender_emails:
+        return "", []
+    sender_query = " OR ".join([f"from:{email}" for email in sender_emails])
+    target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    after_date = target_date.strftime("%Y/%m/%d")
+    before_date = (target_date + datetime.timedelta(days=1)).strftime("%Y/%m/%d")
+    query = f"({sender_query}) after:{after_date} before:{before_date}"
+    logger.info(f"Using Gmail query: {query}")
+    try:
+        results = _execute_with_retry(service.users().messages().list(userId="me", q=query))
+        messages = results.get("messages", [])
+    except (HttpError, TimeoutError, OSError) as error:
+        logger.error(f"An error occurred fetching emails: {error}", exc_info=True)
+        return "", []
+    if not messages:
+        return "", []
+    all_text_blocks = []
+    sender_to_custom_name = {
+        s["sender_email"].lower(): s["custom_name"] for s in sources
+    }
+    for msg_info in reversed(messages):
+        try:
+            msg = _execute_with_retry(
+                service.users().messages().get(userId="me", id=msg_info["id"])
+            )
+        except (HttpError, TimeoutError, OSError) as exc:
+            logger.error(
+                f"Failed to fetch email {msg_info['id']} after retries: {exc}. Skipping.",
+                exc_info=True,
+            )
+            continue
+        if "UNREAD" in msg.get("labelIds", []):
+            try:
+                subject = next(
+                    (
+                        h["value"]
+                        for h in msg["payload"]["headers"]
+                        if h["name"] == "Subject"
+                    ),
+                    "No Subject",
+                )
+                logger.info(
+                    f"Marking email as read: '{subject[:50]}...' (ID: {msg_info['id']})"
+                )
+                _execute_with_retry(
+                    service.users().messages().modify(
+                        userId="me", id=msg_info["id"], body={"removeLabelIds": ["UNREAD"]}
+                    )
+                )
+            except (HttpError, TimeoutError, OSError) as e:
+                logger.warning(
+                    f"Could not mark email {msg_info['id']} as read. Error: {e}. Continuing."
+                )
+        headers = msg["payload"]["headers"]
+        sender_email = next(
+            (
+                match.group(1).lower()
+                for h in headers
+                if h["name"] == "From" and (match := re.search(r"<(.+?)>", h["value"]))
+            ),
+            "",
+        )
+        custom_name = sender_to_custom_name.get(sender_email, "Unknown Source")
+        body_text = ""
+        try:
+            if "parts" in msg["payload"]:
+                part = next(
+                    (
+                        p
+                        for p in msg["payload"]["parts"]
+                        if p["mimeType"] in ["text/plain", "text/html"]
+                    ),
+                    None,
+                )
+                if part:
+                    data = base64.urlsafe_b64decode(part["body"]["data"])
+                    body_text = data.decode("utf-8", errors="replace")
+                    if part["mimeType"] == "text/html":
+                        body_text = re.sub("<[^<]+?>", "", body_text)
+            else:
+                data = base64.urlsafe_b64decode(msg["payload"]["body"]["data"])
+                body_text = data.decode("utf-8", errors="replace")
+            text_block = f"\n\nNewsletter from: {custom_name}.\n\n{body_text.strip()}"
+            all_text_blocks.append({"text": text_block, "title": custom_name})
+        except Exception:
+            logger.error(f"Failed to parse email from {custom_name}", exc_info=True)
+            all_text_blocks.append(
+                {
+                    "text": f"\n\n{custom_name} could not be processed.\n\n",
+                    "title": f"{custom_name} (Error)",
+                }
+            )
+    return "".join([b["text"] for b in all_text_blocks]), all_text_blocks
+
+
+def save_cleaned_text(text_content: str, date_str: str) -> str:
     """
-    Uploads the generated MP3 using the existing upload_mp3.py functionality.
+    Archive the cleaned text to disk for debugging / audit. Returns the path.
+    """
+    os.makedirs(CLEANED_TEXT_FOLDER, exist_ok=True)
+    text_filename = f"digest_{date_str}_cleaned.txt"
+    text_filepath = os.path.join(CLEANED_TEXT_FOLDER, text_filename)
+    with open(text_filepath, "w", encoding="utf-8") as f:
+        f.write(text_content)
+    logger.info(f"Cleaned text archived to: {text_filepath}")
+    return text_filepath
+
+
+def upload_audio(
+    mp3_filepath: str, config: dict, date_str: str, text_blocks: list
+) -> bool:
+    """
+    Uploads the generated MP3 using the tried and true upload_mp3.py functionality.
     Returns True if successful, False otherwise.
     """
     if not os.path.exists(mp3_filepath):
@@ -475,9 +592,128 @@ def upload_audio(mp3_filepath: str, config: dict, date_str: str, text_blocks: li
         return False
 
 
-def get_output_base_filename(date_str: str) -> str:
-    """Generates a base filename for output audio based on the date."""
-    return f"Daily_Digest_{date_str}"
+def generate_and_upload_audio(
+    text_content: str, text_blocks: list, config: dict, date_str: str
+) -> list:
+    """
+    Generate the MP3 with local Kokoro TTS (CPU) and upload it.
+    Returns a list of file paths created for cleanup.
+    """
+    if not text_content.strip():
+        logger.warning("No text content to process.")
+        return []
+
+    logger.info("🎙️ Starting local TTS generation...")
+
+    save_cleaned_text(text_content, date_str)
+
+    mp3_filename = f"digest_{date_str}_cleaned_generated_audio.mp3"
+    mp3_filepath = os.path.join(ARCHIVE_FOLDER, mp3_filename)
+
+    try:
+        generate_audio_from_text(text_content, mp3_filepath)
+    except Exception as e:
+        logger.error(f"❌ TTS generation failed: {e}", exc_info=True)
+        return []
+
+    success = upload_audio(mp3_filepath, config, date_str, text_blocks)
+
+    if success:
+        logger.info("🎉 Audio generation and upload completed successfully!")
+        return [mp3_filepath]
+    else:
+        logger.error("❌ Workflow failed during upload.")
+        return []
+
+
+def validate_and_process_chunk(chunk, max_len=250):
+    cleaned_chunk = re.sub(r"https?://\S+", "", chunk).strip()
+    if not cleaned_chunk:
+        return []
+    if len(cleaned_chunk) <= max_len:
+        return [cleaned_chunk]
+    sub_chunks = []
+    while len(cleaned_chunk) > max_len:
+        split_pos = cleaned_chunk.rfind(" ", 0, max_len)
+        if split_pos == -1:
+            split_pos = max_len
+        sub_chunks.append(cleaned_chunk[:split_pos])
+        cleaned_chunk = cleaned_chunk[split_pos:].lstrip()
+    sub_chunks.append(cleaned_chunk)
+    return sub_chunks
+
+
+def cleanup(files_to_remove):
+    """
+    Cleans up temporary audio files based on their type.
+    - Deletes .wav files.
+    - Unpins .mp3 files from OneDrive (for testing).
+    """
+    if not files_to_remove:
+        return
+    logger.info("Cleaning up temporary files...")
+    for file_path in files_to_remove:
+        try:
+            if os.path.exists(file_path):
+                # Check the file extension to decide the action
+                if file_path.lower().endswith(".wav"):
+                    os.remove(file_path)
+                    logger.info(f"Deleted temporary file: {file_path}")
+                elif file_path.lower().endswith(".mp3"):
+                    # For MP3s, unpin them instead of deleting
+                    unpin_file_from_onedrive(Path(file_path))
+                    # The unpin function has its own logging, so we don't need another message here.
+                else:
+                    logger.warning(
+                        f"Skipping unknown file type during cleanup: {file_path}"
+                    )
+            else:
+                logger.warning(
+                    f"File not found for cleanup, already removed?: {file_path}"
+                )
+        except OSError as e:
+            logger.error(f"Could not process temporary file {file_path}: {e}")
+
+
+def unpin_file_from_onedrive(file_path: Path) -> None:
+    """
+    Executes the 'attrib' command to mark a file as 'cloud-only' in OneDrive.
+    This unpins the file from the local device, freeing up space. This is a
+    Windows-specific command.
+    """
+    # On non-Windows systems, this will fail gracefully.
+    if sys.platform != "win32":
+        # We can just delete the file on non-windows systems, or do nothing.
+        # Here we'll just log and return.
+        # logging.warning(f"Unpinning is a Windows-only feature. Skipping for {file_path}.")
+        try:
+            os.remove(file_path)
+            logging.info(f"Deleted temporary MP3 file: {file_path}")
+        except OSError as e:
+            logging.error(f"Could not delete temporary MP3 file {file_path}: {e}")
+        return
+
+    try:
+        # The '+U' attribute marks the file as not being fully present on the local machine.
+        # The '-P' attribute removes the 'pinned' status, ensuring it can be dehydrated.
+        subprocess.run(
+            ["attrib", "+U", "-P", str(file_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        logging.info(f"Successfully unpinned '{file_path}' from local storage.")
+    except FileNotFoundError:
+        logging.error(
+            "The 'attrib' command was not found. This function is intended for Windows."
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(
+            f"Failed to execute 'attrib' command for '{file_path}'.\n"
+            f"Return code: {e.returncode}\n"
+            f"Stderr: {e.stderr}"
+        )
+
 
 # --- Main Execution Logic ---
 def main():
@@ -655,12 +891,8 @@ Default behavior (when no dates are specified):
                 for block in text_blocks:
                     block["text"] = remove_markdown_links(block["text"])
 
-                # --- Synthesize Speech ---
-                logger.info("Initiating TTS speech synthesis...")
-                output_base_filename = get_output_base_filename(date_str)
-                # Synthesize speech using the new generator function
-                mp3_filepath_generated, mp3_size_mb = synthesize_speech(
-                    cleaned_full_text, output_base_filename
+                files_created = generate_and_upload_audio(
+                    cleaned_full_text, text_blocks, config, date_str
                 )
 
                 if not mp3_filepath_generated:

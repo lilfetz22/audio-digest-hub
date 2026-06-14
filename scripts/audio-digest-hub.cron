@@ -1,0 +1,23 @@
+# audio-digest-hub — daily orchestrator cron entry.
+#
+# One-time server setup (run once as root on the Ubuntu host):
+#
+#     chmod +x /root/audio-digest-hub/pipeline.py
+#     mkdir -p /root/audio-digest-hub/logs
+#     crontab -e
+#     # ... then paste the entry below into root's crontab.
+#
+# Verify timezone interpretation before trusting the schedule:
+#
+#     date && TZ=America/New_York date
+#     # Berlin vs New York time — should differ by 5h (winter) or 6h (summer).
+#
+# Manual dry-run (skips the Friday cleanup branch even on Fridays):
+#
+#     /root/audio-digest-hub/pipeline.py --skip-cleanup
+
+# CRON_TZ makes cron interpret the schedule in New York local time, so DST is
+# handled automatically (1 AM EST in winter, 1 AM EDT in summer). The server's
+# own clock can stay on Berlin time without affecting this.
+CRON_TZ=America/New_York
+0 1 * * * flock -n /tmp/audio-digest-hub.lock /root/audio-digest-hub/pipeline.py >> /root/audio-digest-hub/logs/pipeline.cron.log 2>&1

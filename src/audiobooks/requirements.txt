@@ -4,7 +4,10 @@ google-api-python-client
 google-auth-oauthlib
 pydub
 imageio-ffmpeg
-coqui-tts
+kokoro>=0.9.4
+soundfile
+numpy
+tqdm
 torch
 torchaudio
 google-genai

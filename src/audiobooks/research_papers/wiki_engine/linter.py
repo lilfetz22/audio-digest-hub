@@ -12,6 +12,7 @@ import yaml
 
 from .git_hooks import WikiGitManager
 from .utils import load_prompt, slugify
+from .index_builder import IndexBuilder # Added import for IndexBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,13 @@ class WikiLinter:
         llm_client=None,
         model_name: str = "gemini-3.1-flash-lite-preview",
         git_manager: Optional[WikiGitManager] = None,
+        index_builder: Optional[IndexBuilder] = None, # Added index_builder
         auto_commit: bool = False,
         repo_root: Optional[str] = None,
+        parent_root: Optional[str] = None, # Added parent_root
+        branch: list[str] = ["main", "feat/kokoro-cpu-tts"], # Updated to include the new branch
+        auto_push: bool = False, # Added auto_push
+        push_parent: bool = False, # Added push_parent
     ):
         self.wiki_dir = Path(wiki_dir)
         self.concepts_dir = self.wiki_dir / "concepts"
@@ -58,12 +64,16 @@ class WikiLinter:
         self.queries_dir = self.wiki_dir / "queries"
         self.llm_client = llm_client
         self.model_name = model_name
-        self.auto_commit = auto_commit
-        repo_path = Path(repo_root) if repo_root else self.wiki_dir.parent
         self.git_manager = git_manager or WikiGitManager(
-            repo_root=str(repo_path),
+            repo_root=str(repo_root) if repo_root else self.wiki_dir.parent,
             wiki_dir=str(self.wiki_dir),
+            parent_root=parent_root,
+            branch=branch,
+            auto_push=auto_push,
+            push_parent=push_parent,
         )
+        self.index_builder = index_builder or IndexBuilder(str(self.wiki_dir)) # Initialize index_builder
+        self.auto_commit = auto_commit
 
     def run_full_lint(self) -> dict:
         """Run all lint checks and generate a report.
