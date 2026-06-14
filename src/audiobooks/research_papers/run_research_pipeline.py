@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
 
 
+def _resolve_config_relative_path(config_dir, path_value):
+    """Resolve config-relative paths without altering absolute paths."""
+    if not path_value:
+        return path_value
+    return path_value if os.path.isabs(path_value) else os.path.join(config_dir, path_value)
+
+
 def setup_logging():
     """Configure logging for the research pipeline."""
     log_file = "research_pipeline.log"
@@ -56,13 +63,18 @@ def load_config(config_path=None):
 
     config = configparser.ConfigParser()
     config.read(config_path)
+    config_dir = os.path.dirname(os.path.abspath(config_path))
 
     try:
         return {
             "api_url": config["WebApp"]["API_URL"],
             "api_key": config["WebApp"]["API_KEY"],
-            "credentials_file": config["Gmail"]["CREDENTIALS_FILE"],
-            "token_file": config["Gmail"]["TOKEN_FILE"],
+            "credentials_file": _resolve_config_relative_path(
+                config_dir, config["Gmail"]["CREDENTIALS_FILE"]
+            ),
+            "token_file": _resolve_config_relative_path(
+                config_dir, config["Gmail"]["TOKEN_FILE"]
+            ),
             "gemini_api_key": config["Gemini"]["API_KEY"],
             "generation_model": config["Gemini"]["GENERATION_MODEL"],
             "backup_api_key": config.get("Gemini", "BACKUP_API_KEY", fallback=None),
