@@ -69,6 +69,16 @@ class WikiGitManager:
         try:
             if self.parent_root is not None:
                 # Submodule mode — repo_root IS the wiki submodule's git root.
+                # Guard against an unpopulated submodule (no .git file/dir).
+                git_marker = self.repo_root / ".git"
+                if not git_marker.exists():
+                    logger.warning(
+                        "Wiki submodule at %s is unpopulated (no .git entry). "
+                        "Skipping auto-commit. Run `git submodule update --init` "
+                        "to initialise it.",
+                        self.repo_root,
+                    )
+                    return False
                 self._ensure_on_branch(cwd=self.repo_root)
 
             # ── Step 1: Stage all changes (check=True so failures are loud) ──
