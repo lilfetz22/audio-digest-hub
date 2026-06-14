@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "llm-wiki": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "wiki_engine.mcp_server"],
+      "cwd": "${workspaceFolder}/src/audiobooks/research_papers",
+      "env": {}
+    }
+  }
+}
