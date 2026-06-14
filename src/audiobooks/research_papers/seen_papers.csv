@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-05-30,https://huggingface.co/papers/2605.29801,AgentDoG 1.5: A Lightweight and Scalable Alignment Framework for AI Agent Safety and Security (81▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30280,"Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks, Environments, and Robot Embodiments (73▲)",huggingface,
-2026-05-30,https://huggingface.co/papers/2605.29250,OmniRetrieval: Unified Retrieval across Heterogeneous Knowledge Sources (54▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.25378,CollectionLoRA: Collecting 50 Effects in 1 LoRA via Multi-Teacher On-Policy Distillation (48▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30263,minWM: A Full-Stack Open-Source Framework for Real-Time Interactive Video World Models (40▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30346,YoCausal: How Far is Video Generation from World Model? A Causality Perspective (32▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30248,GenClaw: Code-Driven Agentic Image Generation (25▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30260,How LoRA Remembers? A Parametric Memory Law for LLM Finetuning (20▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30076,UniSteer: Text-Guided Flow Matching in Activation Space for Versatile LLM Steering (19▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30161,Why Far Looks Up: Probing Spatial Representation in Vision-Language Models (18▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30073,Native Audio-Visual Alignment for Generation (18▲),huggingface,
-2026-05-30,https://huggingface.co/papers/2605.30265,LoMo: Local Modality Substitution for Deeper Vision-Language Fusion (17▲),huggingface,
 2026-06-01,https://arxiv.org/abs/1709.08894,On the regularization of Wasserstein GANs,arxiv,stat
 2026-06-01,https://arxiv.org/abs/2405.07836,Forecasting with Hyper-Trees,arxiv,stat
 2026-06-01,https://arxiv.org/abs/2407.08485,Logistic lasso regression with nearest neighbors for gradient-based dimension reduction,arxiv,stat
@@ -3566,3 +3554,15 @@ date,url,title,source,category
 2026-06-12,https://huggingface.co/papers/2606.12195,InternVideo3: Agentify Foundation Models with Multimodal Contextual Reasoning (18▲),huggingface,
 2026-06-12,https://huggingface.co/papers/2606.11817,Grammar-Constrained Decoding Can Jailbreak LLMs into Generating Malicious Code (17▲),huggingface,
 2026-06-12,https://huggingface.co/papers/2606.12370,Breaking Entropy Bounds: Accelerating RL Training via MTP with Rejection Sampling (16▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13681,EvoArena: Tracking Memory Evolution for Robust LLM Agents in Dynamic Environments (104▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13392,MiniMax Sparse Attention (82▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13673,SpatialClaw: Rethinking Action Interface for Agentic Spatial Reasoning (80▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13679,InterleaveThinker: Reinforcing Agentic Interleaved Generation (73▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.08063,Robust-U1: Can MLLMs Self-Recover Corrupted Visual Content for Robust Understanding? (71▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13473,MaxProof: Scaling Mathematical Proof with Generative-Verifier RL and Population-Level Test-Time Scaling (69▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.12087,FORT-Searcher: Synthesizing Shortcut-Resistant Search Tasks for Training Deep Search Agents (60▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.09426,"WeaveBench: A Long-Horizon, Real-World Benchmark for Computer-Use Agents with Hybrid Interfaces (53▲)",huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13578,LabVLA: Grounding Vision-Language-Action Models in Scientific Laboratories (50▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13289,HYDRA-X: Native Unified Multimodal Models with Holistic Visual Tokenizers (24▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.10768,N-GRPO: Embedding-Level Neighbor Mixing for Enhanced Policy Optimization (19▲),huggingface,
+2026-06-13,https://huggingface.co/papers/2606.13662,EurekAgent: Agent Environment Engineering is All You Need For Autonomous Scientific Discovery (18▲),huggingface,
