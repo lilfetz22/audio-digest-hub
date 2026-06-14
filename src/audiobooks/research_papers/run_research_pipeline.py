@@ -44,8 +44,12 @@ def setup_logging():
     logger.info("Research paper pipeline starting...")
 
 
-def load_config(config_path="config.ini"):
+def load_config(config_path=None):
     """Load configuration from INI file."""
+    if config_path is None:
+        # config.ini lives one directory up from this script (src/audiobooks/)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(os.path.dirname(script_dir), "config.ini")
     if not os.path.exists(config_path):
         logger.error(f"Config file not found: {config_path}")
         sys.exit(1)
