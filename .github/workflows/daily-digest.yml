@@ -20,8 +20,8 @@ name: Daily Audio Digest
 
 on:
   schedule:
-    # 1:30 AM EST (= 6:30 AM UTC)
-    - cron: '30 6 * * *'
+    # 1:08 AM EDT / 12:08 AM EST
+    - cron: '8 5 * * *'
   workflow_dispatch:
     inputs:
       skip_cleanup:
