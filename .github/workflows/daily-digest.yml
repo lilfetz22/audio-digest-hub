@@ -53,6 +53,18 @@ jobs:
           python-version: '3.11'
 
       # -----------------------------------------------------------------------
+      # 2b. Cache HuggingFace model weights so they are only downloaded once.
+      #     Cache key is pinned to model names; bump the suffix if you upgrade.
+      # -----------------------------------------------------------------------
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: hf-models-${{ runner.os }}-kokoro-82m-minilm-l6-v2-v1
+          restore-keys: |
+            hf-models-${{ runner.os }}-
+
+      # -----------------------------------------------------------------------
       # 3. System dependencies (Kokoro requires espeak-ng for phonemization)
       # -----------------------------------------------------------------------
       - name: Install system dependencies
@@ -97,6 +109,7 @@ jobs:
           fi
         env:
           PYTHONUNBUFFERED: "1"
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
       # -----------------------------------------------------------------------
       # 7. Commit updated seen_papers.csv so dedup state persists across runs
