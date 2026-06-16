@@ -33,7 +33,7 @@ on:
 jobs:
   build-digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     permissions:
       contents: write  # needed to commit seen_papers.csv back to the repo
 
