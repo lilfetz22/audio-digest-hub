@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-06-06,https://huggingface.co/papers/2606.06492,Code2LoRA: Hypernetwork-Generated Adapters for Code Language Models under Software Evolution (45▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.05553,ArcANE: Do Role-Playing Language Agents Stay in Character at the Right Time? (40▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.04743,TIDE: Proactive Multi-Problem Discovery via Template-Guided Iteration (36▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.05622,AdaPlanBench: Evaluating Adaptive Planning in Large Language Model Agents under World and User Constraints (32▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.05259,VideoKR: Towards Knowledge- and Reasoning-Intensive Video Understanding (26▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.06428,Reinforcement Learning Elicits Contextual Learning of Unseen Language Translation (23▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.05275,Personal AI Agent for Camera Roll VQA (16▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.06042,LoomVideo: Unifying Multimodal Inputs into Video Generation and Editing (16▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.06477,Complexity-Balanced Diffusion Splitting (15▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.03312,RobotValues: Evaluating Household Robots When Human Values Conflict (15▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.04703,Rethinking Continual Experience Internalization for Self-Evolving LLM Agents (13▲),huggingface,
-2026-06-06,https://huggingface.co/papers/2606.04811,Dream.exe: Can Video Generation Models Dream Executable Robot Manipulation? (12▲),huggingface,
 2026-06-08,https://arxiv.org/abs/2109.02644,Resolvent convergence for sample covariance matrices with general covariance profiles and quadratic-form control,arxiv,stat
 2026-06-08,https://arxiv.org/abs/2206.08598,Characterizing Learning Dynamics under Relative Reparameterization of Singular Models,arxiv,stat
 2026-06-08,https://arxiv.org/abs/2211.02192,A Mixed Model Approach for Estimating Regional Functional Connectivity from Voxel-level BOLD Signals,arxiv,stat
@@ -4194,3 +4182,15 @@ date,url,title,source,category
 2026-06-19,https://huggingface.co/papers/2606.17800,MaineCoon: Pursuing A Real-Time Audio-Visual Social World Model (8▲),huggingface,
 2026-06-19,https://huggingface.co/papers/2606.18967,EfficientRollout: System-Aware Self-Speculative Decoding for RL Rollouts (8▲),huggingface,
 2026-06-19,https://huggingface.co/papers/2606.05985,Beyond Alignment: Value Diversity as a Collective Property in Multicultural Agent Systems (8▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.19195,Moebius: 0.2B Lightweight Image Inpainting Framework with 10B-Level Performance (96▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.15133,DragMesh-2: Physically Plausible Dexterous Hand-Object Interaction with Articulated Objects (61▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.19419,Playful Agentic Robot Learning (35▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.20515,S-Agent: Spatial Tool-Use Elicits Reasoning for Spatial Intelligence (27▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.20517,Multi-LCB: Extending LiveCodeBench to Multiple Programming Languages (26▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.19704,Beyond Static Leaderboards: Predictive Validity for the Evaluation of LLM Agents (21▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.20506,FreeStyle: Free Control of Style-Content Dual-Reference Generation from Community LoRA Mining (18▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.20563,JanusMesh: Fast and Zero-Shot 3D Visual Illusion Generation via Cross-Space Denoising (16▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.20404,FlowBender: Feedback-Aware Training for Self-Correcting Conditional Flows (15▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2604.13416,DF3DV-1K: A Large-Scale Dataset and Benchmark for Distractor-Free Novel View Synthesis (9▲),huggingface,
+2026-06-20,https://huggingface.co/papers/2606.19531,"ImageWAM: Do World Action Models Really Need Video Generation, or Just Image Editing? (9▲)",huggingface,
+2026-06-20,https://huggingface.co/papers/2606.19980,ENPIRE: Agentic Robot Policy Self-Improvement in the Real World (7▲),huggingface,
