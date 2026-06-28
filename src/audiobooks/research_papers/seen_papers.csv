@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-06-13,https://huggingface.co/papers/2606.13681,EvoArena: Tracking Memory Evolution for Robust LLM Agents in Dynamic Environments (104▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13392,MiniMax Sparse Attention (82▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13673,SpatialClaw: Rethinking Action Interface for Agentic Spatial Reasoning (80▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13679,InterleaveThinker: Reinforcing Agentic Interleaved Generation (73▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.08063,Robust-U1: Can MLLMs Self-Recover Corrupted Visual Content for Robust Understanding? (71▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13473,MaxProof: Scaling Mathematical Proof with Generative-Verifier RL and Population-Level Test-Time Scaling (69▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.12087,FORT-Searcher: Synthesizing Shortcut-Resistant Search Tasks for Training Deep Search Agents (60▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.09426,"WeaveBench: A Long-Horizon, Real-World Benchmark for Computer-Use Agents with Hybrid Interfaces (53▲)",huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13578,LabVLA: Grounding Vision-Language-Action Models in Scientific Laboratories (50▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13289,HYDRA-X: Native Unified Multimodal Models with Holistic Visual Tokenizers (24▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.10768,N-GRPO: Embedding-Level Neighbor Mixing for Enhanced Policy Optimization (19▲),huggingface,
-2026-06-13,https://huggingface.co/papers/2606.13662,EurekAgent: Agent Environment Engineering is All You Need For Autonomous Scientific Discovery (18▲),huggingface,
 2026-06-15,https://arxiv.org/abs/2210.03964,An Efficient and Continuous Voronoi Density Estimator,arxiv,stat
 2026-06-15,https://arxiv.org/abs/2310.19435,A novel characterization of structures in smooth regression curves: from a viewpoint of persistent homology,arxiv,stat
 2026-06-15,https://arxiv.org/abs/2312.14889,On Rate-Optimal Partitioning Classification from Observable and from Privatised Data,arxiv,stat
@@ -4709,3 +4697,15 @@ date,url,title,source,category
 2026-06-26,https://huggingface.co/papers/2606.25473,Causal-rCM: A Unified Teacher-Forcing and Self-Forcing Open Recipe for Autoregressive Diffusion Distillation in Streaming Video Generation and Interactive World Models (17▲),huggingface,
 2026-06-26,https://huggingface.co/papers/2606.24849,IV-CoT: Implicit Visual Chain-of-Thought for Structure-Aware Text-to-Image Generation (14▲),huggingface,
 2026-06-26,https://huggingface.co/papers/2606.18239,EBench: Elemental Diagnosis of Generalist Mobile Manipulation Policies (14▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.27377,DanceOPD: On-Policy Generative Field Distillation (54▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.27313,ViQ: Text-Aligned Visual Quantized Representations at Any Resolution (36▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.26790,OPID: On-Policy Skill Distillation for Agentic Reinforcement Learning (35▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.26907,Qwen-Image-Agent: Bridging the Context Gap in Real-World Image Generation (34▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.26300,The Verification Horizon: No Silver Bullet for Coding Agent Rewards (33▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.18394,JetSpec: Breaking the Scaling Ceiling of Speculative Decoding with Parallel Tree Drafting (24▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.24551,GUI vs. CLI: Execution Bottlenecks in Screen-Only and Skill-Mediated Computer-Use Agents (23▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.26217,Fast LeWorldModel (16▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.26027,Why Multi-Step Tool-Use Reinforcement Learning Collapses and How Supervisory Signals Fix It (12▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.14397,Running the Gauntlet: Re-evaluating the Capabilities of Agents Beyond Familiar Environments (11▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.27192,LISA: Likelihood Score Alignment for Visual-condition Controllable Generation (10▲),huggingface,
+2026-06-27,https://huggingface.co/papers/2606.26904,Confidence-Aware Tool Orchestration for Robust Video Understanding (8▲),huggingface,
