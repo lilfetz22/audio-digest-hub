@@ -57,7 +57,7 @@ jobs:
       #     Cache key is pinned to model names; bump the suffix if you upgrade.
       # -----------------------------------------------------------------------
       - name: Cache HuggingFace models
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface/hub
           key: hf-models-${{ runner.os }}-kokoro-82m-minilm-l6-v2-v1
