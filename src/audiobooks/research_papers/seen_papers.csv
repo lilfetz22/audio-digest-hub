@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-06-20,https://huggingface.co/papers/2606.19195,Moebius: 0.2B Lightweight Image Inpainting Framework with 10B-Level Performance (96▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.15133,DragMesh-2: Physically Plausible Dexterous Hand-Object Interaction with Articulated Objects (61▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.19419,Playful Agentic Robot Learning (35▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.20515,S-Agent: Spatial Tool-Use Elicits Reasoning for Spatial Intelligence (27▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.20517,Multi-LCB: Extending LiveCodeBench to Multiple Programming Languages (26▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.19704,Beyond Static Leaderboards: Predictive Validity for the Evaluation of LLM Agents (21▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.20506,FreeStyle: Free Control of Style-Content Dual-Reference Generation from Community LoRA Mining (18▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.20563,JanusMesh: Fast and Zero-Shot 3D Visual Illusion Generation via Cross-Space Denoising (16▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.20404,FlowBender: Feedback-Aware Training for Self-Correcting Conditional Flows (15▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2604.13416,DF3DV-1K: A Large-Scale Dataset and Benchmark for Distractor-Free Novel View Synthesis (9▲),huggingface,
-2026-06-20,https://huggingface.co/papers/2606.19531,"ImageWAM: Do World Action Models Really Need Video Generation, or Just Image Editing? (9▲)",huggingface,
-2026-06-20,https://huggingface.co/papers/2606.19980,ENPIRE: Agentic Robot Policy Self-Improvement in the Real World (7▲),huggingface,
 2026-06-23,https://arxiv.org/abs/2007.01497,A new non-parametric test for multivariate paired data from pair matching or paired designs,arxiv,stat
 2026-06-23,https://arxiv.org/abs/2010.14694,Deep Learning for Individual Heterogeneity,arxiv,stat
 2026-06-23,https://arxiv.org/abs/2209.05474,Consistent Selection of the Number of Groups in Panel Models via Cross-Validation,arxiv,stat
@@ -4268,3 +4256,15 @@ date,url,title,source,category
 2026-07-03,https://huggingface.co/papers/2607.00678,ABot-M0.5: Unified Mobility-and-Manipulation World Action Model (11▲),huggingface,
 2026-07-03,https://huggingface.co/papers/2607.01191,Perceive-to-Reason: Decoupling Perception and Reasoning for Fine-Grained Visual Reasoning (11▲),huggingface,
 2026-07-03,https://huggingface.co/papers/2606.31551,AutoTrainess: Teaching Language Models to Improve Language Models Autonomously (8▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.02512,Program-as-Weights: A Programming Paradigm for Fuzzy Functions (56▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.02255,AgenticSTS: A Bounded-Memory Testbed for Long-Horizon LLM Agents (39▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.02440,EvoPolicyGym: Evaluating Autonomous Policy Evolution in Interactive Environments (39▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2606.30562,Morphing into Hybrid Attention Models (30▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.01642,Multi-Resolution Flow Matching: Training-Free Diffusion Acceleration via Staged Sampling (21▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.01647,AgenticDataBench: A Comprehensive Benchmark for Data Agents (21▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.02517,WorldDirector: Building Controllable World Simulators with Persistent Dynamic Memory (16▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2606.31825,Breaking Failure Cascades: Step-Aware Reinforcement Learning for Medical Multimodal Reasoning (14▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.01874,SkillCoach: Self-Evolving Rubrics for Evaluating and Enhancing Agentic Skill-Use (13▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.02291,Optimizing Visual Generative Models via Distribution-wise Rewards (12▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.01002,Logit-Contribution Scoring Identifies Non-Literal Retrieval Heads (10▲),huggingface,
+2026-07-04,https://huggingface.co/papers/2607.02508,From SRA to Self-Flow: Data Augmentation or Self-Supervision? (10▲),huggingface,
