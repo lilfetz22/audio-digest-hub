@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-06-27,https://huggingface.co/papers/2606.27377,DanceOPD: On-Policy Generative Field Distillation (54▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.27313,ViQ: Text-Aligned Visual Quantized Representations at Any Resolution (36▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.26790,OPID: On-Policy Skill Distillation for Agentic Reinforcement Learning (35▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.26907,Qwen-Image-Agent: Bridging the Context Gap in Real-World Image Generation (34▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.26300,The Verification Horizon: No Silver Bullet for Coding Agent Rewards (33▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.18394,JetSpec: Breaking the Scaling Ceiling of Speculative Decoding with Parallel Tree Drafting (24▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.24551,GUI vs. CLI: Execution Bottlenecks in Screen-Only and Skill-Mediated Computer-Use Agents (23▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.26217,Fast LeWorldModel (16▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.26027,Why Multi-Step Tool-Use Reinforcement Learning Collapses and How Supervisory Signals Fix It (12▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.14397,Running the Gauntlet: Re-evaluating the Capabilities of Agents Beyond Familiar Environments (11▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.27192,LISA: Likelihood Score Alignment for Visual-condition Controllable Generation (10▲),huggingface,
-2026-06-27,https://huggingface.co/papers/2606.26904,Confidence-Aware Tool Orchestration for Robust Video Understanding (8▲),huggingface,
 2026-06-29,https://arxiv.org/abs/2102.09235,Deep Residual Networks Learn the Geodesic Curve in the Wasserstein Space,arxiv,stat
 2026-06-29,https://arxiv.org/abs/2402.11736,Monte Carlo with kernel-based Gibbs measures: Guarantees for probabilistic herding,arxiv,stat
 2026-06-29,https://arxiv.org/abs/2405.19466,Active Exploration via Autoregressive Generation of Missing Data,arxiv,stat
@@ -4156,3 +4144,15 @@ date,url,title,source,category
 2026-07-10,https://huggingface.co/papers/2607.06624,AgentLens: Production-Assessed Trajectory Reviews for Coding Agent Evaluation (4▲),huggingface,
 2026-07-10,https://huggingface.co/papers/2607.06838,"WildCity: A Real-World City-Scale Testbed for Rendering, Simulation, and Spatial Intelligence (4▲)",huggingface,
 2026-07-10,https://huggingface.co/papers/2607.06018,RoboTALES: Learning Reasoning-Guided Robot Policies via Task-Aligned Simulated Futures (3▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.03118,Vidu S1: A Real-Time Interactive Video Generation Model (108▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2603.29616,Video-Oasis: Rethinking Evaluation of Video Understanding (43▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2601.16211,Why Can't I Open My Drawer? Mitigating Object-Driven Shortcuts in Zero-Shot Compositional Action Recognition (39▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.08768,UniClawBench: A Universal Benchmark for Proactive Agents on Real-World Tasks (22▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.08758,Ideas Have Genomes: Benchmarking Scientific Lineage Reasoning and Lineage-Grounded Idea Generation (20▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.08770,"LongE2V: Long-Horizon Event-based Video Reconstruction, Prediction, and Frame Interpolation with Video Diffusion Models (19▲)",huggingface,
+2026-07-11,https://huggingface.co/papers/2607.08765,Enhancing In-context Panoramic Generation via Geometric-aware Pretraining (14▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.08404,DrugGen 2: A disease-aware language model for enhancing drug discovery (11▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.03803,CineMobile: On-Device Image-to-Video Diffusion for Cinematic Camera Motion Generation (8▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.07740,Jet-Long: Efficient Long-Context Extension with Dynamic Bifocal RoPE (7▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.08763,OpenCoF: Learning to Reason Through Video Generation (6▲),huggingface,
+2026-07-11,https://huggingface.co/papers/2607.07953,"Linear Attention Architectures: Mechanisms, Trade-offs, and Cross-Layer Routing (4▲)",huggingface,
