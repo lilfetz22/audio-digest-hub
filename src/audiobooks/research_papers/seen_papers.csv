@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-07-04,https://huggingface.co/papers/2607.02512,Program-as-Weights: A Programming Paradigm for Fuzzy Functions (56▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.02255,AgenticSTS: A Bounded-Memory Testbed for Long-Horizon LLM Agents (39▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.02440,EvoPolicyGym: Evaluating Autonomous Policy Evolution in Interactive Environments (39▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2606.30562,Morphing into Hybrid Attention Models (30▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.01642,Multi-Resolution Flow Matching: Training-Free Diffusion Acceleration via Staged Sampling (21▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.01647,AgenticDataBench: A Comprehensive Benchmark for Data Agents (21▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.02517,WorldDirector: Building Controllable World Simulators with Persistent Dynamic Memory (16▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2606.31825,Breaking Failure Cascades: Step-Aware Reinforcement Learning for Medical Multimodal Reasoning (14▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.01874,SkillCoach: Self-Evolving Rubrics for Evaluating and Enhancing Agentic Skill-Use (13▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.02291,Optimizing Visual Generative Models via Distribution-wise Rewards (12▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.01002,Logit-Contribution Scoring Identifies Non-Literal Retrieval Heads (10▲),huggingface,
-2026-07-04,https://huggingface.co/papers/2607.02508,From SRA to Self-Flow: Data Augmentation or Self-Supervision? (10▲),huggingface,
 2026-07-07,https://arxiv.org/abs/1811.05336,Analytical Standard Errors for Exploratory Factor Solutions,arxiv,stat
 2026-07-07,https://arxiv.org/abs/2203.00813,An Accelerated Stochastic Variance-Reduced Algorithm for Entropic Wasserstein Barycenters,arxiv,stat
 2026-07-07,https://arxiv.org/abs/2302.04970,Efficient Modeling of Surrogates to Improve Multi-source High-dimensional Integrative Regression,arxiv,stat
@@ -4110,3 +4098,15 @@ date,url,title,source,category
 2026-07-17,https://huggingface.co/papers/2607.13124,ShortOPD: Recovering Pruned LLMs with Short-to-Long On-Policy Distillation (11▲),huggingface,
 2026-07-17,https://huggingface.co/papers/2607.12752,Hallo4D: Multi-Modal Hallucination Mitigation for Consistent Spatio-Temporal Generation (11▲),huggingface,
 2026-07-17,https://huggingface.co/papers/2607.11523,Vinci2: Providing Proactive Assistance in Continuous Egocentric Videos (9▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.14935,VideoChat3: Fully Open Video MLLM for Efficient and Generalist Video Understanding (106▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.14777,SEED: Self-Evolving On-Policy Distillation for Agentic Reinforcement Learning (67▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.15257,SearchOS-V1: Towards Robust Open-Domain Information-Seeking Agent Collaboration (49▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.14952,LongStraw: Long-Context RL Beyond 2M Tokens under a Fixed GPU Budget (40▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.15207,BadWAM: When World-Action Models Dream Right but Act Wrong (36▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.14202,KeyFrame-Compass: Towards Comprehensive Evaluation of Keyframe-Conditioned Video Generation (30▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.14189,MultiRef-Compass: Towards Comprehensive Evaluation of Multi-Reference-to-Audio-Video Generation (29▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.13188,Concurrent Image Understanding and Generation: Self-Correcting Coupled Markov Jump Processes (23▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.14076,From Pixels to States: Rethinking Interactive World Models as Game Engines (23▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.12800,UniVR: Thinking in Visual Space for Unified Visual Reasoning (22▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.15038,Video = World + Event Stream (15▲),huggingface,
+2026-07-18,https://huggingface.co/papers/2607.13399,"Demystifying On-Policy Distillation: Roles, Pathologies, and Regulations (14▲)",huggingface,
