@@ -717,6 +717,40 @@ def unpin_file_from_onedrive(file_path: Path) -> None:
 
 
 # --- Main Execution Logic ---
+def run_reauth():
+    """Force the Google OAuth flow and write a fresh token.json, then return.
+
+    Bypasses all date/upload logic so a different Google account can be
+    connected on demand (e.g. after the daily GitHub Action has already run).
+    Any existing token is removed first so the interactive browser sign-in
+    always runs rather than silently reusing the old account's credentials.
+    """
+    config = load_config()
+    token_file = config["token_file"]
+    credentials_file = config["credentials_file"]
+
+    if os.path.exists(token_file):
+        logger.info(f"Removing existing token so a fresh sign-in is forced: {token_file}")
+        os.remove(token_file)
+
+    logger.info("Starting Google OAuth flow. A browser window will open for sign-in...")
+    creds = authenticate_gmail(token_file, credentials_file)
+    gmail_service = build("gmail", "v1", credentials=creds)
+
+    try:
+        profile = _execute_with_retry(
+            gmail_service.users().getProfile(userId="me")
+        )
+        logger.info(
+            f"✅ Authentication successful. Connected Gmail account: "
+            f"{profile.get('emailAddress', 'unknown')}"
+        )
+    except HttpError as e:
+        logger.warning(f"Token written, but could not fetch account profile: {e}")
+
+    logger.info(f"Fresh token written to: {token_file}")
+
+
 def main():
     """
     Main execution function.
@@ -740,6 +774,16 @@ def main():
         "--end-date",
         help="The end of the date range (YYYY-MM-DD). Defaults to yesterday if --start-date is used.",
     )
+    parser.add_argument(
+        "--reauth",
+        action="store_true",
+        help=(
+            "Force the Google OAuth flow and write a fresh token.json, then exit. "
+            "Deletes any existing token first so the browser sign-in always runs. "
+            "Use this to connect a different Google account without waiting on the "
+            "daily date/upload checks."
+        ),
+    )
 
     parser.epilog = """
 Default behavior (when no dates are specified):
@@ -749,6 +793,10 @@ Default behavior (when no dates are specified):
 - If no previous uploads exist, only yesterday will be processed
 """
     args = parser.parse_args()
+
+    if args.reauth:
+        run_reauth()
+        return
 
     dates_to_process = []
     try:
