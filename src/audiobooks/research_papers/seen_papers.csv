@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-07-18,https://huggingface.co/papers/2607.14935,VideoChat3: Fully Open Video MLLM for Efficient and Generalist Video Understanding (106▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.14777,SEED: Self-Evolving On-Policy Distillation for Agentic Reinforcement Learning (67▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.15257,SearchOS-V1: Towards Robust Open-Domain Information-Seeking Agent Collaboration (49▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.14952,LongStraw: Long-Context RL Beyond 2M Tokens under a Fixed GPU Budget (40▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.15207,BadWAM: When World-Action Models Dream Right but Act Wrong (36▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.14202,KeyFrame-Compass: Towards Comprehensive Evaluation of Keyframe-Conditioned Video Generation (30▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.14189,MultiRef-Compass: Towards Comprehensive Evaluation of Multi-Reference-to-Audio-Video Generation (29▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.13188,Concurrent Image Understanding and Generation: Self-Correcting Coupled Markov Jump Processes (23▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.14076,From Pixels to States: Rethinking Interactive World Models as Game Engines (23▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.12800,UniVR: Thinking in Visual Space for Unified Visual Reasoning (22▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.15038,Video = World + Event Stream (15▲),huggingface,
-2026-07-18,https://huggingface.co/papers/2607.13399,"Demystifying On-Policy Distillation: Roles, Pathologies, and Regulations (14▲)",huggingface,
 2026-07-21,https://arxiv.org/abs/2106.04770,"Ghosts in Neural Networks: Existence, Structure and Role of Infinite-Dimensional Null Space",arxiv,stat
 2026-07-21,https://arxiv.org/abs/2301.06385,Compartmental Disease Models with Time-Varying Transmission Rates: A Bayesian Generalized Hamiltonian Monte Carlo framework with Applications to COVID-19,arxiv,stat
 2026-07-21,https://arxiv.org/abs/2406.01161,Dynamic Structural Causal Models,arxiv,stat
@@ -4360,3 +4348,15 @@ date,url,title,source,category
 2026-07-31,https://huggingface.co/papers/2607.26754,StatePlay: State-Aware Game World Models for Mechanics-Consistent Generation (12▲),huggingface,
 2026-07-31,https://huggingface.co/papers/2607.27191,Can AI agents conduct open-ended AI research? Early evidence from two case studies (12▲),huggingface,
 2026-07-31,https://huggingface.co/papers/2607.27155,OmegaUse-OfficeVal: Benchmarking LLM Agents on Long-Horizon Office-Suite Tasks with Economic Grounding (7▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28618,AskChem: Claim-Centered Infrastructure for Chemistry Literature Synthesis (285▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28227,Qwen-UI-Agent Technical Report: Toward Next-Generation Real-World Centric Foundation GUI Agents (265▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.26760,Metis: Memory Foundation Model (240▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28624,PhiZero: A World Model Built Around Physical Language (150▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28568,Frontis-MA1: Training an AI4AI Model towards Recursive Self-Improvement in Machine Learning Engineering (144▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.27380,VideoCoCo: Code-as-CoT for Physically-Consistent Video Generation via an Agentic Dual-Engine System (61▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.27919,"Memory Decoder at Scale: A Pretrained, Parametric Long-Term Memory (45▲)",huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28595,Beacon: Knowing When and How to Perform Agentic Visual Reasoning (44▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.26497,BM25 Wins at Scale: A Scaling Study of Retrieval-Augmented Generation Paradigms (38▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28022,Flux-OPD: On-Policy Distillation with Evolving Contexts (37▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.28625,ACE-Data-0: Human-Centric Ambient Capture as Embodied Data Engine (34▲),huggingface,
+2026-08-01,https://huggingface.co/papers/2607.27616,MPIE-Bench: Benchmarking Anatomically Plausible Multi-Person Interaction Editing (34▲),huggingface,
