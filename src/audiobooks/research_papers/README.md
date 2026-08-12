@@ -217,11 +217,14 @@ The generator supports automatic failover across multiple API keys and models to
 
 1. **Primary API key** — tries the configured model chain (`gemini-3.1-flash-lite-preview` → `gemini-3-flash-preview` → `gemini-2.5-pro`)
 2. **Backup API key** (optional) — same model chain on a second free-tier key
-3. **Paid API key + model** (optional) — last resort fallback
+3. **Paid API key + model** (optional) — Gemini last resort
+4. **OpenRouter** (optional) — final fallback once all Gemini tiers are exhausted, using `OPENROUTER_MODEL` via OpenRouter's OpenAI-compatible endpoint
 
 On a 429 (quota exhausted) error, the system immediately skips to the next API key tier without wasting retries. Each model gets up to 10 retries with exponential backoff (30s base, capped at 10 minutes). Network errors (`httpx.ReadError`, `httpx.ConnectError`, etc.) are also retried.
 
 **Model locking:** once a model succeeds, it is reused for all subsequent calls in the same run. If the locked-in model later fails, the full fallback chain is re-entered.
+
+**Wiki ingestion uses OpenRouter exclusively:** when `[OpenRouter]` is configured, the wiki ingestion engine bypasses the Gemini tiers entirely and uses `OPENROUTER_MODEL` as its only LLM option.
 
 ### Feedback System
 
@@ -309,6 +312,10 @@ PAID_API_KEY = your-paid-gemini-key       # Optional: paid key as last resort
 SCORING_MODEL = gemini-3-flash-preview
 GENERATION_MODEL = gemini-3.1-flash-lite-preview
 PAID_GENERATION_MODEL = gemini-2.5-pro    # Optional: model to use with paid key
+
+[OpenRouter]                              # Optional: final fallback for summaries; sole LLM for wiki ingestion
+OPENROUTER_API_KEY = your-openrouter-key
+OPENROUTER_MODEL = openrouter/free
 
 [ResearchPapers]
 ARXIV_SENDERS = no-reply@arxiv.org

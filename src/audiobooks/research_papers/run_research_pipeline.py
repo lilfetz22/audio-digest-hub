@@ -24,14 +24,21 @@ from research_papers.pipeline import ResearchPaperPipeline
 from research_papers.wiki_engine.ingestion import WikiIngestionEngine
 
 logger = logging.getLogger(__name__)
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.send"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.send",
+]
 
 
 def _resolve_config_relative_path(config_dir, path_value):
     """Resolve config-relative paths without altering absolute paths."""
     if not path_value:
         return path_value
-    return path_value if os.path.isabs(path_value) else os.path.join(config_dir, path_value)
+    return (
+        path_value
+        if os.path.isabs(path_value)
+        else os.path.join(config_dir, path_value)
+    )
 
 
 def setup_logging():
@@ -79,11 +86,14 @@ def load_config(config_path=None):
             "generation_model": config["Gemini"]["GENERATION_MODEL"],
             "backup_api_key": config.get("Gemini", "BACKUP_API_KEY", fallback=None),
             "paid_api_key": config.get("Gemini", "PAID_API_KEY", fallback=None),
-            "paid_generation_model": config.get("Gemini", "PAID_GENERATION_MODEL", fallback=None),
-            "scoring_model_name": config.get("Scoring", "MODEL_NAME", fallback="all-MiniLM-L6-v2"),
+            "paid_generation_model": config.get(
+                "Gemini", "PAID_GENERATION_MODEL", fallback=None
+            ),
+            "scoring_model_name": config.get(
+                "Scoring", "MODEL_NAME", fallback="all-MiniLM-L6-v2"
+            ),
             "arxiv_senders": [
-                s.strip()
-                for s in config["ResearchPapers"]["ARXIV_SENDERS"].split(",")
+                s.strip() for s in config["ResearchPapers"]["ARXIV_SENDERS"].split(",")
             ],
             "huggingface_senders": [
                 s.strip()
@@ -101,9 +111,7 @@ def load_config(config_path=None):
             "wiki_auto_commit": config.getboolean(
                 "Wiki", "AUTO_COMMIT", fallback=False
             ),
-            "wiki_auto_push": config.getboolean(
-                "Wiki", "AUTO_PUSH", fallback=False
-            ),
+            "wiki_auto_push": config.getboolean("Wiki", "AUTO_PUSH", fallback=False),
             "wiki_push_parent": config.getboolean(
                 "Wiki", "PUSH_PARENT", fallback=False
             ),
@@ -111,13 +119,25 @@ def load_config(config_path=None):
                 "Wiki", "WIKI_MODEL", fallback=config.get("Gemini", "GENERATION_MODEL")
             ),
             "wiki_backup_api_key": config.get(
-                "Wiki", "BACKUP_API_KEY", fallback=config.get("Gemini", "BACKUP_API_KEY", fallback=None)
+                "Wiki",
+                "BACKUP_API_KEY",
+                fallback=config.get("Gemini", "BACKUP_API_KEY", fallback=None),
             ),
             "wiki_paid_api_key": config.get(
-                "Wiki", "PAID_API_KEY", fallback=config.get("Gemini", "PAID_API_KEY", fallback=None)
+                "Wiki",
+                "PAID_API_KEY",
+                fallback=config.get("Gemini", "PAID_API_KEY", fallback=None),
             ),
             "wiki_paid_model": config.get(
-                "Wiki", "PAID_MODEL", fallback=config.get("Gemini", "PAID_GENERATION_MODEL", fallback=None)
+                "Wiki",
+                "PAID_MODEL",
+                fallback=config.get("Gemini", "PAID_GENERATION_MODEL", fallback=None),
+            ),
+            "openrouter_api_key": config.get(
+                "OpenRouter", "OPENROUTER_API_KEY", fallback=None
+            ),
+            "openrouter_model": config.get(
+                "OpenRouter", "OPENROUTER_MODEL", fallback=None
             ),
         }
     except KeyError as e:
@@ -137,9 +157,7 @@ def authenticate_gmail(token_file, credentials_file):
             if not os.path.exists(credentials_file):
                 logger.error(f"Credentials file not found: {credentials_file}")
                 sys.exit(1)
-            flow = InstalledAppFlow.from_client_secrets_file(
-                credentials_file, SCOPES
-            )
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
             creds = flow.run_local_server(port=8080, open_browser=False)
         with open(token_file, "w") as token:
             token.write(creds.to_json())
@@ -149,9 +167,7 @@ def authenticate_gmail(token_file, credentials_file):
 def main():
     setup_logging()
 
-    parser = argparse.ArgumentParser(
-        description="Research paper digest pipeline"
-    )
+    parser = argparse.ArgumentParser(description="Research paper digest pipeline")
     date_group = parser.add_mutually_exclusive_group()
     date_group.add_argument("--date", help="Process a single date (YYYY-MM-DD)")
     date_group.add_argument("--start-date", help="Start of date range (YYYY-MM-DD)")
@@ -215,6 +231,8 @@ def main():
         backup_api_key=config.get("backup_api_key"),
         paid_api_key=config.get("paid_api_key"),
         paid_model_name=config.get("paid_generation_model"),
+        openrouter_api_key=config.get("openrouter_api_key"),
+        openrouter_model=config.get("openrouter_model"),
     )
     feedback_manager = PreferenceProfileManager(
         profile_path=profile_path,
@@ -252,6 +270,8 @@ def main():
         backup_api_key=config["wiki_backup_api_key"],
         paid_api_key=config["wiki_paid_api_key"],
         paid_model_name=config["wiki_paid_model"],
+        openrouter_api_key=config.get("openrouter_api_key"),
+        openrouter_model=config.get("openrouter_model"),
         auto_commit=config["wiki_auto_commit"],
         auto_push=config["wiki_auto_push"],
         push_parent=config["wiki_push_parent"],
@@ -279,7 +299,9 @@ def main():
                     f"{len(result['concepts_updated'])} updated"
                 )
             except Exception as e:
-                logger.error(f"Wiki ingestion failed for {date_str}: {e}", exc_info=True)
+                logger.error(
+                    f"Wiki ingestion failed for {date_str}: {e}", exc_info=True
+                )
         else:
             logger.info(f"No transcript found for {date_str}, skipping wiki ingestion")
 
