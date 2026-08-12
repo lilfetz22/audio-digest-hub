@@ -9,10 +9,15 @@ from typing import List, Optional, Tuple
 import yaml
 
 from .models import WikiPageMeta, ExtractedConcept, ClassifiedSection
-from .classifier import TranscriptClassifier, split_transcript_into_sections, extract_source_urls_from_section
+from .classifier import (
+    TranscriptClassifier,
+    split_transcript_into_sections,
+    extract_source_urls_from_section,
+)
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
 from .utils import load_prompt, slugify, format_page
+
 try:
     from ..gemini_client import GeminiClientWithFallback
 except ImportError:
@@ -75,6 +80,8 @@ class WikiIngestionEngine:
         backup_api_key: str | None = None,
         paid_api_key: str | None = None,
         paid_model_name: str | None = None,
+        openrouter_api_key: str | None = None,
+        openrouter_model: str | None = None,
         classifier: Optional[TranscriptClassifier] = None,
         index_builder: Optional[IndexBuilder] = None,
         git_manager: Optional[WikiGitManager] = None,
@@ -90,9 +97,17 @@ class WikiIngestionEngine:
         self.sources_dir = self.wiki_dir / "sources"
         self.concepts_dir = self.wiki_dir / "concepts"
         self.model_name = model_name
-        # Prefer api_key to build a fallback-capable client; fall back to bare
-        # llm_client for backward compatibility (e.g. in tests).
-        if api_key:
+        # The wiki portion uses OpenRouter exclusively when configured; fall
+        # back to a Gemini fallback client, then a bare llm_client for tests.
+        if openrouter_api_key and openrouter_model:
+            self.llm_client = GeminiClientWithFallback(
+                api_key=api_key or "",
+                model_name=model_name,
+                openrouter_api_key=openrouter_api_key,
+                openrouter_model=openrouter_model,
+                openrouter_only=True,
+            )
+        elif api_key:
             self.llm_client = GeminiClientWithFallback(
                 api_key=api_key,
                 model_name=model_name,
@@ -102,7 +117,9 @@ class WikiIngestionEngine:
             )
         else:
             self.llm_client = llm_client
-        self.classifier = classifier or TranscriptClassifier(self.llm_client, model_name)
+        self.classifier = classifier or TranscriptClassifier(
+            self.llm_client, model_name
+        )
         self.index_builder = index_builder or IndexBuilder(str(self.wiki_dir))
         self.auto_commit = auto_commit
         self.rebuild_index = rebuild_index
@@ -111,14 +128,20 @@ class WikiIngestionEngine:
             repo_root=str(repo_path),
             wiki_dir=str(self.wiki_dir),
             parent_root=parent_root,
-            branch=["main", "feat/kokoro-cpu-tts"], # Updated to include the new branch
+            branch=["main", "feat/kokoro-cpu-tts"],  # Updated to include the new branch
             auto_push=auto_push,
             push_parent=push_parent,
         )
-        self._extract_prompt = load_prompt(PROMPTS_DIR, "extract_concepts_system.txt", _EXTRACT_CONCEPTS_FALLBACK)
-        self._update_prompt = load_prompt(PROMPTS_DIR, "update_concept_system.txt", _UPDATE_CONCEPT_FALLBACK)
+        self._extract_prompt = load_prompt(
+            PROMPTS_DIR, "extract_concepts_system.txt", _EXTRACT_CONCEPTS_FALLBACK
+        )
+        self._update_prompt = load_prompt(
+            PROMPTS_DIR, "update_concept_system.txt", _UPDATE_CONCEPT_FALLBACK
+        )
 
-    def _llm_generate(self, user_prompt: str, system_prompt: str | None = None) -> str | None:
+    def _llm_generate(
+        self, user_prompt: str, system_prompt: str | None = None
+    ) -> str | None:
         """Call the LLM, routing through the fallback client when available."""
         if self.llm_client is None:
             return None
@@ -197,7 +220,9 @@ class WikiIngestionEngine:
         return result
 
     @staticmethod
-    def _merge_source_urls(priority_urls: List[str], existing_urls: List[str]) -> List[str]:
+    def _merge_source_urls(
+        priority_urls: List[str], existing_urls: List[str]
+    ) -> List[str]:
         """Merge two URL lists, priority_urls first, deduplicating while preserving order."""
         return list(dict.fromkeys(priority_urls + (existing_urls or [])))
 
@@ -252,9 +277,7 @@ class WikiIngestionEngine:
                     # with any sources the LLM also identified.  dict.fromkeys
                     # preserves insertion order and removes duplicates.
                     sources=list(
-                        dict.fromkeys(
-                            section.paper_urls + item.get("sources", [])
-                        )
+                        dict.fromkeys(section.paper_urls + item.get("sources", []))
                     ),
                 )
                 concepts.append(concept)
@@ -294,9 +317,7 @@ class WikiIngestionEngine:
         )
 
         # Build page body
-        related_links = " ".join(
-            [f"[[{r}]]" for r in concept.related_concepts]
-        )
+        related_links = " ".join([f"[[{r}]]" for r in concept.related_concepts])
         body = f"""## TLDR
 
 {concept.tldr}
@@ -332,7 +353,9 @@ class WikiIngestionEngine:
         filepath.write_text(updated, encoding="utf-8")
         logger.info(f"Updated concept page: {filepath}")
 
-    def _llm_update_concept(self, existing_content: str, concept: ExtractedConcept) -> str:
+    def _llm_update_concept(
+        self, existing_content: str, concept: ExtractedConcept
+    ) -> str:
         """Use LLM to intelligently merge new info into existing page."""
         _, existing_body = self._parse_page(existing_content)
         new_info = f"Name: {concept.name}\nTLDR: {concept.tldr}\nBody: {concept.body}\nCounterarguments: {concept.counterarguments}"
@@ -345,7 +368,9 @@ class WikiIngestionEngine:
         try:
             result_text = self._llm_generate(prompt)
             if result_text is None:
-                return self._simple_append(existing_content, concept, datetime.now().strftime("%Y-%m-%d"))
+                return self._simple_append(
+                    existing_content, concept, datetime.now().strftime("%Y-%m-%d")
+                )
             result_text = result_text.strip()
             if result_text.startswith("```"):
                 result_text = result_text.split("\n", 1)[1]
@@ -373,9 +398,7 @@ class WikiIngestionEngine:
                     datetime.now().strftime("%Y-%m-%d"),
                 )
 
-            related_links = " ".join(
-                [f"[[{r}]]" for r in concept.related_concepts]
-            )
+            related_links = " ".join([f"[[{r}]]" for r in concept.related_concepts])
             body = f"""## TLDR
 
 {data.get('tldr', concept.tldr)}
@@ -396,9 +419,13 @@ class WikiIngestionEngine:
 
         except Exception as e:
             logger.warning(f"LLM update failed, using simple append: {e}")
-            return self._simple_append(existing_content, concept, datetime.now().strftime("%Y-%m-%d"))
+            return self._simple_append(
+                existing_content, concept, datetime.now().strftime("%Y-%m-%d")
+            )
 
-    def _simple_append(self, existing_content: str, concept: ExtractedConcept, date_str: str) -> str:
+    def _simple_append(
+        self, existing_content: str, concept: ExtractedConcept, date_str: str
+    ) -> str:
         """Simple append of new info to existing page."""
         meta, body = self._parse_page(existing_content)
         meta.updated = date_str
