@@ -217,10 +217,9 @@ The generator supports automatic failover across multiple API keys and models to
 
 1. **Primary API key** — tries the configured model chain (`gemini-3.1-flash-lite-preview` → `gemini-3-flash-preview` → `gemini-2.5-pro`)
 2. **Backup API key** (optional) — same model chain on a second free-tier key
-3. **Paid API key + model** (optional) — Gemini last resort
-4. **OpenRouter** (optional) — final fallback once all Gemini tiers are exhausted, using `OPENROUTER_MODEL` via OpenRouter's OpenAI-compatible endpoint
+3. **OpenRouter** (optional) — final fallback for any Gemini failure once all Gemini tiers are exhausted, using `OPENROUTER_MODEL` via OpenRouter's OpenAI-compatible endpoint
 
-On a 429 (quota exhausted) error, the system immediately skips to the next API key tier without wasting retries. Each model gets up to 10 retries with exponential backoff (30s base, capped at 10 minutes). Network errors (`httpx.ReadError`, `httpx.ConnectError`, etc.) are also retried.
+On any Gemini failure (429 quota, other client errors, or exhausted retries), the system moves to the next API key tier, then falls through to OpenRouter as a last resort. Each model gets up to 10 retries with exponential backoff (30s base, capped at 10 minutes). Network errors (`httpx.ReadError`, `httpx.ConnectError`, etc.) are also retried.
 
 **Model locking:** once a model succeeds, it is reused for all subsequent calls in the same run. If the locked-in model later fails, the full fallback chain is re-entered.
 
@@ -308,10 +307,8 @@ TOKEN_FILE = token.json                # Auto-created after first auth
 [Gemini]
 API_KEY = your-gemini-api-key
 BACKUP_API_KEY = your-backup-gemini-key   # Optional: second free-tier key for failover
-PAID_API_KEY = your-paid-gemini-key       # Optional: paid key as last resort
 SCORING_MODEL = gemini-3-flash-preview
 GENERATION_MODEL = gemini-3.1-flash-lite-preview
-PAID_GENERATION_MODEL = gemini-2.5-pro    # Optional: model to use with paid key
 
 [OpenRouter]                              # Optional: final fallback for summaries; sole LLM for wiki ingestion
 OPENROUTER_API_KEY = your-openrouter-key
