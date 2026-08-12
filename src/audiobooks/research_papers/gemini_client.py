@@ -306,11 +306,26 @@ class GeminiClientWithFallback:
                         )
                         time.sleep(delay)
                         continue
-                    response.raise_for_status()
                 response.raise_for_status()
                 data = response.json()
+                # OpenRouter can return HTTP 200 with an error payload or an
+                # empty choices list (common on free/rate-limited models).
+                choices = data.get("choices")
+                if not choices:
+                    err = data.get("error")
+                    raise RuntimeError(
+                        f"OpenRouter returned no choices for "
+                        f"{self.openrouter_model}"
+                        + (f": {err}" if err else "")
+                    )
+                content = choices[0].get("message", {}).get("content")
+                if not content:
+                    raise RuntimeError(
+                        f"OpenRouter returned empty content for "
+                        f"{self.openrouter_model}"
+                    )
                 logger.info(f"OpenRouter model succeeded: {self.openrouter_model}")
-                return data["choices"][0]["message"]["content"]
+                return content
             except (
                 httpx.ReadError,
                 httpx.ConnectError,
