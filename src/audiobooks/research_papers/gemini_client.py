@@ -7,15 +7,15 @@ consistently in one place.
 Fallback order:
   1. Primary API key  – preferred model, then FALLBACK_MODELS in order
   2. Backup API key   – same model chain (skipped if not configured)
-  3. Paid API key     – paid model (skipped if not configured)
-  4. OpenRouter       – final fallback (skipped if not configured)
+  3. OpenRouter       – final fallback for any Gemini failure (skipped if
+                        not configured)
 
 When ``openrouter_only`` is set, the Gemini tiers are bypassed entirely and
 OpenRouter becomes the single option (used by the wiki ingestion engine).
 
 Within each model attempt, up to 10 retries with exponential back-off are
-made for retryable server/network errors. A 429 quota error immediately
-moves to the next API-key tier without burning retry budget.
+made for retryable server/network errors. Any Gemini failure that exhausts
+the API-key tiers falls through to OpenRouter as a last resort.
 """
 
 import logging
@@ -45,8 +45,6 @@ class GeminiClientWithFallback:
         api_key: str,
         model_name: str = "gemini-3.1-flash-lite",
         backup_api_key: str | None = None,
-        paid_api_key: str | None = None,
-        paid_model_name: str | None = None,
         openrouter_api_key: str | None = None,
         openrouter_model: str | None = None,
         openrouter_only: bool = False,
@@ -54,8 +52,6 @@ class GeminiClientWithFallback:
         self.api_key = api_key
         self.model_name = model_name
         self.backup_api_key = backup_api_key
-        self.paid_api_key = paid_api_key
-        self.paid_model_name = paid_model_name
         self.openrouter_api_key = openrouter_api_key
         self.openrouter_model = openrouter_model
         self.openrouter_only = openrouter_only
@@ -153,8 +149,12 @@ class GeminiClientWithFallback:
                             f"Quota exhausted (429) for {model} on "
                             f"{key_label} API key. Switching to next API key tier..."
                         )
-                        break  # skip remaining models on this key
-                    raise
+                    else:
+                        logger.warning(
+                            f"Client error for {model} on {key_label} API key: "
+                            f"{e}. Switching to next API key tier..."
+                        )
+                    break  # skip remaining models on this key
                 except (
                     genai_errors.ServerError,
                     httpx.ReadError,
@@ -175,22 +175,7 @@ class GeminiClientWithFallback:
                             f"(last free model on {key_label} key)."
                         )
 
-        # Last resort: paid API key + paid model
-        if self.paid_api_key and self.paid_model_name:
-            logger.warning(
-                f"All free models/keys failed. Falling back to paid model "
-                f"{self.paid_model_name}..."
-            )
-            paid_client = genai.Client(api_key=self.paid_api_key)
-            result = self._try_model(
-                paid_client, self.paid_model_name, system_prompt, user_prompt
-            )
-            self._resolved_model = self.paid_model_name
-            self._resolved_client = paid_client
-            logger.info(f"Locked in paid model: {self.paid_model_name}")
-            return result
-
-        # Final fallback: OpenRouter
+        # Final fallback: OpenRouter (last resort for any Gemini failure)
         if self.openrouter_api_key and self.openrouter_model:
             logger.warning(
                 f"All Gemini models/keys failed. Falling back to OpenRouter "
@@ -199,8 +184,7 @@ class GeminiClientWithFallback:
             return self._try_openrouter(system_prompt, user_prompt)
 
         raise RuntimeError(
-            "All free models/keys failed and no paid API key or OpenRouter "
-            "fallback configured."
+            "All Gemini models/keys failed and no OpenRouter fallback configured."
         )
 
     def _try_model(
@@ -315,8 +299,7 @@ class GeminiClientWithFallback:
                     err = data.get("error")
                     raise RuntimeError(
                         f"OpenRouter returned no choices for "
-                        f"{self.openrouter_model}"
-                        + (f": {err}" if err else "")
+                        f"{self.openrouter_model}" + (f": {err}" if err else "")
                     )
                 content = choices[0].get("message", {}).get("content")
                 if not content:
