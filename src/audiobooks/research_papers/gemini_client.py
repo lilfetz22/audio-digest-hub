@@ -144,17 +144,19 @@ class GeminiClientWithFallback:
                     logger.info(f"Locked in model: {model} ({key_label} API key)")
                     return result
                 except genai_errors.ClientError as e:
-                    if getattr(e, "code", None) == 429:
+                    code = getattr(e, "code", None)
+                    if code == 429:
                         logger.warning(
                             f"Quota exhausted (429) for {model} on "
                             f"{key_label} API key. Switching to next API key tier..."
                         )
-                    else:
-                        logger.warning(
-                            f"Client error for {model} on {key_label} API key: "
-                            f"{e}. Switching to next API key tier..."
-                        )
-                    break  # skip remaining models on this key
+                        break  # quota is key-wide; skip remaining models on this key
+                    # Model-specific error: try the next model on this same key.
+                    logger.warning(
+                        f"Client error ({code}) for {model} on {key_label} API "
+                        f"key: {e}. Trying next model..."
+                    )
+                    continue
                 except (
                     genai_errors.ServerError,
                     httpx.ReadError,
