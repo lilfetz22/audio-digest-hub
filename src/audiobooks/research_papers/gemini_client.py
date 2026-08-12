@@ -7,7 +7,11 @@ consistently in one place.
 Fallback order:
   1. Primary API key  – preferred model, then FALLBACK_MODELS in order
   2. Backup API key   – same model chain (skipped if not configured)
-  3. Paid API key     – paid model (last resort, skipped if not configured)
+  3. Paid API key     – paid model (skipped if not configured)
+  4. OpenRouter       – final fallback (skipped if not configured)
+
+When ``openrouter_only`` is set, the Gemini tiers are bypassed entirely and
+OpenRouter becomes the single option (used by the wiki ingestion engine).
 
 Within each model attempt, up to 10 retries with exponential back-off are
 made for retryable server/network errors. A 429 quota error immediately
@@ -34,6 +38,8 @@ class GeminiClientWithFallback:
         "gemini-2.5-pro",
     ]
 
+    OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
     def __init__(
         self,
         api_key: str,
@@ -41,12 +47,18 @@ class GeminiClientWithFallback:
         backup_api_key: str | None = None,
         paid_api_key: str | None = None,
         paid_model_name: str | None = None,
+        openrouter_api_key: str | None = None,
+        openrouter_model: str | None = None,
+        openrouter_only: bool = False,
     ) -> None:
         self.api_key = api_key
         self.model_name = model_name
         self.backup_api_key = backup_api_key
         self.paid_api_key = paid_api_key
         self.paid_model_name = paid_model_name
+        self.openrouter_api_key = openrouter_api_key
+        self.openrouter_model = openrouter_model
+        self.openrouter_only = openrouter_only
         self._resolved_model: str | None = None
         self._resolved_client: genai.Client | None = None
 
@@ -68,12 +80,23 @@ class GeminiClientWithFallback:
         Raises:
             RuntimeError: When all tiers are exhausted.
         """
+        # OpenRouter-only mode: bypass the Gemini tiers entirely.
+        if self.openrouter_only:
+            if not (self.openrouter_api_key and self.openrouter_model):
+                raise RuntimeError(
+                    "openrouter_only is set but OpenRouter API key/model "
+                    "are not configured."
+                )
+            return self._try_openrouter(system_prompt, user_prompt)
+
         # Fast path: try locked-in model first
         if self._resolved_model is not None:
             try:
                 return self._try_model(
-                    self._resolved_client, self._resolved_model,
-                    system_prompt, user_prompt,
+                    self._resolved_client,
+                    self._resolved_model,
+                    system_prompt,
+                    user_prompt,
                 )
             except genai_errors.ClientError as e:
                 if getattr(e, "code", None) == 429:
@@ -88,8 +111,14 @@ class GeminiClientWithFallback:
                     )
                 self._resolved_model = None
                 self._resolved_client = None
-            except (genai_errors.ServerError, httpx.ReadError, httpx.ConnectError,
-                    httpx.RemoteProtocolError, ConnectionError, OSError):
+            except (
+                genai_errors.ServerError,
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.RemoteProtocolError,
+                ConnectionError,
+                OSError,
+            ):
                 logger.warning(
                     f"Locked-in model {self._resolved_model} failed. "
                     f"Re-entering full fallback chain..."
@@ -126,9 +155,14 @@ class GeminiClientWithFallback:
                         )
                         break  # skip remaining models on this key
                     raise
-                except (genai_errors.ServerError, httpx.ReadError,
-                        httpx.ConnectError, httpx.RemoteProtocolError,
-                        ConnectionError, OSError):
+                except (
+                    genai_errors.ServerError,
+                    httpx.ReadError,
+                    httpx.ConnectError,
+                    httpx.RemoteProtocolError,
+                    ConnectionError,
+                    OSError,
+                ):
                     if model_idx < len(models) - 1:
                         next_model = models[model_idx + 1]
                         logger.warning(
@@ -156,8 +190,17 @@ class GeminiClientWithFallback:
             logger.info(f"Locked in paid model: {self.paid_model_name}")
             return result
 
+        # Final fallback: OpenRouter
+        if self.openrouter_api_key and self.openrouter_model:
+            logger.warning(
+                f"All Gemini models/keys failed. Falling back to OpenRouter "
+                f"model {self.openrouter_model}..."
+            )
+            return self._try_openrouter(system_prompt, user_prompt)
+
         raise RuntimeError(
-            "All free models/keys failed and no paid API key configured."
+            "All free models/keys failed and no paid API key or OpenRouter "
+            "fallback configured."
         )
 
     def _try_model(
@@ -173,8 +216,8 @@ class GeminiClientWithFallback:
         can swap API keys without wasting the retry budget.
         """
         max_retries = 10
-        base_delay = 30   # seconds; doubles per attempt
-        max_delay = 600   # 10 minutes cap
+        base_delay = 30  # seconds; doubles per attempt
+        max_delay = 600  # 10 minutes cap
 
         config_kwargs: dict = {"temperature": 0.7}
         if system_prompt:
@@ -193,7 +236,7 @@ class GeminiClientWithFallback:
             except genai_errors.ServerError as e:
                 is_retryable = getattr(e, "code", None) == 503
                 if is_retryable and attempt < max_retries - 1:
-                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    delay = min(base_delay * (2**attempt), max_delay)
                     logger.warning(
                         f"Gemini API unavailable (503) for {model}. "
                         f"Retrying in {delay}s "
@@ -202,10 +245,15 @@ class GeminiClientWithFallback:
                     time.sleep(delay)
                 else:
                     raise
-            except (httpx.ReadError, httpx.ConnectError,
-                    httpx.RemoteProtocolError, ConnectionError, OSError) as e:
+            except (
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.RemoteProtocolError,
+                ConnectionError,
+                OSError,
+            ) as e:
                 if attempt < max_retries - 1:
-                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    delay = min(base_delay * (2**attempt), max_delay)
                     logger.warning(
                         f"Network error for {model}: {e}. "
                         f"Retrying in {delay}s "
@@ -214,3 +262,74 @@ class GeminiClientWithFallback:
                     time.sleep(delay)
                 else:
                     raise
+
+    def _try_openrouter(
+        self,
+        system_prompt: str | None,
+        user_prompt: str,
+    ) -> str:
+        """Call OpenRouter (OpenAI-compatible) with exponential back-off retries.
+
+        Retries on 429/5xx and transient network errors up to 10 times.
+        """
+        max_retries = 10
+        base_delay = 30  # seconds; doubles per attempt
+        max_delay = 600  # 10 minutes cap
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+
+        headers = {"Authorization": f"Bearer {self.openrouter_api_key}"}
+        payload = {
+            "model": self.openrouter_model,
+            "messages": messages,
+            "temperature": 0.7,
+        }
+
+        for attempt in range(max_retries):
+            try:
+                response = httpx.post(
+                    self.OPENROUTER_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=120,
+                )
+                if response.status_code in (429, 500, 502, 503, 504):
+                    if attempt < max_retries - 1:
+                        delay = min(base_delay * (2**attempt), max_delay)
+                        logger.warning(
+                            f"OpenRouter returned {response.status_code} for "
+                            f"{self.openrouter_model}. Retrying in {delay}s "
+                            f"(attempt {attempt + 1}/{max_retries})..."
+                        )
+                        time.sleep(delay)
+                        continue
+                    response.raise_for_status()
+                response.raise_for_status()
+                data = response.json()
+                logger.info(f"OpenRouter model succeeded: {self.openrouter_model}")
+                return data["choices"][0]["message"]["content"]
+            except (
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.RemoteProtocolError,
+                httpx.TimeoutException,
+                ConnectionError,
+                OSError,
+            ) as e:
+                if attempt < max_retries - 1:
+                    delay = min(base_delay * (2**attempt), max_delay)
+                    logger.warning(
+                        f"Network error for OpenRouter {self.openrouter_model}: "
+                        f"{e}. Retrying in {delay}s "
+                        f"(attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
+        raise RuntimeError(
+            f"OpenRouter model {self.openrouter_model} failed after "
+            f"{max_retries} attempts."
+        )
