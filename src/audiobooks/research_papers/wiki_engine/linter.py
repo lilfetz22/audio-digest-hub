@@ -9,10 +9,17 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 import yaml
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .git_hooks import WikiGitManager
-from .utils import load_prompt, slugify
-from .index_builder import IndexBuilder # Added import for IndexBuilder
+from .utils import (
+    load_prompt,
+    slugify,
+    parse_json_response,
+    coerce_json_list,
+    build_response_format,
+)
+from .index_builder import IndexBuilder  # Added import for IndexBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +40,29 @@ Return a JSON array of issues. Respond ONLY with valid JSON."""
 
 LINT_SYSTEM_PROMPT = load_prompt(PROMPTS_DIR, "lint_system.txt", _LINT_SYSTEM_FALLBACK)
 
+
+class _LintIssue(BaseModel):
+    """Structured-output contract for a single lint issue."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    description: str
+    pages_involved: list[str]
+    severity: str
+
+
+class _LintIssueList(BaseModel):
+    """Object wrapper — json_schema requires an object root, not a bare array."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    issues: list[_LintIssue]
+
+
+# OpenRouter structured-output schema derived from the pydantic models above.
+_LINT_RESPONSE_FORMAT = build_response_format("lint_issues", _LintIssueList)
+
 _TECH_TERM_PATTERN = re.compile(
     r"\b(?:transformer|attention|diffusion|reinforcement learning|"
     r"state space|mixture of experts|fine-tuning|"
@@ -50,13 +80,16 @@ class WikiLinter:
         llm_client=None,
         model_name: str = "gemini-3.1-flash-lite-preview",
         git_manager: Optional[WikiGitManager] = None,
-        index_builder: Optional[IndexBuilder] = None, # Added index_builder
+        index_builder: Optional[IndexBuilder] = None,  # Added index_builder
         auto_commit: bool = False,
         repo_root: Optional[str] = None,
-        parent_root: Optional[str] = None, # Added parent_root
-        branch: list[str] = ["main", "feat/kokoro-cpu-tts"], # Updated to include the new branch
-        auto_push: bool = False, # Added auto_push
-        push_parent: bool = False, # Added push_parent
+        parent_root: Optional[str] = None,  # Added parent_root
+        branch: list[str] = [
+            "main",
+            "feat/kokoro-cpu-tts",
+        ],  # Updated to include the new branch
+        auto_push: bool = False,  # Added auto_push
+        push_parent: bool = False,  # Added push_parent
     ):
         self.wiki_dir = Path(wiki_dir)
         self.concepts_dir = self.wiki_dir / "concepts"
@@ -72,7 +105,9 @@ class WikiLinter:
             auto_push=auto_push,
             push_parent=push_parent,
         )
-        self.index_builder = index_builder or IndexBuilder(str(self.wiki_dir)) # Initialize index_builder
+        self.index_builder = index_builder or IndexBuilder(
+            str(self.wiki_dir)
+        )  # Initialize index_builder
         self.auto_commit = auto_commit
 
     def run_full_lint(self) -> dict:
@@ -170,30 +205,50 @@ class WikiLinter:
 
         combined = "\n\n".join(pages_content)
 
+        data = parse_json_response(
+            lambda: self._llm_generate(
+                combined, LINT_SYSTEM_PROMPT, _LINT_RESPONSE_FORMAT
+            ),
+            context="find_contradictions",
+        )
+        if data is None:
+            return []
+
+        contradictions = []
+        for item in coerce_json_list(data, "issues"):
+            if not isinstance(item, dict):
+                continue
+            try:
+                issue = _LintIssue.model_validate(item)
+            except ValidationError as e:
+                logger.warning("Skipping lint issue failing schema validation: %s", e)
+                continue
+            if issue.type == "contradiction":
+                contradictions.append(issue.model_dump())
+        return contradictions
+
+    def _llm_generate(
+        self,
+        user_prompt: str,
+        system_prompt: str | None = None,
+        response_format: dict | None = None,
+    ) -> str | None:
+        """Call the LLM, routing through the fallback client when available."""
+        if self.llm_client is None:
+            return None
+        # GeminiClientWithFallback exposes .generate(); legacy bare clients do not.
         try:
-            response = self.llm_client.models.generate_content(
-                model=self.model_name,
-                contents=combined,
-                config={"system_instruction": LINT_SYSTEM_PROMPT},
-            )
-            result_text = response.text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("\n", 1)[1]
-                result_text = result_text.rsplit("```", 1)[0]
-
-            data = json.loads(result_text)
-            contradictions = [
-                item for item in data
-                if item.get("type") == "contradiction"
-            ]
-            return contradictions
-
-        except json.JSONDecodeError as e:
-            logger.warning("LLM returned invalid JSON: %s", e)
-            return []
-        except Exception:
-            logger.exception("Unexpected error during contradiction detection")
-            return []
+            from ..gemini_client import GeminiClientWithFallback
+        except ImportError:
+            from research_papers.gemini_client import GeminiClientWithFallback
+        if isinstance(self.llm_client, GeminiClientWithFallback):
+            return self.llm_client.generate(user_prompt, system_prompt, response_format)
+        response = self.llm_client.models.generate_content(
+            model=self.model_name,
+            contents=user_prompt,
+            config={"system_instruction": system_prompt} if system_prompt else {},
+        )
+        return response.text
 
     def find_implicit_concepts(self, min_mentions: int = 3) -> List[dict]:
         """Find terms mentioned frequently that lack their own concept page.
@@ -294,15 +349,21 @@ class WikiLinter:
         lines.append(f"\n## Contradictions ({len(result['contradictions'])} found)\n")
         if result["contradictions"]:
             for c in result["contradictions"]:
-                lines.append(f"- **{c.get('severity', 'medium')}**: {c.get('description', '')}\n")
+                lines.append(
+                    f"- **{c.get('severity', 'medium')}**: {c.get('description', '')}\n"
+                )
                 lines.append(f"  - Pages: {', '.join(c.get('pages_involved', []))}\n")
         else:
             lines.append("- None found.\n")
 
-        lines.append(f"\n## Implicit Concepts ({len(result['implicit_concepts'])} found)\n")
+        lines.append(
+            f"\n## Implicit Concepts ({len(result['implicit_concepts'])} found)\n"
+        )
         if result["implicit_concepts"]:
             for ic in result["implicit_concepts"]:
-                lines.append(f"- **{ic['term']}** — mentioned {ic['mention_count']} times, no dedicated page\n")
+                lines.append(
+                    f"- **{ic['term']}** — mentioned {ic['mention_count']} times, no dedicated page\n"
+                )
         else:
             lines.append("- None found.\n")
 
