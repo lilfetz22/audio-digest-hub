@@ -23,6 +23,7 @@ supabase/.temp/
 
 # virtual environment
 audiogeneratorenv/
+.venv/
 src/audiobooks/.venv/
 src/audiobooks/config.ini
 src/audiobooks/credentials.json

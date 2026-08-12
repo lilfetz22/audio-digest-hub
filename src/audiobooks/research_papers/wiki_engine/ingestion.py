@@ -78,8 +78,6 @@ class WikiIngestionEngine:
         llm_client=None,
         model_name: str = "gemini-3.1-flash-lite-preview",
         backup_api_key: str | None = None,
-        paid_api_key: str | None = None,
-        paid_model_name: str | None = None,
         openrouter_api_key: str | None = None,
         openrouter_model: str | None = None,
         classifier: Optional[TranscriptClassifier] = None,
@@ -112,8 +110,6 @@ class WikiIngestionEngine:
                 api_key=api_key,
                 model_name=model_name,
                 backup_api_key=backup_api_key,
-                paid_api_key=paid_api_key,
-                paid_model_name=paid_model_name,
             )
         else:
             self.llm_client = llm_client
