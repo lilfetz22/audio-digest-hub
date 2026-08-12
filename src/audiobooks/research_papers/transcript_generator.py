@@ -36,6 +36,8 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         backup_api_key: str | None = None,
         paid_api_key: str | None = None,
         paid_model_name: str | None = None,
+        openrouter_api_key: str | None = None,
+        openrouter_model: str | None = None,
     ):
         self.model_name = model_name
         self._fallback_client = GeminiClientWithFallback(
@@ -44,6 +46,8 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
             backup_api_key=backup_api_key,
             paid_api_key=paid_api_key,
             paid_model_name=paid_model_name,
+            openrouter_api_key=openrouter_api_key,
+            openrouter_model=openrouter_model,
         )
         self._request_timestamps: List[float] = []
         self._token_usage: List[tuple] = []  # (timestamp, token_count)
@@ -114,9 +118,13 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         # ingestion engine can associate the original paper URL with the
         # concepts it extracts — without relying on the LLM to re-find URLs.
         annotated_parts = []
-        for paper, transcript in zip_longest(deep_dive_papers, deep_dive_transcripts, fillvalue=None):
+        for paper, transcript in zip_longest(
+            deep_dive_papers, deep_dive_transcripts, fillvalue=None
+        ):
             if paper is None or transcript is None:
-                raise ValueError("Expected equal counts of deep dive papers and transcripts")
+                raise ValueError(
+                    "Expected equal counts of deep dive papers and transcripts"
+                )
             marker = f"<!-- WIKI_SOURCE_URL: {paper.url} -->"
             annotated_parts.append(f"{marker}\n{transcript.strip()}")
         if interrogator_section:
@@ -170,9 +178,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         logger.info("Interrogator episode complete")
         return result
 
-    def _build_single_paper_prompt(
-        self, paper: PaperContent, date_str: str
-    ) -> str:
+    def _build_single_paper_prompt(self, paper: PaperContent, date_str: str) -> str:
         """Build a user prompt for a deep dive into a single paper."""
         sections = [
             f"Generate a deep-dive research digest segment for {date_str}.\n",
@@ -193,9 +199,7 @@ class GeminiTranscriptGenerator(TranscriptGenerator):
         self._request_timestamps = [
             t for t in self._request_timestamps if t > window_start
         ]
-        self._token_usage = [
-            (t, c) for t, c in self._token_usage if t > window_start
-        ]
+        self._token_usage = [(t, c) for t, c in self._token_usage if t > window_start]
 
         # Check request count limit
         while len(self._request_timestamps) >= MAX_REQUESTS_PER_MINUTE:
