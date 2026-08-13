@@ -51,3 +51,17 @@ export async function getSignedAudioUrl(storagePath: string): Promise<string> {
   inflight.set(storagePath, request);
   return request;
 }
+
+/**
+ * Drops every cached/in-flight signed URL. A signed URL is a per-user bearer
+ * capability for the RLS-scoped `audiobooks` bucket, so it should not keep
+ * working for the rest of its TTL after the user signs out on a shared device.
+ */
+export function clearSignedAudioUrlCache() {
+  cache.clear();
+  inflight.clear();
+}
+
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT' || event === 'USER_UPDATED') clearSignedAudioUrlCache();
+});
