@@ -211,11 +211,45 @@ python -m pytest
 ```
 
 ### Environment Variables
-Create a `.env.local` file for frontend configuration:
-```
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+The frontend needs no build-time environment variables — the Supabase project URL and
+anon key are baked into `src/integrations/supabase/client.ts` (the anon key is public by
+design and protected by RLS). Nothing in `src/` reads `import.meta.env.VITE_*`.
+
+## 🚢 Deployment (Vercel)
+
+The frontend is deployed on **Vercel**, built straight from the `main` branch of this
+repo. `vercel.json` is the source of truth for the build:
+
+| Setting | Value |
+| --- | --- |
+| Framework preset | `vite` |
+| Install command | `npm ci` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+
+Two details worth knowing:
+
+- **SPA rewrite.** Every path that doesn't match a static file is rewritten to
+  `/index.html` so React Router can handle deep links like `/player/:id`. Without that
+  rewrite, refreshing on any route but `/` returns a 404 from the CDN.
+- **`npm ci` is pinned deliberately.** A stale `bun.lockb` from the original scaffold is
+  still committed; pinning the install command keeps Vercel on npm and
+  `package-lock.json` regardless of which lockfiles it finds.
+
+Pushes to `main` deploy to production; every other branch and PR gets a preview
+deployment.
+
+### Supabase Auth redirect URLs
+
+`useAuth.tsx` builds its signup redirect from `window.location.origin`, so the
+deployment's own domain must be allow-listed in the Supabase dashboard under
+**Authentication → URL Configuration**:
+
+- **Site URL** — the production domain.
+- **Redirect URLs** — the production domain plus `https://*.vercel.app/**` if you want
+  preview deployments to be able to complete email confirmation.
+
+Adding a custom domain later means updating both of those as well.
 
 ## 🤝 Contributing
 
