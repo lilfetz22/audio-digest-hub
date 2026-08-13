@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import yaml
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .models import WikiPageMeta, ExtractedConcept, ClassifiedSection
 from .classifier import (
@@ -16,7 +17,14 @@ from .classifier import (
 )
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
-from .utils import load_prompt, slugify, format_page
+from .utils import (
+    load_prompt,
+    slugify,
+    format_page,
+    parse_json_response,
+    coerce_json_list,
+    build_response_format,
+)
 
 try:
     from ..gemini_client import GeminiClientWithFallback
@@ -29,9 +37,38 @@ logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
+
+class _ExtractedConceptModel(BaseModel):
+    """Structured-output contract for a single extracted concept."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    tldr: str
+    body: str
+    counterarguments: str
+    confidence: float
+    categories: list[str]
+    related_concepts: list[str]
+    sources: list[str]
+
+
+class _ExtractedConceptList(BaseModel):
+    """Object wrapper — json_schema requires an object root, not a bare array."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    concepts: list[_ExtractedConceptModel]
+
+
+# OpenRouter structured-output schema derived from the pydantic models above.
+_EXTRACT_RESPONSE_FORMAT = build_response_format(
+    "extracted_concepts", _ExtractedConceptList
+)
+
 _EXTRACT_CONCEPTS_FALLBACK = """You are a knowledge extraction engine. Given a research paper transcript section, extract the key concepts discussed.
 
-For EACH distinct concept, return a JSON array where each element has:
+Return a JSON object with a "concepts" array, where each element has:
 - "name": The concept name (e.g., "Mixture of Experts", "State Space Models")
 - "tldr": A single sentence summary
 - "body": A structured explanation (2-4 paragraphs, use markdown)
@@ -41,7 +78,7 @@ For EACH distinct concept, return a JSON array where each element has:
 - "related_concepts": Names of other concepts this relates to
 - "sources": Any paper URLs or references mentioned
 
-Respond ONLY with a valid JSON array. No markdown formatting."""
+Respond ONLY with a valid JSON object of the form {"concepts": [...]}. No markdown formatting."""
 
 _UPDATE_CONCEPT_FALLBACK = """You are a knowledge base editor. You are updating an existing concept page with new information from a recent research paper.
 
@@ -136,7 +173,10 @@ class WikiIngestionEngine:
         )
 
     def _llm_generate(
-        self, user_prompt: str, system_prompt: str | None = None
+        self,
+        user_prompt: str,
+        system_prompt: str | None = None,
+        response_format: dict | None = None,
     ) -> str | None:
         """Call the LLM, routing through the fallback client when available."""
         if self.llm_client is None:
@@ -147,7 +187,7 @@ class WikiIngestionEngine:
         except ImportError:
             from research_papers.gemini_client import GeminiClientWithFallback
         if isinstance(self.llm_client, GeminiClientWithFallback):
-            return self.llm_client.generate(user_prompt, system_prompt)
+            return self.llm_client.generate(user_prompt, system_prompt, response_format)
         response = self.llm_client.models.generate_content(
             model=self.model_name,
             contents=user_prompt,
@@ -246,45 +286,40 @@ class WikiIngestionEngine:
         if not self.llm_client:
             return []
 
-        try:
-            result_text = self._llm_generate(section.text[:8000], self._extract_prompt)
-            if result_text is None:
-                return []
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("\n", 1)[1]
-                result_text = result_text.rsplit("```", 1)[0]
+        data = parse_json_response(
+            lambda: self._llm_generate(
+                section.text[:8000], self._extract_prompt, _EXTRACT_RESPONSE_FORMAT
+            ),
+            context="extract_concepts",
+        )
+        if data is None:
+            return []
 
-            data = json.loads(result_text)
-            if not isinstance(data, list):
-                data = [data]
-
-            concepts = []
-            for item in data:
-                concept = ExtractedConcept(
-                    name=item.get("name", "Unknown"),
-                    tldr=item.get("tldr", ""),
-                    body=item.get("body", ""),
-                    counterarguments=item.get("counterarguments", ""),
-                    confidence=item.get("confidence", 0.5),
-                    categories=item.get("categories", [section.category]),
-                    related_concepts=item.get("related_concepts", []),
+        concepts = []
+        for item in coerce_json_list(data, "concepts"):
+            if not isinstance(item, dict):
+                continue
+            try:
+                parsed = _ExtractedConceptModel.model_validate(item)
+            except ValidationError as e:
+                logger.warning("Skipping concept failing schema validation: %s", e)
+                continue
+            concepts.append(
+                ExtractedConcept(
+                    name=parsed.name or "Unknown",
+                    tldr=parsed.tldr,
+                    body=parsed.body,
+                    counterarguments=parsed.counterarguments,
+                    confidence=parsed.confidence,
+                    categories=parsed.categories or [section.category],
+                    related_concepts=parsed.related_concepts,
                     # Always include Python-extracted paper URLs; supplement
                     # with any sources the LLM also identified.  dict.fromkeys
                     # preserves insertion order and removes duplicates.
-                    sources=list(
-                        dict.fromkeys(section.paper_urls + item.get("sources", []))
-                    ),
+                    sources=list(dict.fromkeys(section.paper_urls + parsed.sources)),
                 )
-                concepts.append(concept)
-            return concepts
-
-        except json.JSONDecodeError as e:
-            logger.warning("LLM returned invalid JSON: %s", e)
-            return []
-        except Exception:
-            logger.exception("Unexpected error during concept extraction")
-            return []
+            )
+        return concepts
 
     def _upsert_concept(self, concept: ExtractedConcept, date_str: str) -> bool:
         """Create or update a concept page. Returns True if updated existing."""

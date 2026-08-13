@@ -58,7 +58,12 @@ class GeminiClientWithFallback:
         self._resolved_model: str | None = None
         self._resolved_client: genai.Client | None = None
 
-    def generate(self, user_prompt: str, system_prompt: str | None = None) -> str:
+    def generate(
+        self,
+        user_prompt: str,
+        system_prompt: str | None = None,
+        response_format: dict | None = None,
+    ) -> str:
         """Generate content with full fallback chain.
 
         On the first call every tier is tried in order.  Whichever
@@ -69,6 +74,9 @@ class GeminiClientWithFallback:
         Args:
             user_prompt: The user/content part of the prompt.
             system_prompt: Optional system instruction.
+            response_format: Optional OpenAI-style ``response_format`` (e.g. a
+                ``{"type": "json_schema", ...}`` structured-output spec).  Only
+                applied on the OpenRouter path; ignored by the Gemini tiers.
 
         Returns:
             Generated text.
@@ -83,7 +91,7 @@ class GeminiClientWithFallback:
                     "openrouter_only is set but OpenRouter API key/model "
                     "are not configured."
                 )
-            return self._try_openrouter(system_prompt, user_prompt)
+            return self._try_openrouter(system_prompt, user_prompt, response_format)
 
         # Fast path: try locked-in model first
         if self._resolved_model is not None:
@@ -183,7 +191,7 @@ class GeminiClientWithFallback:
                 f"All Gemini models/keys failed. Falling back to OpenRouter "
                 f"model {self.openrouter_model}..."
             )
-            return self._try_openrouter(system_prompt, user_prompt)
+            return self._try_openrouter(system_prompt, user_prompt, response_format)
 
         raise RuntimeError(
             "All Gemini models/keys failed and no OpenRouter fallback configured."
@@ -253,10 +261,14 @@ class GeminiClientWithFallback:
         self,
         system_prompt: str | None,
         user_prompt: str,
+        response_format: dict | None = None,
     ) -> str:
         """Call OpenRouter (OpenAI-compatible) with exponential back-off retries.
 
         Retries on 429/5xx and transient network errors up to 10 times.
+
+        ``response_format`` is forwarded verbatim (e.g. a ``json_schema``
+        structured-output spec) when provided.
         """
         max_retries = 10
         base_delay = 30  # seconds; doubles per attempt
@@ -273,6 +285,8 @@ class GeminiClientWithFallback:
             "messages": messages,
             "temperature": 0.7,
         }
+        if response_format:
+            payload["response_format"] = response_format
 
         for attempt in range(max_retries):
             try:

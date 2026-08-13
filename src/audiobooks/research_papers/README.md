@@ -225,6 +225,8 @@ On any Gemini failure (429 quota, other client errors, or exhausted retries), th
 
 **Wiki ingestion uses OpenRouter exclusively:** when `[OpenRouter]` is configured, the wiki ingestion engine bypasses the Gemini tiers entirely and uses `OPENROUTER_MODEL` as its only LLM option.
 
+**Structured JSON outputs (wiki engine):** the classifier, concept extractor, and linter request OpenRouter [structured outputs](https://openrouter.ai/docs/features/structured-outputs) via `response_format` with a `json_schema` derived from Pydantic models (the single source of truth for both the schema and response validation). Responses are validated against those models; fields that fail validation are skipped or fall back rather than corrupting a page. If a response is empty or unparseable, the same `OPENROUTER_MODEL` is called again once (code fences and surrounding prose are also tolerated) before the call gives up and logs the raw snippet — so a malformed reply is retried instead of silently dropped.
+
 ### Feedback System
 
 **File:** [feedback.py](feedback.py)
@@ -621,6 +623,7 @@ Core Python packages (see `requirements.txt` in parent directory):
 | Package | Purpose |
 |---------|---------|
 | `google-genai` | Gemini API client (scoring + transcript generation) |
+| `pydantic` | Structured-output schemas + response validation for the wiki engine |
 | `pymupdf` | PDF text extraction for Arxiv papers |
 | `beautifulsoup4` | HTML parsing for emails and HuggingFace pages |
 | `requests` | HTTP calls for paper downloads and Supabase API |
