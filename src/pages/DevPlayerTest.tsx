@@ -151,6 +151,16 @@ const LegacyHarness = () => {
   const pendingAutoPlayRef = useRef(false);
   const seen = useRef(new Set<HTMLAudioElement>());
 
+  // Stable identity so React does not detach/reattach (and re-render) on every
+  // commit — an inline arrow function here is a new ref each render.
+  const attachAndCount = useCallback((el: HTMLAudioElement | null) => {
+    audioRef.current = el;
+    if (el && !seen.current.has(el)) {
+      seen.current.add(el);
+      setElements(seen.current.size);
+    }
+  }, []);
+
   useEffect(() => {
     // The pre-fix reset: blows away state, so the loading branch unmounts <audio>.
     setAudiobook(null);
@@ -183,13 +193,7 @@ const LegacyHarness = () => {
       ) : (
         <>
           <audio
-            ref={(el) => {
-              audioRef.current = el;
-              if (el && !seen.current.has(el)) {
-                seen.current.add(el);
-                setElements(seen.current.size);
-              }
-            }}
+            ref={attachAndCount}
             src={audioUrl}
             preload="metadata"
             onEnded={handleEnded}
@@ -279,6 +283,19 @@ const FixedHarness = () => {
   const player = useAudioPlayer(audiobook, handleEnded, () => goToNextPart({ autoPlay: true }));
   const { attachAudio, loadSource } = player;
 
+  // Stable identity so React does not detach/reattach (and re-render) on every
+  // commit — an inline arrow function here is a new ref each render.
+  const attachAndCount = useCallback(
+    (el: HTMLAudioElement | null) => {
+      attachAudio(el);
+      if (el && !seen.current.has(el)) {
+        seen.current.add(el);
+        setElements(seen.current.size);
+      }
+    },
+    [attachAudio],
+  );
+
   useEffect(() => {
     let cancelled = false;
     if (!audiobookRef.current) setLoading(true);
@@ -320,13 +337,7 @@ const FixedHarness = () => {
     <div className="mx-auto max-w-md space-y-4 p-4">
       {/* Persistent element — never unmounted, no src prop. */}
       <audio
-        ref={(el) => {
-          attachAudio(el);
-          if (el && !seen.current.has(el)) {
-            seen.current.add(el);
-            setElements(seen.current.size);
-          }
-        }}
+        ref={attachAndCount}
         preload="auto"
       />
       <h1 className="text-xl font-bold">Fixed</h1>
