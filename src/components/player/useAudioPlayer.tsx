@@ -10,304 +10,472 @@ interface Audiobook {
   chapters_json: Record<string, number> | null;
 }
 
-export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void) => {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const onEndedRef = useRef(onEnded);
+export interface LoadSourceOptions {
+  /** Start playing as soon as the source is assigned. */
+  autoPlay?: boolean;
+  /** Resume position in seconds, applied once metadata is available. */
+  startAt?: number;
+  /** Row that owns the media being loaded. Progress is only saved for this row. */
+  ownerId?: string;
+}
+
+const RATE_STORAGE_KEY = 'audioPlayer.playbackRate';
+const DEFAULT_PLAYBACK_RATE = 2;
+/** A saved position this close to the end means the part was finished, not paused. */
+const END_OF_PART_TOLERANCE_SECONDS = 1;
+
+const MEDIA_SESSION_ACTIONS: MediaSessionAction[] = [
+  'play',
+  'pause',
+  'seekbackward',
+  'seekforward',
+  'seekto',
+  'nexttrack',
+];
+
+const readStoredPlaybackRate = (): number => {
+  try {
+    const parsed = parseFloat(window.localStorage.getItem(RATE_STORAGE_KEY) ?? '');
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PLAYBACK_RATE;
+  } catch {
+    return DEFAULT_PLAYBACK_RATE;
+  }
+};
+
+export const useAudioPlayer = (
+  audiobook: Audiobook | null,
+  onEnded?: () => void,
+  onNextTrack?: () => void,
+) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [playbackRate, setPlaybackRate] = useState(2);
+  const [playbackRate, setPlaybackRate] = useState(readStoredPlaybackRate);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSeeking, setIsSeeking] = useState(false);
 
-  // Keep onEnded ref in sync so event listeners don't need to be re-attached
+  const onEndedRef = useRef(onEnded);
+  const onNextTrackRef = useRef(onNextTrack);
+  const hasNextTrack = Boolean(onNextTrack);
+  const audiobookRef = useRef(audiobook);
+  const rateRef = useRef(playbackRate);
+  const isSeekingRef = useRef(false);
+  /** URL currently assigned to the element, so we never re-assign the same one. */
+  const appliedSrcRef = useRef<string | null>(null);
+  const pendingSeekRef = useRef<number | null>(null);
+  /** id of the audiobook whose media is actually on the element right now. */
+  const loadedBookIdRef = useRef<string | null>(null);
+  /** Last known playback position, kept even after the element detaches. */
+  const lastPositionRef = useRef(0);
+
   useEffect(() => {
     onEndedRef.current = onEnded;
   }, [onEnded]);
 
-  // Sync state with audio element
-  const syncAudioState = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  useEffect(() => {
+    onNextTrackRef.current = onNextTrack;
+  }, [onNextTrack]);
 
-    setIsPlaying(!audio.paused);
-    setCurrentTime(audio.currentTime);
-    setDuration(audio.duration || 0);
-    setVolume(audio.volume);
-    setPlaybackRate(audio.playbackRate);
+  useEffect(() => {
+    audiobookRef.current = audiobook;
+  }, [audiobook]);
+
+  useEffect(() => {
+    rateRef.current = playbackRate;
+  }, [playbackRate]);
+
+  /**
+   * Ref callback that also drives state, so the listener effect below has a
+   * dependency that actually changes when the element appears. Reading
+   * `audioRef.current` from a dependency array does not work — mutating a ref
+   * never schedules a render, so the effect fires at arbitrary times.
+   */
+  const attachAudio = useCallback((element: HTMLAudioElement | null) => {
+    audioRef.current = element;
+    setAudioEl(element);
   }, []);
 
-  // Monitor loading state and provide fallback
-  useEffect(() => {
-    if (isLoading) {
-      const timeout = setTimeout(() => {
-        console.log('Loading state timeout - forcing clear');
-        setIsLoading(false);
-      }, 10000); // 10 second timeout
-
-      return () => clearTimeout(timeout);
+  /**
+   * Applies the rate to both `playbackRate` and `defaultPlaybackRate`. Browsers
+   * reset `playbackRate` to `defaultPlaybackRate` every time a new resource
+   * loads, so setting only the former silently reverts to 1x on the next load.
+   */
+  const applyPlaybackRate = useCallback((audio: HTMLAudioElement, rate: number) => {
+    audio.defaultPlaybackRate = rate;
+    if (audio.playbackRate !== rate) {
+      audio.playbackRate = rate;
     }
-  }, [isLoading]);
+  }, []);
 
-  // Set up audio element event listeners when audio element becomes available
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      console.log('Audio setup: No audio element available yet');
-      return;
+  const savePlaybackPosition = useCallback(async (positionOverride?: number) => {
+    const book = audiobookRef.current;
+    if (!book) return;
+    // The element can already be playing the next part while `audiobook` state
+    // is still catching up with the route. Never attribute that timeline to
+    // this row.
+    if (loadedBookIdRef.current !== null && loadedBookIdRef.current !== book.id) return;
+
+    // Fall back to the last known position when the element has already
+    // detached (e.g. the unmount flush, which runs after `attachAudio(null)`).
+    const position = Math.floor(
+      positionOverride ?? audioRef.current?.currentTime ?? lastPositionRef.current,
+    );
+    if (!Number.isFinite(position) || position <= 0) return;
+
+    const { error: updateError } = await supabase
+      .from('audiobooks')
+      .update({ last_playback_position_seconds: position })
+      .eq('id', book.id);
+
+    if (updateError) {
+      console.error('Error saving playback position:', updateError);
     }
+  }, []);
 
-    console.log('Audio setup: Audio element found, setting up event listeners');
+  /**
+   * Points the element at `url`, optionally seeking and starting playback.
+   *
+   * Call this synchronously from a user gesture or from the `ended` handler.
+   * Mobile browsers grant autoplay permission per media element based on prior
+   * user interaction with *that element*; swapping `src` on the element the user
+   * already started keeps the permission, whereas a freshly mounted element gets
+   * `NotAllowedError` while the screen is locked.
+   */
+  const loadSource = useCallback(
+    (url: string, options: LoadSourceOptions = {}) => {
+      const audio = audioRef.current;
+      if (!audio || !url) return;
 
-    const updateTime = () => {
-      if (!isSeeking) {
-        setCurrentTime(audio.currentTime);
+      const startPlayback = () => {
+        applyPlaybackRate(audio, rateRef.current);
+        audio.play().catch((err) => {
+          console.error('Playback could not be started automatically:', err);
+          setIsPlaying(false);
+          setIsLoading(false);
+        });
+      };
+
+      if (appliedSrcRef.current === url) {
+        // Already loaded — most often the route catching up with a transition we
+        // performed imperatively. Re-assigning src here would restart the part.
+        if (options.ownerId) loadedBookIdRef.current = options.ownerId;
+        if (options.autoPlay && audio.paused) startPlayback();
+        return;
       }
+
+      appliedSrcRef.current = url;
+      loadedBookIdRef.current = options.ownerId ?? audiobookRef.current?.id ?? null;
+      pendingSeekRef.current =
+        options.startAt && options.startAt > 0 ? options.startAt : null;
+
+      setError(null);
+      setDuration(0);
+      setCurrentTime(options.startAt ?? 0);
+      lastPositionRef.current = options.startAt ?? 0;
+
+      audio.src = url;
+      applyPlaybackRate(audio, rateRef.current);
+      audio.load();
+
+      if (options.autoPlay) {
+        startPlayback();
+      } else {
+        // The load algorithm pauses the element without firing `pause`, so the
+        // UI would otherwise keep showing a Pause button over silence.
+        setIsPlaying(false);
+      }
+    },
+    [applyPlaybackRate],
+  );
+
+  // Audio element event listeners. Keyed on the element itself, which now stays
+  // mounted for the lifetime of the page.
+  useEffect(() => {
+    const audio = audioEl;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      lastPositionRef.current = audio.currentTime;
+      if (!isSeekingRef.current) setCurrentTime(audio.currentTime);
     };
-    
-    const updateDuration = () => {
-      setDuration(audio.duration || 0);
+
+    const handleDurationChange = () => {
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
     };
-    
+
+    const handleLoadedMetadata = () => {
+      handleDurationChange();
+      applyPlaybackRate(audio, rateRef.current);
+
+      const seekTarget = pendingSeekRef.current;
+      pendingSeekRef.current = null;
+      if (seekTarget == null) return;
+
+      // A position at the very end means the part was played to completion.
+      // Resuming there would leave the user staring at a player that cannot
+      // advance, so start over instead.
+      const finished =
+        Number.isFinite(audio.duration) &&
+        seekTarget >= audio.duration - END_OF_PART_TOLERANCE_SECONDS;
+      audio.currentTime = finished ? 0 : seekTarget;
+    };
+
     const handlePlay = () => {
-      console.log('Play event fired');
+      applyPlaybackRate(audio, rateRef.current);
       setIsPlaying(true);
       setIsLoading(false);
       setError(null);
     };
-    
-    const handlePause = () => {
-      console.log('Pause event fired');
-      setIsPlaying(false);
+
+    const handlePlaying = () => {
+      applyPlaybackRate(audio, rateRef.current);
+      setIsPlaying(true);
       setIsLoading(false);
     };
-    
-    const handleEnded = () => {
-      console.log('Ended event fired');
+
+    const handlePause = () => {
       setIsPlaying(false);
       setIsLoading(false);
-      // Save final position before triggering onEnded (which may navigate away)
-      if (audiobook && audio.currentTime > 0) {
-        supabase
-          .from('audiobooks')
-          .update({ last_playback_position_seconds: Math.floor(audio.duration || audio.currentTime) })
-          .eq('id', audiobook.id)
-          .then(() => console.log('Saved final playback position on ended'));
-      }
+      void savePlaybackPosition();
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setIsLoading(false);
+      void savePlaybackPosition(Math.floor(audio.duration || audio.currentTime));
+      // Invoked synchronously inside the media event so that a
+      // `loadSource(..., { autoPlay: true })` from the callback still counts as
+      // user-activated playback on this element.
       onEndedRef.current?.();
     };
 
     const handleLoadStart = () => {
-      console.log('LoadStart event fired');
       setIsLoading(true);
       setError(null);
     };
 
     const handleCanPlay = () => {
-      console.log('CanPlay event fired');
       setIsLoading(false);
-      syncAudioState();
-    };
-
-    const handleError = (e: Event) => {
-      console.log('Error event fired', e);
-      setIsLoading(false);
-      setIsPlaying(false);
-      setError('Failed to load audio file');
-      console.error('Audio error:', e);
     };
 
     const handleWaiting = () => {
-      console.log('Waiting event fired');
       setIsLoading(true);
     };
 
-    const handleSeeking = () => {
-      console.log('Seeking event fired');
+    const handleSeekingEvent = () => {
+      isSeekingRef.current = true;
       setIsSeeking(true);
     };
 
     const handleSeeked = () => {
-      console.log('Seeked event fired');
+      isSeekingRef.current = false;
       setIsSeeking(false);
+      lastPositionRef.current = audio.currentTime;
       setCurrentTime(audio.currentTime);
     };
 
-    const handlePlaying = () => {
-      console.log('Playing event fired');
+    const handleError = () => {
       setIsLoading(false);
-      setIsPlaying(true);
+      setIsPlaying(false);
+      setError('Failed to load audio file');
+      // Allow a later loadSource with the same URL to re-attempt the load.
+      appliedSrcRef.current = null;
+      console.error('Audio error:', audio.error);
     };
 
-    // Add all event listeners
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', updateDuration);
-    audio.addEventListener('loadeddata', updateDuration);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('durationchange', handleDurationChange);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('play', handlePlay);
+    audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('canplay', handleCanPlay);
-    audio.addEventListener('error', handleError);
     audio.addEventListener('waiting', handleWaiting);
-    audio.addEventListener('seeking', handleSeeking);
+    audio.addEventListener('seeking', handleSeekingEvent);
     audio.addEventListener('seeked', handleSeeked);
-    audio.addEventListener('playing', handlePlaying);
-
-    console.log('Audio setup: Event listeners attached');
-
-    // Initial sync
-    syncAudioState();
+    audio.addEventListener('error', handleError);
 
     return () => {
-      console.log('Audio setup: Cleaning up event listeners');
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', updateDuration);
-      audio.removeEventListener('loadeddata', updateDuration);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('durationchange', handleDurationChange);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('loadstart', handleLoadStart);
       audio.removeEventListener('canplay', handleCanPlay);
-      audio.removeEventListener('error', handleError);
       audio.removeEventListener('waiting', handleWaiting);
-      audio.removeEventListener('seeking', handleSeeking);
+      audio.removeEventListener('seeking', handleSeekingEvent);
       audio.removeEventListener('seeked', handleSeeked);
-      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('error', handleError);
     };
-  }, [audioRef.current]); // Only depend on the audio element itself
+  }, [audioEl, applyPlaybackRate, savePlaybackPosition]);
 
-  // Save playback position every 5 seconds when playing
+  // React state is the source of truth for rate; push it to the element and
+  // remember it for the next visit. Nothing reads the rate back off the element.
   useEffect(() => {
-    if (!audiobook || !isPlaying || !audioRef.current) return;
+    if (audioEl) applyPlaybackRate(audioEl, playbackRate);
+    try {
+      window.localStorage.setItem(RATE_STORAGE_KEY, String(playbackRate));
+    } catch {
+      // Private browsing / storage disabled — the in-memory default still applies.
+    }
+  }, [audioEl, playbackRate, applyPlaybackRate]);
 
-    const interval = setInterval(() => {
-      savePlaybackPosition();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [audiobook, isPlaying]);
-
-  // Save position when pausing or component unmounts
   useEffect(() => {
+    if (audioEl) audioEl.volume = volume;
+  }, [audioEl, volume]);
+
+  // Fallback so the play button can never be stuck in a spinner if the browser
+  // goes quiet without firing either `canplay` or `error`.
+  useEffect(() => {
+    if (!isLoading) return;
+    const timeout = setTimeout(() => setIsLoading(false), 10000);
+    return () => clearTimeout(timeout);
+  }, [isLoading]);
+
+  // OS lock-screen / notification controls. Without an active media session the
+  // widget goes stale across a part swap, forcing the user to unlock the phone
+  // and press play inside the app.
+  useEffect(() => {
+    const audio = audioEl;
+    if (!audio || !('mediaSession' in navigator)) return;
+
+    const { mediaSession } = navigator;
+    const nudge = (delta: number) => {
+      const target = audio.currentTime + delta;
+      audio.currentTime = Math.max(0, Math.min(audio.duration || 0, target));
+    };
+
+    mediaSession.setActionHandler('play', () => {
+      applyPlaybackRate(audio, rateRef.current);
+      audio.play().catch((err) => console.error('Media session play failed:', err));
+    });
+    mediaSession.setActionHandler('pause', () => audio.pause());
+    mediaSession.setActionHandler('seekbackward', (details) =>
+      nudge(-(details.seekOffset ?? 15)),
+    );
+    mediaSession.setActionHandler('seekforward', (details) =>
+      nudge(details.seekOffset ?? 15),
+    );
+    mediaSession.setActionHandler('seekto', (details) => {
+      if (details.seekTime != null) audio.currentTime = details.seekTime;
+    });
+    if (hasNextTrack) {
+      mediaSession.setActionHandler('nexttrack', () => onNextTrackRef.current?.());
+    }
+
     return () => {
-      if (audiobook && audioRef.current && audioRef.current.currentTime > 0) {
-        savePlaybackPosition();
-      }
+      MEDIA_SESSION_ACTIONS.forEach((action) => {
+        try {
+          mediaSession.setActionHandler(action, null);
+        } catch {
+          // Chrome throws for actions it does not support; nothing to undo.
+        }
+      });
+    };
+  }, [audioEl, applyPlaybackRate, hasNextTrack]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    if (!audiobook) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: audiobook.title,
+      artist: 'Audio Digest Hub',
+    });
+    return () => {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = 'none';
     };
   }, [audiobook]);
 
-  const savePlaybackPosition = async () => {
-    if (!audiobook || !audioRef.current) return;
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }, [isPlaying]);
 
-    try {
-      await supabase
-        .from('audiobooks')
-        .update({ last_playback_position_seconds: Math.floor(audioRef.current.currentTime) })
-        .eq('id', audiobook.id);
-    } catch (error) {
-      console.error('Error saving playback position:', error);
-    }
-  };
+  // Periodic progress checkpoint while playing.
+  useEffect(() => {
+    if (!audiobook || !isPlaying) return;
+    const interval = setInterval(() => void savePlaybackPosition(), 5000);
+    return () => clearInterval(interval);
+  }, [audiobook, isPlaying, savePlaybackPosition]);
 
-  const togglePlayPause = async () => {
+  // Flush progress when the tab is backgrounded or torn down. On mobile the page
+  // can be discarded without ever running an unmount.
+  useEffect(() => {
+    const flush = () => void savePlaybackPosition();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
+      flush();
+    };
+  }, [savePlaybackPosition]);
+
+  const togglePlayPause = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio) {
-      console.log('togglePlayPause: No audio element found');
+    if (!audio) return;
+
+    if (!audio.paused) {
+      audio.pause();
       return;
     }
 
-    console.log('togglePlayPause: Starting, isPlaying =', isPlaying);
-    console.log('togglePlayPause: Audio element state:', {
-      paused: audio.paused,
-      readyState: audio.readyState,
-      networkState: audio.networkState,
-      currentSrc: audio.currentSrc,
-      src: audio.src
-    });
-
     try {
-      if (!audio.paused) {
-        console.log('togglePlayPause: Pausing audio');
-        audio.pause();
-      } else {
-        console.log('togglePlayPause: Starting play, setting loading state');
-        setIsLoading(true);
-        setError(null);
-        
-        const loadingTimeout = setTimeout(() => {
-          console.log('Loading timeout - clearing loading state');
-          setIsLoading(false);
-        }, 5000);
-        
-        console.log('togglePlayPause: Calling audio.play()');
-        await audio.play();
-        console.log('togglePlayPause: audio.play() completed successfully');
-        
-        clearTimeout(loadingTimeout);
-        
-        setIsLoading(false);
-        console.log('togglePlayPause: Loading state cleared');
-      }
-    } catch (error) {
-      console.error('Error toggling play/pause:', error);
+      setIsLoading(true);
+      setError(null);
+      applyPlaybackRate(audio, rateRef.current);
+      await audio.play();
+      // Re-assert after play(): some browsers reset the rate when they begin
+      // fetching media data for a source that was not preloaded.
+      applyPlaybackRate(audio, rateRef.current);
+    } catch (err) {
+      console.error('Error toggling play/pause:', err);
       setError('Failed to play audio');
+    } finally {
       setIsLoading(false);
     }
-  };
+  }, [applyPlaybackRate]);
 
-  const skip = (seconds: number) => {
+  const seekTo = useCallback((time: number) => {
     const audio = audioRef.current;
     if (!audio) return;
+    const clamped = Math.max(0, Math.min(audio.duration || 0, time));
+    audio.currentTime = clamped;
+    setCurrentTime(clamped);
+  }, []);
 
-    const newTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + seconds));
-    audio.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
+  const skip = useCallback(
+    (seconds: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      seekTo(audio.currentTime + seconds);
+    },
+    [seekTo],
+  );
 
-  const seekTo = (time: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const clampedTime = Math.max(0, Math.min(audio.duration || 0, time));
-    audio.currentTime = clampedTime;
-    setCurrentTime(clampedTime);
-  };
-
-  const handleVolumeChange = (newVolume: number) => {
+  const handleVolumeChange = useCallback((newVolume: number) => {
     setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
-  };
+  }, []);
 
-  const handlePlaybackRateChange = (rate: number) => {
+  const handlePlaybackRateChange = useCallback((rate: number) => {
     setPlaybackRate(rate);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate;
-    }
-  };
-
-  const handleLoadedData = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    
-    // Set playback rate to match state
-    audio.playbackRate = playbackRate;
-    
-    // Restore playback position
-    if (audiobook && audiobook.last_playback_position_seconds > 0) {
-      seekTo(audiobook.last_playback_position_seconds);
-    }
-    
-    // Sync state after loading
-    syncAudioState();
-  };
+  }, []);
 
   return {
     audioRef,
+    attachAudio,
+    loadSource,
     isPlaying,
     currentTime,
     duration,
@@ -321,6 +489,5 @@ export const useAudioPlayer = (audiobook: Audiobook | null, onEnded?: () => void
     seekTo,
     handleVolumeChange,
     handlePlaybackRateChange,
-    handleLoadedData,
   };
 };

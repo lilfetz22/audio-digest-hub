@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import Player from "./pages/Player";
 import ResearchReview from "./pages/ResearchReview";
 import NotFound from "./pages/NotFound";
+import DevPlayerTest from "./pages/DevPlayerTest";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,9 @@ const App = () => (
                   </ProtectedRoute>
                 } 
               />
+              {import.meta.env.DEV && (
+                <Route path="/devtest" element={<DevPlayerTest />} />
+              )}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
