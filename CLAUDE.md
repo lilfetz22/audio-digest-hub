@@ -119,9 +119,11 @@ The frontend has **no build-time env vars**. Despite what older docs implied, no
 
 ## Frontend deployment (Vercel)
 
-The frontend is hosted on **Vercel**, built from `main`. `vercel.json` pins the whole build (`framework: vite`, `npm ci`, `npm run build`, `dist`) plus the catch-all rewrite to `/index.html` that React Router deep links depend on — removing that rewrite makes every route except `/` 404 on refresh.
+The frontend is hosted on **Vercel**, built from `main`. `vercel.json` pins the whole build (`framework: vite`, `npm ci --legacy-peer-deps`, `npm run build`, `dist`) plus the catch-all rewrite to `/index.html` that React Router deep links depend on — removing that rewrite makes every route except `/` 404 on refresh.
 
-`npm ci` is pinned on purpose: a stale `bun.lockb` from the original Lovable scaffold is still committed, and pinning the install command keeps Vercel on npm and `package-lock.json` no matter which lockfiles it detects.
+**`--legacy-peer-deps` is load-bearing.** `cmdk@1.0.0` pins a `react@^18` peer while the app runs React 19, so a bare `npm ci` fails with `ERESOLVE` — locally and on Vercel. Use it for local installs too. Bumping to `cmdk@^1.1.1` (accepts React 19) is the real fix and would let the flag go.
+
+npm is pinned on purpose as well: a stale `bun.lockb` from the original Lovable scaffold is still committed, and pinning the install command keeps Vercel on npm and `package-lock.json` no matter which lockfiles it detects.
 
 Two things that live outside the repo and won't show up in a diff:
 
