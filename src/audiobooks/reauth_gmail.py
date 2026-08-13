@@ -57,24 +57,38 @@ def reauth(credentials_file: str, token_file: str, print_token: bool) -> int:
         logger.error("Credentials file not found: %s", credentials_file)
         return 1
 
-    # Remove any existing token so the browser sign-in always runs rather than
-    # silently reusing the old (possibly revoked) account credentials.
+    # Move any existing token aside so the browser sign-in always runs rather
+    # than silently reusing the old (possibly revoked) account credentials.
+    # It is restored if the flow fails, so a failed re-auth never leaves the
+    # machine with no credentials at all.
+    backup = None
     if os.path.exists(token_file):
-        logger.info("Removing existing token to force a fresh sign-in: %s", token_file)
-        os.remove(token_file)
+        backup = token_file + ".bak"
+        logger.info("Setting existing token aside to force a fresh sign-in: %s", token_file)
+        os.replace(token_file, backup)
 
     logger.info("Starting Google OAuth flow — a browser window will open...")
-    flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
-    creds = flow.run_local_server(port=0)
+    try:
+        flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
+        creds = flow.run_local_server(port=0)
+    except Exception:
+        if backup:
+            os.replace(backup, token_file)
+            logger.error("OAuth flow failed; restored the previous token.")
+        raise
 
-    with open(token_file, "w") as fh:
+    # 0600 — the file holds a long-lived refresh token for gmail.modify/send.
+    fd = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
         fh.write(creds.to_json())
     logger.info("Fresh token written to: %s", token_file)
+    if backup and os.path.exists(backup):
+        os.remove(backup)
 
     try:
         profile = build("gmail", "v1", credentials=creds).users().getProfile(userId="me").execute()
         logger.info(
-            "✅ Authentication successful. Connected Gmail account: %s",
+            "OK: Authentication successful. Connected Gmail account: %s",
             profile.get("emailAddress", "unknown"),
         )
     except HttpError as e:
@@ -88,6 +102,10 @@ def reauth(credentials_file: str, token_file: str, print_token: bool) -> int:
         )
 
     if print_token:
+        logger.warning(
+            "Printing live credentials (refresh_token, client_secret) — do not "
+            "run this with output captured, redirected, or logged."
+        )
         with open(token_file) as fh:
             token_json = fh.read()
         print("\n" + "=" * 72)
