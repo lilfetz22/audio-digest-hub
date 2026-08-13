@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -194,9 +195,11 @@ class WikiIngestionEngine:
         self.llm_merge_updates = llm_merge_updates
         self.combined_analysis = combined_analysis
         self.max_workers = max_workers
-        self.classifier = classifier or TranscriptClassifier(
-            self.llm_client, model_name
-        )
+        # Only the legacy combined_analysis=False path needs a classifier, so
+        # it is built on demand to avoid loading its prompt on every engine.
+        self.classifier = classifier
+        self._failed_sections = 0
+        self._failure_lock = threading.Lock()
         self.index_builder = index_builder or IndexBuilder(str(self.wiki_dir))
         self.auto_commit = auto_commit
         self.rebuild_index = rebuild_index
@@ -270,9 +273,13 @@ class WikiIngestionEngine:
         # Step 2/3: Classify sections and extract their concepts. The
         # combined path makes one LLM call per section instead of two.
         sections = split_transcript_into_sections(transcript_text)
+        self._failed_sections = 0
         if self.combined_analysis:
             analyzed = self._analyze_sections(sections)
         else:
+            self.classifier = self.classifier or TranscriptClassifier(
+                self.llm_client, self.model_name
+            )
             classified = self.classifier.classify(sections)
             # Inject Python-extracted source URLs into each classified
             # section. This is intentionally done by Python code, not the
@@ -299,8 +306,17 @@ class WikiIngestionEngine:
             index_path = self.index_builder.rebuild()
             result["index_page"] = str(index_path)
 
+        result["sections_total"] = len(sections)
+        result["sections_failed"] = self._failed_sections
+        all_failed = bool(sections) and self._failed_sections == len(sections)
+        if all_failed:
+            logger.error(
+                "All %d sections failed analysis; skipping auto-commit.",
+                len(sections),
+            )
+
         # Step 5: Optional auto-commit of wiki mutations
-        if self.auto_commit:
+        if self.auto_commit and not all_failed:
             result["auto_committed"] = self.git_manager.auto_commit(
                 message=f"wiki: ingest transcript {date_str}"
             )
@@ -347,6 +363,12 @@ class WikiIngestionEngine:
         if data is None:
             return []
 
+        return self._build_concepts(data, section)
+
+    def _build_concepts(
+        self, data: dict, section: ClassifiedSection
+    ) -> List[ExtractedConcept]:
+        """Turn a parsed ``concepts`` payload into ExtractedConcept objects."""
         concepts = []
         for item in coerce_json_list(data, "concepts"):
             if not isinstance(item, dict):
@@ -402,6 +424,8 @@ class WikiIngestionEngine:
             return self._analyze_section(text)
         except Exception as e:
             logger.warning("Section %d analysis raised; skipping: %s", index, e)
+            with self._failure_lock:
+                self._failed_sections += 1
             return (
                 ClassifiedSection(text=text, category="Other", title="Unclassified"),
                 [],
@@ -448,28 +472,7 @@ class WikiIngestionEngine:
             extract_source_urls_from_section(text), section.paper_urls
         )
 
-        concepts: List[ExtractedConcept] = []
-        for item in coerce_json_list(data, "concepts"):
-            if not isinstance(item, dict):
-                continue
-            try:
-                parsed = _ExtractedConceptModel.model_validate(item)
-            except ValidationError as e:
-                logger.warning("Skipping concept failing schema validation: %s", e)
-                continue
-            concepts.append(
-                ExtractedConcept(
-                    name=parsed.name or "Unknown",
-                    tldr=parsed.tldr,
-                    body=parsed.body,
-                    counterarguments=parsed.counterarguments,
-                    confidence=parsed.confidence,
-                    categories=parsed.categories or [section.category],
-                    related_concepts=parsed.related_concepts,
-                    sources=list(dict.fromkeys(section.paper_urls + parsed.sources)),
-                )
-            )
-        return section, concepts
+        return section, self._build_concepts(data, section)
 
     def _upsert_concept(self, concept: ExtractedConcept, date_str: str) -> bool:
         """Create or update a concept page. Returns True if updated existing."""
