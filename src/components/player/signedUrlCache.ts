@@ -1,8 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const TTL_SECONDS = 3600;
-/** Re-sign this far before expiry so a long part never runs past its signature. */
-const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+/** Long enough that one path yields a byte-identical URL for a whole session. */
+const TTL_SECONDS = 12 * 60 * 60;
+/** Re-sign this far ahead so no part is ever started on a nearly-expired signature. */
+const REFRESH_MARGIN_MS = 2 * 60 * 60 * 1000;
 
 interface CacheEntry {
   url: string;
