@@ -426,20 +426,21 @@ class WikiIngestionEngine:
         if not isinstance(data, dict):
             return default_section, []
 
+        # Validate only the fields the classification contract owns — extra
+        # keys the model volunteers must never destroy the parsed concepts.
+        raw_classification = {k: data.get(k) for k in ("category", "title", "paper_urls")}
+        raw_classification["paper_urls"] = raw_classification.get("paper_urls") or []
         try:
-            classification = _SectionClassification.model_validate(
-                {k: v for k, v in data.items() if k != "concepts"}
+            classification = _SectionClassification.model_validate(raw_classification)
+            section = ClassifiedSection(
+                text=text,
+                category=classification.category or "Other",
+                title=classification.title,
+                paper_urls=classification.paper_urls,
             )
         except ValidationError as e:
-            logger.warning("Section analysis failed schema validation: %s", e)
-            return default_section, []
-
-        section = ClassifiedSection(
-            text=text,
-            category=classification.category or "Other",
-            title=classification.title,
-            paper_urls=classification.paper_urls,
-        )
+            logger.warning("Section classification invalid, defaulting: %s", e)
+            section = default_section
         # Inject Python-extracted source URLs into the section. This is
         # intentionally done by Python code, not the LLM, so that the
         # original arXiv / Hugging Face URLs reliably make it into wiki pages.
