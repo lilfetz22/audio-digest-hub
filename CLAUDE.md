@@ -56,7 +56,7 @@ cd src/audiobooks/research_papers && pytest tests/test_pipeline.py -v
 cd src/audiobooks/research_papers && pytest tests/test_pipeline.py::TestName::test_case -v
 ```
 
-`research_papers/tests/conftest.py` inserts `research_papers/` and `src/audiobooks/` into `sys.path` and stubs `sentence_transformers` and `pymupdf` in `pytest_configure`, so tests run without those heavy deps installed. If you add a module that imports a heavy optional dep at import time, add a stub there or collection will break.
+`research_papers/tests/conftest.py` inserts `research_papers/` and `src/audiobooks/` into `sys.path` and stubs `sentence_transformers` and `pymupdf` in `pytest_configure`, so tests run without those heavy deps installed. If you add a module that imports a heavy optional dep at import time, add a stub there or collection will break. It also installs an autouse fixture that repoints `dedup._csv_path()` at a temp file, so no test can rewrite the committed `seen_papers.csv`.
 
 ### Supabase
 
