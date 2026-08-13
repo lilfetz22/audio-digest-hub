@@ -17,6 +17,7 @@ dist-ssr
 .env
 config.ini
 *.save
+.claude
 
 # Supabase CLI ephemeral state (env-specific URLs, versions — must not be committed)
 supabase/.temp/
