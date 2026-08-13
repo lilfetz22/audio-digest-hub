@@ -61,6 +61,7 @@ export const useAudioPlayer = (
 
   const onEndedRef = useRef(onEnded);
   const onNextTrackRef = useRef(onNextTrack);
+  const hasNextTrack = Boolean(onNextTrack);
   const audiobookRef = useRef(audiobook);
   const rateRef = useRef(playbackRate);
   const isSeekingRef = useRef(false);
@@ -282,6 +283,8 @@ export const useAudioPlayer = (
       setIsLoading(false);
       setIsPlaying(false);
       setError('Failed to load audio file');
+      // Allow a later loadSource with the same URL to re-attempt the load.
+      appliedSrcRef.current = null;
       console.error('Audio error:', audio.error);
     };
 
@@ -366,7 +369,9 @@ export const useAudioPlayer = (
     mediaSession.setActionHandler('seekto', (details) => {
       if (details.seekTime != null) audio.currentTime = details.seekTime;
     });
-    mediaSession.setActionHandler('nexttrack', () => onNextTrackRef.current?.());
+    if (hasNextTrack) {
+      mediaSession.setActionHandler('nexttrack', () => onNextTrackRef.current?.());
+    }
 
     return () => {
       MEDIA_SESSION_ACTIONS.forEach((action) => {
@@ -377,7 +382,7 @@ export const useAudioPlayer = (
         }
       });
     };
-  }, [audioEl, applyPlaybackRate]);
+  }, [audioEl, applyPlaybackRate, hasNextTrack]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
@@ -386,6 +391,10 @@ export const useAudioPlayer = (
       title: audiobook.title,
       artist: 'Audio Digest Hub',
     });
+    return () => {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = 'none';
+    };
   }, [audiobook]);
 
   useEffect(() => {
