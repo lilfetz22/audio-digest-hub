@@ -3,13 +3,14 @@
 import json
 import os
 import tempfile
-import time
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 
+from wiki_engine.classifier import split_transcript_into_sections
 from wiki_engine.ingestion import WikiIngestionEngine
 from wiki_engine.models import WikiPageMeta, ExtractedConcept, ClassifiedSection
 
@@ -72,6 +73,21 @@ def _make_analysis_response_text():
             },
         ],
     })
+
+
+@pytest.fixture
+def multi_section_transcript(tmp_path):
+    """Transcript that splits into exactly three sections.
+
+    split_transcript_into_sections breaks on a blank line once the current
+    section exceeds 1200 characters, so each paragraph is padded past that.
+    """
+    paragraph = (
+        "This paragraph discusses a distinct research topic in detail. " * 25
+    )
+    transcript = tmp_path / "research_digest_2026-04-11.txt"
+    transcript.write_text("\n\n".join([paragraph] * 3), encoding="utf-8")
+    return transcript
 
 
 @pytest.fixture
@@ -380,13 +396,19 @@ class TestCombinedSectionAnalysis:
         assert engine.max_workers == 4
 
     def test_combined_analysis_calls_llm_once_per_section(
-        self, tmp_wiki, sample_transcript, mock_llm_client
+        self, tmp_wiki, multi_section_transcript, mock_llm_client
     ):
         """The combined path makes exactly one LLM call per section, not two."""
         engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=mock_llm_client)
-        engine.ingest_transcript(str(sample_transcript), "2026-04-10")
+        sections = split_transcript_into_sections(
+            multi_section_transcript.read_text(encoding="utf-8")
+        )
+        assert len(sections) == 3
 
-        assert mock_llm_client.models.generate_content.call_count == 1
+        analyzed = engine._analyze_sections(sections)
+
+        assert len(analyzed) == 3
+        assert mock_llm_client.models.generate_content.call_count == 3
 
     def test_combined_analysis_extracts_classification_and_concepts(
         self, tmp_wiki, mock_llm_client
@@ -456,22 +478,53 @@ class TestCombinedSectionAnalysis:
 
     def test_analyze_sections_ordering_deterministic_with_parallel_workers(self, tmp_wiki):
         """executor.map keeps results in input order, not completion order."""
-        section_texts = [f"section-{i}" for i in range(5)]
+        section_texts = [f"section-{i}" for i in range(4)]
         engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=None, max_workers=4)
+        # Every worker blocks until all have arrived, so completion order is
+        # forced to interleave without depending on wall-clock timing.
+        barrier = threading.Barrier(len(section_texts))
 
         def fake_analyze(text):
             idx = int(text.split("-")[1])
-            # Later-indexed sections finish first, proving order isn't
-            # determined by completion order.
-            time.sleep(0.03 * (len(section_texts) - idx))
+            barrier.wait(timeout=10)
             return ClassifiedSection(text=text, category="Other", title=f"Title-{idx}"), []
 
         with patch.object(engine, "_analyze_section", side_effect=fake_analyze):
             results = engine._analyze_sections(section_texts)
 
         assert [section.title for section, _ in results] == [
-            f"Title-{i}" for i in range(5)
+            f"Title-{i}" for i in range(4)
         ]
+
+    def test_extra_classification_field_does_not_drop_concepts(self, tmp_wiki):
+        """An unexpected classification key must not discard the parsed concepts."""
+        payload = json.loads(_make_analysis_response_text())
+        payload["summary"] = "an unexpected extra field"
+        client = MagicMock()
+        response = MagicMock()
+        response.text = json.dumps(payload)
+        client.models.generate_content.return_value = response
+
+        engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=client)
+        section, concepts = engine._analyze_section("Some transcript section text.")
+
+        assert section.category == "AI Architecture"
+        assert len(concepts) == 2
+
+    def test_missing_paper_urls_does_not_drop_concepts(self, tmp_wiki):
+        """An omitted paper_urls key defaults to [] instead of failing the section."""
+        payload = json.loads(_make_analysis_response_text())
+        del payload["paper_urls"]
+        client = MagicMock()
+        response = MagicMock()
+        response.text = json.dumps(payload)
+        client.models.generate_content.return_value = response
+
+        engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=client)
+        section, concepts = engine._analyze_section("Some transcript section text.")
+
+        assert section.paper_urls == []
+        assert len(concepts) == 2
 
     def test_analyze_sections_isolates_section_failure(self, tmp_wiki):
         """A section whose analysis raises contributes zero concepts; others unaffected."""
