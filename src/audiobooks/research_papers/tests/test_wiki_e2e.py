@@ -53,38 +53,36 @@ def mock_llm():
     """Mock LLM that returns reasonable extraction results."""
     client = MagicMock()
 
-    classify_response = MagicMock()
-    classify_response.text = json.dumps({
+    analyze_response = MagicMock()
+    analyze_response.text = json.dumps({
         "category": "AI Architecture",
         "title": "MoE SSM and Distillation",
         "paper_urls": [],
+        "concepts": [
+            {
+                "name": "Mixture of Experts",
+                "tldr": "Sparse routing achieves dense-model quality at reduced compute.",
+                "body": "MoE uses gating to route tokens to expert sub-networks.",
+                "counterarguments": "Load balancing and expert collapse remain open problems.",
+                "confidence": 0.85,
+                "categories": ["AI Architecture", "Optimization"],
+                "related_concepts": ["State Space Models"],
+                "sources": [],
+            },
+            {
+                "name": "State Space Models",
+                "tldr": "Linear-time sequence modeling via structured state transitions.",
+                "body": "SSMs achieve O(n) complexity for sequence modeling.",
+                "counterarguments": "May underperform on tasks needing precise token interactions.",
+                "confidence": 0.80,
+                "categories": ["AI Architecture"],
+                "related_concepts": ["Mixture of Experts", "Attention"],
+                "sources": [],
+            },
+        ],
     })
 
-    extract_response = MagicMock()
-    extract_response.text = json.dumps([
-        {
-            "name": "Mixture of Experts",
-            "tldr": "Sparse routing achieves dense-model quality at reduced compute.",
-            "body": "MoE uses gating to route tokens to expert sub-networks.",
-            "counterarguments": "Load balancing and expert collapse remain open problems.",
-            "confidence": 0.85,
-            "categories": ["AI Architecture", "Optimization"],
-            "related_concepts": ["State Space Models"],
-            "sources": [],
-        },
-        {
-            "name": "State Space Models",
-            "tldr": "Linear-time sequence modeling via structured state transitions.",
-            "body": "SSMs achieve O(n) complexity for sequence modeling.",
-            "counterarguments": "May underperform on tasks needing precise token interactions.",
-            "confidence": 0.80,
-            "categories": ["AI Architecture"],
-            "related_concepts": ["Mixture of Experts", "Attention"],
-            "sources": [],
-        },
-    ])
-
-    client.models.generate_content.side_effect = [classify_response, extract_response]
+    client.models.generate_content.return_value = analyze_response
     return client
 
 
