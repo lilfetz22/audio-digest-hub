@@ -44,7 +44,9 @@ def _parse_retry_after(value: str) -> float | None:
         return None
     value = value.strip()
     try:
-        return float(int(value))
+        # Servers (and proxies) can emit negative values; never hand a
+        # negative delay to time.sleep().
+        return max(float(int(value)), 0.0)
     except ValueError:
         pass
     try:
@@ -366,7 +368,7 @@ class GeminiClientWithFallback:
                         )
                         if retry_after is not None:
                             source = "server Retry-After"
-                            delay = retry_after
+                            delay = max(retry_after, 0.0)
                             if delay > max_delay:
                                 logger.warning(
                                     f"Server-supplied Retry-After of "
