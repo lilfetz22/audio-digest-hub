@@ -68,7 +68,7 @@ _EXTRACT_RESPONSE_FORMAT = build_response_format(
 
 _EXTRACT_CONCEPTS_FALLBACK = """You are a knowledge extraction engine. Given a research paper transcript section, extract the key concepts discussed.
 
-For EACH distinct concept, return a JSON array where each element has:
+Return a JSON object with a "concepts" array, where each element has:
 - "name": The concept name (e.g., "Mixture of Experts", "State Space Models")
 - "tldr": A single sentence summary
 - "body": A structured explanation (2-4 paragraphs, use markdown)
@@ -78,7 +78,7 @@ For EACH distinct concept, return a JSON array where each element has:
 - "related_concepts": Names of other concepts this relates to
 - "sources": Any paper URLs or references mentioned
 
-Respond ONLY with a valid JSON array. No markdown formatting."""
+Respond ONLY with a valid JSON object of the form {"concepts": [...]}. No markdown formatting."""
 
 _UPDATE_CONCEPT_FALLBACK = """You are a knowledge base editor. You are updating an existing concept page with new information from a recent research paper.
 
