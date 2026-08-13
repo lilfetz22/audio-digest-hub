@@ -30,7 +30,9 @@ def _inline_refs(schema: dict) -> dict:
             ref = node.get("$ref")
             if isinstance(ref, str):
                 return resolve(dict(defs.get(ref.split("/")[-1], {})))
-            return {k: resolve(v) for k, v in node.items()}
+            # Drop ``title`` — harmless to OpenAI-strict validators but rejected
+            # by some providers reached via OpenRouter.
+            return {k: resolve(v) for k, v in node.items() if k != "title"}
         if isinstance(node, list):
             return [resolve(item) for item in node]
         return node
@@ -110,7 +112,26 @@ def parse_json_response(
     label = f" [{context}]" if context else ""
     last_raw: Optional[str] = None
     for attempt in range(retries + 1):
-        raw = generate_fn()
+        try:
+            raw = generate_fn()
+        except Exception as e:  # LLM boundary: a client failure must not crash ingestion
+            last_raw = None
+            if attempt < retries:
+                logger.warning(
+                    "LLM generation raised%s (attempt %d/%d); retrying... (%s)",
+                    label,
+                    attempt + 1,
+                    retries + 1,
+                    e,
+                )
+                continue
+            logger.warning(
+                "LLM generation raised%s after %d attempt(s); giving up: %s",
+                label,
+                retries + 1,
+                e,
+            )
+            return None
         last_raw = raw
         if raw and raw.strip():
             parsed = _loads_lenient(raw)
