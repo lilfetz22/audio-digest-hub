@@ -115,7 +115,18 @@ Edge functions (`supabase/functions/{audiobooks,sources,research-papers,cleanup}
 
 In CI, `.github/workflows/daily-digest.yml` reconstructs all three files from the `CONFIG_INI`, `GOOGLE_CREDENTIALS_JSON`, and `GOOGLE_TOKEN_JSON` secrets, and writes the refreshed OAuth token back to `GOOGLE_TOKEN_JSON` via `GH_PAT` after every run. If you change what the pipeline reads from disk, update that workflow step too.
 
-Frontend config comes from `.env.local` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+The frontend has **no build-time env vars**. Despite what older docs implied, nothing in `src/` reads `import.meta.env.VITE_*` — the Supabase URL and anon key are hardcoded in `src/integrations/supabase/client.ts`. Don't add a `.env.local` requirement without also wiring it into Vercel.
+
+## Frontend deployment (Vercel)
+
+The frontend is hosted on **Vercel**, built from `main`. `vercel.json` pins the whole build (`framework: vite`, `npm ci`, `npm run build`, `dist`) plus the catch-all rewrite to `/index.html` that React Router deep links depend on — removing that rewrite makes every route except `/` 404 on refresh.
+
+`npm ci` is pinned on purpose: a stale `bun.lockb` from the original Lovable scaffold is still committed, and pinning the install command keeps Vercel on npm and `package-lock.json` no matter which lockfiles it detects.
+
+Two things that live outside the repo and won't show up in a diff:
+
+- **Supabase Auth URL configuration.** `useAuth.tsx` derives its signup redirect from `window.location.origin`, so every domain the app is served from must be allow-listed under Authentication → URL Configuration. Changing domains means updating Supabase, not code.
+- **Lovable is still connected** as a visual editor. `lovable-tagger` is a dev-mode-only vite plugin and has no effect on the production build, so leave it unless you're cutting Lovable loose entirely.
 
 ## Conventions
 
