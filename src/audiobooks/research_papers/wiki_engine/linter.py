@@ -36,7 +36,7 @@ For each issue found, provide:
 - "pages_involved": List of page filenames involved
 - "severity": "high", "medium", or "low"
 
-Return a JSON array of issues. Respond ONLY with valid JSON."""
+Return a JSON object of the form {"issues": [...]}. Respond ONLY with valid JSON."""
 
 LINT_SYSTEM_PROMPT = load_prompt(PROMPTS_DIR, "lint_system.txt", _LINT_SYSTEM_FALLBACK)
 
