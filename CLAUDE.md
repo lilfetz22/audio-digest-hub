@@ -130,6 +130,8 @@ Two things that live outside the repo and won't show up in a diff:
 - **Supabase Auth URL configuration.** `useAuth.tsx` derives its signup redirect from `window.location.origin`, so every domain the app is served from must be allow-listed under Authentication → URL Configuration. Changing domains means updating Supabase, not code.
 - **Lovable is still connected** as a visual editor. `lovable-tagger` is a dev-mode-only vite plugin and has no effect on the production build, so leave it unless you're cutting Lovable loose entirely.
 
+**`date-fns` is pinned at `^3.x` on purpose — don't let Dependabot bump it to v4.** `react-day-picker@8.10.2` (the newest 8.x, and the version this repo's `^8.10.1` resolves to) declares a peer of `date-fns@^2.28.0 || ^3.0.0`. Installing `date-fns@4` doesn't fail loudly — npm dedupes to the v4 copy anyway and only warns, leaving `node_modules` in a state `npm ls` reports as `invalid`/`ELSPROBLEMS`. Nothing in `src/` imports `date-fns` directly (`components/ui/calendar.tsx` is the only consumer via `react-day-picker`, and nothing in the app renders `Calendar`), so this only matters if `react-day-picker` reaches v9 — check its `date-fns` peer range before bumping either.
+
 ## Conventions
 
 - **Conventional Commits** for every commit message (from `.cursorrules`).
