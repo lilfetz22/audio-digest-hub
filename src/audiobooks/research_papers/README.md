@@ -219,13 +219,13 @@ The generator supports automatic failover across multiple API keys and models to
 2. **Backup API key** (optional) — same model chain on a second free-tier key
 3. **OpenRouter** (optional) — final fallback for any Gemini failure once all Gemini tiers are exhausted, using `OPENROUTER_MODEL` via OpenRouter's OpenAI-compatible endpoint
 
-On any Gemini failure (429 quota, other client errors, or exhausted retries), the system moves to the next API key tier, then falls through to OpenRouter as a last resort. Each model gets up to 10 retries with exponential backoff (30s base, capped at 10 minutes). Network errors (`httpx.ReadError`, `httpx.ConnectError`, etc.) are also retried.
+On any Gemini failure (429 quota, other client errors, or exhausted retries), the system moves to the next API key tier, then falls through to OpenRouter as a last resort. Each model gets up to 4 retries with exponential backoff (5s base, capped at 1 minute). Network errors (`httpx.ReadError`, `httpx.ConnectError`, etc.) are also retried. OpenRouter retries honour a server-supplied `Retry-After` header (delta-seconds or HTTP-date) when present, clamped to the same 1-minute cap, and fall back to exponential backoff otherwise.
 
-**Model locking:** once a model succeeds, it is reused for all subsequent calls in the same run. If the locked-in model later fails, the full fallback chain is re-entered.
+**Model locking:** once a model succeeds, it is reused for all subsequent calls in the same run. If the locked-in model later fails, the full fallback chain is re-entered. The locked-in `(client, model)` pair is stored as a single tuple behind a lock, so concurrent callers (e.g. parallel wiki section analysis) never see a half-updated combination and only one thread walks the tier chain at a time.
 
 **Wiki ingestion uses OpenRouter exclusively:** when `[OpenRouter]` is configured, the wiki ingestion engine bypasses the Gemini tiers entirely and uses `OPENROUTER_MODEL` as its only LLM option.
 
-**Structured JSON outputs (wiki engine):** the classifier, concept extractor, and linter request OpenRouter [structured outputs](https://openrouter.ai/docs/features/structured-outputs) via `response_format` with a `json_schema` derived from Pydantic models (the single source of truth for both the schema and response validation). Responses are validated against those models; fields that fail validation are skipped or fall back rather than corrupting a page. If a response is empty or unparseable, the same `OPENROUTER_MODEL` is called again once (code fences and surrounding prose are also tolerated) before the call gives up and logs the raw snippet — so a malformed reply is retried instead of silently dropped.
+**Structured JSON outputs (wiki engine):** the section analyzer, classifier, concept extractor, and linter request OpenRouter [structured outputs](https://openrouter.ai/docs/features/structured-outputs) via `response_format` with a `json_schema` derived from Pydantic models (the single source of truth for both the schema and response validation). Responses are validated against those models; fields that fail validation are skipped or fall back rather than corrupting a page. If a response is empty or unparseable, the same `OPENROUTER_MODEL` is called again once (code fences and surrounding prose are also tolerated) before the call gives up and logs the raw snippet — so a malformed reply is retried instead of silently dropped.
 
 ### Feedback System
 
@@ -462,8 +462,9 @@ pytest tests/test_feedback.py -v
 | `test_transcript_generator.py` | Prompt construction, per-paper generation, batch mode, summary text assembly, category grouping |
 | `test_pipeline.py` | Full end-to-end orchestration, per-category selection, idempotency, Supabase metadata push, error scenarios |
 | `test_feedback.py` | Profile loading/writing, interest extraction, growth capping, FeedbackClient API calls |
+| `test_gemini_client_retry.py` | `Retry-After` parsing (delta-seconds, HTTP-date, past dates, unparseable values), model locking, and thread-safe resolution under concurrent `generate()` calls |
 | `test_wiki_classifier.py` | Section classification, `split_transcript_into_sections`, `extract_source_urls_from_section` (arXiv/HF markers, deduplication, malformed markers) |
-| `test_wiki_ingestion.py` | Source page creation, concept extraction, upsert, index rebuild, auto-commit, WIKI_SOURCE_URL marker preservation in concept frontmatter |
+| `test_wiki_ingestion.py` | Source page creation, concept extraction, upsert, index rebuild, auto-commit, WIKI_SOURCE_URL marker preservation in concept frontmatter, combined section analysis (single call per section, legacy two-call path, parallel ordering, per-section failure isolation), `llm_merge_updates` behaviour |
 | `test_wiki_e2e.py` | Full ingestion pipeline, index rebuild, search, query save/find, lint |
 | `test_wiki_git_hooks.py` | WikiGitManager auto-commit on new/modified files, change detection |
 | `test_wiki_mcp_server.py` | Tool listing, `wiki_search`, `wiki_get_page`, `wiki_list_pages`, `wiki_save_query`, dispatch/error resilience |
@@ -612,6 +613,12 @@ p.ingest_transcript('raw_content/research_digest_2026-04-20.txt', '2026-04-20')
 
 After ingestion, `wiki/index.md` is rebuilt and a git commit is created automatically if `auto_commit=True`.
 
+**Combined section analysis (default):** with `combined_analysis=True` (the default), classification and concept extraction for a section happen in a **single** LLM call against `prompts/analyze_section_system.txt`, halving the number of requests per transcript. Set `combined_analysis=False` to fall back to the two-call path (`classify_system.txt` then `extract_concepts_system.txt`).
+
+**Parallel sections:** sections are analyzed through a thread pool of `max_workers` threads (default 4); pass `max_workers=1` to run sequentially with no executor. Results keep their original section order, a failure in one section is isolated (that section becomes `Other`/`Unclassified` with no concepts), and concept-page upserts always run sequentially so two threads can never write the same slug.
+
+**Concept merges:** updating an existing concept page appends a new dated section by default. Pass `llm_merge_updates=True` to instead have the LLM rewrite the page using `prompts/update_concept_system.txt`.
+
 **Source URL injection (Python-side, no LLM):** `ingest_transcript` parses `<!-- WIKI_SOURCE_URL: ... -->` markers embedded by the transcript generator and injects the original arXiv / Hugging Face URLs directly into concept page `sources:` frontmatter. This guarantees reliable URL provenance — the LLM is only involved in concept extraction, not URL retrieval.
 
 ---
@@ -665,17 +672,19 @@ research_papers/
 │   ├── search.py            # BM25 + qmd hybrid search
 │   ├── utils.py             # load_prompt, slugify, format_page
 │   └── prompts/
+│       ├── analyze_section_system.txt
 │       ├── extract_concepts_system.txt
 │       └── update_concept_system.txt
 └── tests/
     ├── __init__.py
-    ├── conftest.py              # sys.path setup; pytest_configure stubs for optional deps
+    ├── conftest.py              # sys.path setup; pytest_configure stubs for optional deps; autouse dedup CSV isolation
     ├── test_email_parser.py
     ├── test_paper_downloader.py
     ├── test_paper_scorer.py
     ├── test_transcript_generator.py
     ├── test_pipeline.py
     ├── test_feedback.py
+    ├── test_gemini_client_retry.py
     ├── test_wiki_classifier.py
     ├── test_wiki_ingestion.py
     ├── test_wiki_e2e.py
