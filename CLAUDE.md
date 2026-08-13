@@ -119,9 +119,9 @@ The frontend has **no build-time env vars**. Despite what older docs implied, no
 
 ## Frontend deployment (Vercel)
 
-The frontend is hosted on **Vercel**, built from `main`. `vercel.json` pins the whole build (`framework: vite`, `npm ci --legacy-peer-deps`, `npm run build`, `dist`) plus the catch-all rewrite to `/index.html` that React Router deep links depend on — removing that rewrite makes every route except `/` 404 on refresh.
+The frontend is hosted on **Vercel**, built from `main`. `vercel.json` pins the whole build (`framework: vite`, `npm ci`, `npm run build`, `dist`) plus the catch-all rewrite to `/index.html` that React Router deep links depend on — removing that rewrite makes every route except `/` 404 on refresh.
 
-**`--legacy-peer-deps` is load-bearing.** `cmdk@1.0.0` pins a `react@^18` peer while the app runs React 19, so a bare `npm ci` fails with `ERESOLVE` — locally and on Vercel. Use it for local installs too. Bumping to `cmdk@^1.1.1` (accepts React 19) is the real fix and would let the flag go.
+**`npm ci` must keep working without `--legacy-peer-deps`.** It used to fail: `cmdk`, `next-themes` and `vaul` declared `react@^18` peers while the app runs React 19, and the lockfile pinned exactly those pre-React-19 versions. Those three were bumped (`^1.1.1`, `^0.4.6`, `^1.1.2`) and the rest of the tree re-resolved inside its existing `^` ranges. If `npm ci` starts throwing `ERESOLVE` again, a dependency has regressed into a React 19 peer conflict — bump that dependency instead of restoring the flag, which would let Vercel install a tree npm considers invalid.
 
 npm is pinned on purpose as well: a stale `bun.lockb` from the original Lovable scaffold is still committed, and pinning the install command keeps Vercel on npm and `package-lock.json` no matter which lockfiles it detects.
 

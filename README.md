@@ -223,7 +223,7 @@ repo. `vercel.json` is the source of truth for the build:
 | Setting | Value |
 | --- | --- |
 | Framework preset | `vite` |
-| Install command | `npm ci --legacy-peer-deps` |
+| Install command | `npm ci` |
 | Build command | `npm run build` |
 | Output directory | `dist` |
 
@@ -232,10 +232,13 @@ Two details worth knowing:
 - **SPA rewrite.** Every path that doesn't match a static file is rewritten to
   `/index.html` so React Router can handle deep links like `/player/:id`. Without that
   rewrite, refreshing on any route but `/` returns a 404 from the CDN.
-- **`--legacy-peer-deps` is required, not cosmetic.** `cmdk@1.0.0` declares a
-  `react@^18` peer while the app is on React 19, so a plain `npm ci` aborts with
-  `ERESOLVE`. The flag is how this lockfile has always been installable. Upgrading to
-  `cmdk@^1.1.1` (which accepts React 19) would let the flag be dropped.
+- **A plain `npm ci` works — keep it that way.** It used to fail with `ERESOLVE`:
+  `cmdk`, `next-themes` and `vaul` all declared `react@^18` peers while the app runs
+  React 19, and the lockfile pinned the exact versions that predated React 19 support.
+  Those three were bumped and the rest of the tree re-resolved within its existing
+  ranges. If you ever need `--legacy-peer-deps` again, a dependency has regressed into
+  a React 19 peer conflict — fix the dependency rather than adding the flag back, or
+  Vercel silently installs a tree npm considers invalid.
 - **npm is pinned deliberately.** A stale `bun.lockb` from the original scaffold is
   still committed; pinning the install command keeps Vercel on npm and
   `package-lock.json` regardless of which lockfiles it finds.
