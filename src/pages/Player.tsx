@@ -72,7 +72,7 @@ const Player = () => {
       // the specific media element the user interacted with, so reusing this one
       // lets part 2 start with the screen still locked. The old flow navigated
       // first, which mounted a brand new <audio> and got NotAllowedError.
-      loadSource(next.url, { autoPlay: options.autoPlay, startAt: 0 });
+      loadSource(next.url, { autoPlay: options.autoPlay, startAt: 0, ownerId: next.id });
       navigate(`/player/${next.id}`, { state: { autoPlay: options.autoPlay } });
     },
     // `loadSource` comes from the hook call below, so it cannot appear in this
@@ -199,6 +199,7 @@ const Player = () => {
     loadSource(audioUrl, {
       autoPlay: shouldAutoPlay,
       startAt: audiobook.last_playback_position_seconds,
+      ownerId: audiobook.id,
     });
   }, [audioUrl, audiobook, loadSource]);
 
