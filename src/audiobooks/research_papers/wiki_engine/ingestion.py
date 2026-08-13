@@ -2,6 +2,8 @@
 
 import json
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -14,6 +16,7 @@ from .classifier import (
     TranscriptClassifier,
     split_transcript_into_sections,
     extract_source_urls_from_section,
+    _SectionClassification,
 )
 from .git_hooks import WikiGitManager
 from .index_builder import IndexBuilder
@@ -66,6 +69,24 @@ _EXTRACT_RESPONSE_FORMAT = build_response_format(
     "extracted_concepts", _ExtractedConceptList
 )
 
+
+class _SectionAnalysisModel(BaseModel):
+    """Structured-output contract combining classification and concept extraction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    title: str
+    paper_urls: list[str]
+    concepts: list[_ExtractedConceptModel]
+
+
+# Combined schema — lets a single OpenRouter call return both the
+# classification fields and the extracted concepts for a section.
+_ANALYZE_RESPONSE_FORMAT = build_response_format(
+    "section_analysis", _SectionAnalysisModel
+)
+
 _EXTRACT_CONCEPTS_FALLBACK = """You are a knowledge extraction engine. Given a research paper transcript section, extract the key concepts discussed.
 
 Return a JSON object with a "concepts" array, where each element has:
@@ -79,6 +100,24 @@ Return a JSON object with a "concepts" array, where each element has:
 - "sources": Any paper URLs or references mentioned
 
 Respond ONLY with a valid JSON object of the form {"concepts": [...]}. No markdown formatting."""
+
+_ANALYZE_SECTION_FALLBACK = """You are a research paper classifier and knowledge extraction engine. Given a transcript section, classify it and extract the key concepts discussed.
+
+Return a JSON object with these fields:
+- "category": The primary category (one of: "AI Architecture", "Hardware", "Benchmarking", "Optimization", "NLP", "Computer Vision", "Reinforcement Learning", "Robotics", "Time Series", "AI Agents", "Safety & Alignment", "Other")
+- "title": A short descriptive title for this section (max 10 words)
+- "paper_urls": Any URLs mentioned in the text (list of strings)
+- "concepts": An array of extracted concepts, where each element has:
+  - "name": The concept name (e.g., "Mixture of Experts", "State Space Models")
+  - "tldr": A single sentence summary
+  - "body": A structured explanation (2-4 paragraphs, use markdown)
+  - "counterarguments": Known limitations, data gaps, or counterarguments (1-2 paragraphs)
+  - "confidence": How confident you are in the extraction (0.0-1.0)
+  - "categories": List of topic categories this concept belongs to
+  - "related_concepts": Names of other concepts this relates to
+  - "sources": Any paper URLs or references mentioned
+
+Respond ONLY with a valid JSON object of the form {"category": ..., "title": ..., "paper_urls": [...], "concepts": [...]}. No markdown formatting."""
 
 _UPDATE_CONCEPT_FALLBACK = """You are a knowledge base editor. You are updating an existing concept page with new information from a recent research paper.
 
@@ -127,6 +166,9 @@ class WikiIngestionEngine:
         branch: str = "main",
         auto_push: bool = False,
         push_parent: bool = False,
+        llm_merge_updates: bool = False,
+        combined_analysis: bool = True,
+        max_workers: int = 4,
     ):
         self.wiki_dir = Path(wiki_dir)
         self.sources_dir = self.wiki_dir / "sources"
@@ -150,9 +192,14 @@ class WikiIngestionEngine:
             )
         else:
             self.llm_client = llm_client
-        self.classifier = classifier or TranscriptClassifier(
-            self.llm_client, model_name
-        )
+        self.llm_merge_updates = llm_merge_updates
+        self.combined_analysis = combined_analysis
+        self.max_workers = max_workers
+        # Only the legacy combined_analysis=False path needs a classifier, so
+        # it is built on demand to avoid loading its prompt on every engine.
+        self.classifier = classifier
+        self._failed_sections = 0
+        self._failure_lock = threading.Lock()
         self.index_builder = index_builder or IndexBuilder(str(self.wiki_dir))
         self.auto_commit = auto_commit
         self.rebuild_index = rebuild_index
@@ -167,6 +214,9 @@ class WikiIngestionEngine:
         )
         self._extract_prompt = load_prompt(
             PROMPTS_DIR, "extract_concepts_system.txt", _EXTRACT_CONCEPTS_FALLBACK
+        )
+        self._analyze_prompt = load_prompt(
+            PROMPTS_DIR, "analyze_section_system.txt", _ANALYZE_SECTION_FALLBACK
         )
         self._update_prompt = load_prompt(
             PROMPTS_DIR, "update_concept_system.txt", _UPDATE_CONCEPT_FALLBACK
@@ -220,21 +270,30 @@ class WikiIngestionEngine:
         source_page_path = self._create_source_page(transcript_text, date_str)
         result["source_page"] = str(source_page_path)
 
-        # Step 2: Split and classify sections
+        # Step 2/3: Classify sections and extract their concepts. The
+        # combined path makes one LLM call per section instead of two.
         sections = split_transcript_into_sections(transcript_text)
-        classified = self.classifier.classify(sections)
-
-        # Inject Python-extracted source URLs into each classified section.
-        # This is intentionally done by Python code, not the LLM, so that the
-        # original arXiv / Hugging Face URLs reliably make it into wiki pages.
-        for cs in classified:
-            cs.paper_urls = self._merge_source_urls(
-                extract_source_urls_from_section(cs.text), cs.paper_urls
+        self._failed_sections = 0
+        if self.combined_analysis:
+            analyzed = self._analyze_sections(sections)
+        else:
+            self.classifier = self.classifier or TranscriptClassifier(
+                self.llm_client, self.model_name
             )
+            classified = self.classifier.classify(sections)
+            # Inject Python-extracted source URLs into each classified
+            # section. This is intentionally done by Python code, not the
+            # LLM, so that the original arXiv / Hugging Face URLs reliably
+            # make it into wiki pages.
+            for cs in classified:
+                cs.paper_urls = self._merge_source_urls(
+                    extract_source_urls_from_section(cs.text), cs.paper_urls
+                )
+            analyzed = [(cs, self._extract_concepts(cs)) for cs in classified]
 
-        # Step 3: Extract concepts from each section
-        for section in classified:
-            concepts = self._extract_concepts(section)
+        # Upserts touch concept .md files by slug and must stay sequential —
+        # concurrent writes to the same slug would corrupt pages.
+        for _section, concepts in analyzed:
             for concept in concepts:
                 was_updated = self._upsert_concept(concept, date_str)
                 if was_updated:
@@ -247,8 +306,17 @@ class WikiIngestionEngine:
             index_path = self.index_builder.rebuild()
             result["index_page"] = str(index_path)
 
+        result["sections_total"] = len(sections)
+        result["sections_failed"] = self._failed_sections
+        all_failed = bool(sections) and self._failed_sections == len(sections)
+        if all_failed:
+            logger.error(
+                "All %d sections failed analysis; skipping auto-commit.",
+                len(sections),
+            )
+
         # Step 5: Optional auto-commit of wiki mutations
-        if self.auto_commit:
+        if self.auto_commit and not all_failed:
             result["auto_committed"] = self.git_manager.auto_commit(
                 message=f"wiki: ingest transcript {date_str}"
             )
@@ -295,6 +363,12 @@ class WikiIngestionEngine:
         if data is None:
             return []
 
+        return self._build_concepts(data, section)
+
+    def _build_concepts(
+        self, data: dict, section: ClassifiedSection
+    ) -> List[ExtractedConcept]:
+        """Turn a parsed ``concepts`` payload into ExtractedConcept objects."""
         concepts = []
         for item in coerce_json_list(data, "concepts"):
             if not isinstance(item, dict):
@@ -320,6 +394,85 @@ class WikiIngestionEngine:
                 )
             )
         return concepts
+
+    def _analyze_sections(
+        self, sections: List[str]
+    ) -> List[Tuple[ClassifiedSection, List[ExtractedConcept]]]:
+        """Classify and extract concepts for every section.
+
+        Sequential when max_workers <= 1 (no executor is spun up at all);
+        otherwise uses a thread pool. Results always come back in the
+        original section order — executor.map preserves input order
+        regardless of completion order.
+        """
+        if self.max_workers <= 1 or len(sections) <= 1:
+            return [
+                self._analyze_section_safe(i, text) for i, text in enumerate(sections)
+            ]
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            return list(
+                executor.map(
+                    self._analyze_section_safe, range(len(sections)), sections
+                )
+            )
+
+    def _analyze_section_safe(
+        self, index: int, text: str
+    ) -> Tuple[ClassifiedSection, List[ExtractedConcept]]:
+        """Run _analyze_section, isolating a failure to just this section."""
+        try:
+            return self._analyze_section(text)
+        except Exception as e:
+            logger.warning("Section %d analysis raised; skipping: %s", index, e)
+            with self._failure_lock:
+                self._failed_sections += 1
+            return (
+                ClassifiedSection(text=text, category="Other", title="Unclassified"),
+                [],
+            )
+
+    def _analyze_section(
+        self, text: str
+    ) -> Tuple[ClassifiedSection, List[ExtractedConcept]]:
+        """Classify a section and extract its concepts in a single LLM call."""
+        default_section = ClassifiedSection(
+            text=text, category="Other", title="Unclassified"
+        )
+        if not self.llm_client:
+            return default_section, []
+
+        data = parse_json_response(
+            lambda: self._llm_generate(
+                text[:8000], self._analyze_prompt, _ANALYZE_RESPONSE_FORMAT
+            ),
+            context="analyze_section",
+        )
+        if not isinstance(data, dict):
+            return default_section, []
+
+        # Validate only the fields the classification contract owns — extra
+        # keys the model volunteers must never destroy the parsed concepts.
+        raw_classification = {k: data.get(k) for k in ("category", "title", "paper_urls")}
+        raw_classification["paper_urls"] = raw_classification.get("paper_urls") or []
+        try:
+            classification = _SectionClassification.model_validate(raw_classification)
+            section = ClassifiedSection(
+                text=text,
+                category=classification.category or "Other",
+                title=classification.title,
+                paper_urls=classification.paper_urls,
+            )
+        except ValidationError as e:
+            logger.warning("Section classification invalid, defaulting: %s", e)
+            section = default_section
+        # Inject Python-extracted source URLs into the section. This is
+        # intentionally done by Python code, not the LLM, so that the
+        # original arXiv / Hugging Face URLs reliably make it into wiki pages.
+        section.paper_urls = self._merge_source_urls(
+            extract_source_urls_from_section(text), section.paper_urls
+        )
+
+        return section, self._build_concepts(data, section)
 
     def _upsert_concept(self, concept: ExtractedConcept, date_str: str) -> bool:
         """Create or update a concept page. Returns True if updated existing."""
@@ -375,10 +528,9 @@ class WikiIngestionEngine:
         """Update an existing concept page with new information."""
         existing_content = filepath.read_text(encoding="utf-8")
 
-        if self.llm_client:
+        if self.llm_client and self.llm_merge_updates:
             updated = self._llm_update_concept(existing_content, concept)
         else:
-            # Fallback: simple append
             updated = self._simple_append(existing_content, concept, date_str)
 
         filepath.write_text(updated, encoding="utf-8")

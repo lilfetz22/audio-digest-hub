@@ -10,11 +10,16 @@ can run without those libraries installed.  The stubs are inserted into sys.modu
 before any test module is collected, ensuring:
   - `@patch("sentence_transformers.util.cos_sim")` can locate its target
   - Top-level `import pymupdf` in paper_downloader.py succeeds during collection
+
+Finally, an autouse fixture redirects the dedup CSV at a temp file so no test can
+mutate the committed `seen_papers.csv`.
 """
 
 import os
 import sys
 from unittest.mock import MagicMock
+
+import pytest
 
 # research_papers/ — enables `from wiki_engine.xxx import ...`
 _research_papers_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -52,3 +57,17 @@ def pytest_configure(config):
     # Without this stub the entire test module fails to collect.
     if "pymupdf" not in sys.modules:
         sys.modules["pymupdf"] = MagicMock(name="pymupdf")
+
+
+@pytest.fixture(autouse=True)
+def isolate_seen_papers_csv(tmp_path, monkeypatch):
+    """Point dedup at a throwaway CSV for every test.
+
+    ``dedup._csv_path()`` resolves to the committed ``seen_papers.csv`` next to
+    the pipeline code, so any test reaching ``ResearchPipeline.run()`` would
+    otherwise rewrite real dedup state — pruning it to the 14-day window and
+    appending fixture papers.
+    """
+    from research_papers import dedup
+
+    monkeypatch.setattr(dedup, "_csv_path", lambda: str(tmp_path / "seen_papers.csv"))

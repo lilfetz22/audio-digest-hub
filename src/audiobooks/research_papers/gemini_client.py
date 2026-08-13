@@ -13,14 +13,19 @@ Fallback order:
 When ``openrouter_only`` is set, the Gemini tiers are bypassed entirely and
 OpenRouter becomes the single option (used by the wiki ingestion engine).
 
-Within each model attempt, up to 10 retries with exponential back-off are
+Within each model attempt, up to 4 retries with exponential back-off are
 made for retryable server/network errors. Any Gemini failure that exhausts
 the API-key tiers falls through to OpenRouter as a last resort.
 """
 
 import logging
+import random
+import re
+import threading
 import time
-from typing import List, Tuple
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from typing import Dict, List, Tuple
 
 import httpx
 from google import genai
@@ -28,6 +33,34 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 logger = logging.getLogger(__name__)
+
+
+def _jittered(delay: float) -> float:
+    """Apply full jitter so concurrent workers do not retry in lockstep."""
+    return random.uniform(delay / 2, delay)
+
+
+def _parse_retry_after(value: str) -> float | None:
+    """Parse a Retry-After header value into seconds to wait.
+
+    Supports both delta-seconds (e.g. "12") and HTTP-date
+    (e.g. "Wed, 21 Oct 2015 07:28:00 GMT") forms. Returns None if
+    ``value`` is absent, empty, or unparseable.
+    """
+    if not value or not value.strip():
+        return None
+    value = value.strip()
+    # Strict delta-seconds syntax — int() would also accept PEP 515
+    # underscores.  Negative values are clamped; servers do emit them.
+    if re.fullmatch(r"[+-]?\d+", value):
+        return max(float(value), 0.0)
+    try:
+        retry_date = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if retry_date.tzinfo is None:
+        retry_date = retry_date.replace(tzinfo=timezone.utc)
+    return max((retry_date - datetime.now(timezone.utc)).total_seconds(), 0.0)
 
 
 class GeminiClientWithFallback:
@@ -55,8 +88,14 @@ class GeminiClientWithFallback:
         self.openrouter_api_key = openrouter_api_key
         self.openrouter_model = openrouter_model
         self.openrouter_only = openrouter_only
-        self._resolved_model: str | None = None
-        self._resolved_client: genai.Client | None = None
+        # Stored as one tuple so concurrent callers can never observe a
+        # half-updated client/model combination.
+        self._resolved: Tuple[genai.Client, str] | None = None
+        self._resolve_lock = threading.RLock()
+        self._clients: Dict[str, genai.Client] = {}
+        # One connection pool for all OpenRouter calls; httpx.Client is
+        # thread-safe and avoids a TLS handshake on every attempt.
+        self._http_client = httpx.Client(timeout=120)
 
     def generate(
         self,
@@ -70,6 +109,7 @@ class GeminiClientWithFallback:
         (client, model) succeeds is "locked in" for subsequent calls,
         so we avoid re-running the full chain on every request.  If the
         locked-in combination later fails the full chain is re-entered.
+        Safe to call from multiple threads.
 
         Args:
             user_prompt: The user/content part of the prompt.
@@ -93,43 +133,97 @@ class GeminiClientWithFallback:
                 )
             return self._try_openrouter(system_prompt, user_prompt, response_format)
 
-        # Fast path: try locked-in model first
-        if self._resolved_model is not None:
-            try:
-                return self._try_model(
-                    self._resolved_client,
-                    self._resolved_model,
-                    system_prompt,
-                    user_prompt,
-                )
-            except genai_errors.ClientError as e:
-                if getattr(e, "code", None) == 429:
-                    logger.warning(
-                        f"Quota exhausted (429) for locked-in model "
-                        f"{self._resolved_model}. Re-entering fallback chain..."
-                    )
-                else:
-                    logger.warning(
-                        f"Client error for locked-in model "
-                        f"{self._resolved_model}: {e}. Re-entering fallback chain..."
-                    )
-                self._resolved_model = None
-                self._resolved_client = None
-            except (
-                genai_errors.ServerError,
-                httpx.ReadError,
-                httpx.ConnectError,
-                httpx.RemoteProtocolError,
-                ConnectionError,
-                OSError,
-            ):
-                logger.warning(
-                    f"Locked-in model {self._resolved_model} failed. "
-                    f"Re-entering full fallback chain..."
-                )
-                self._resolved_model = None
-                self._resolved_client = None
+        resolved = self._resolved
+        if resolved is not None:
+            result = self._try_resolved(resolved, system_prompt, user_prompt)
+            if result is not None:
+                return result
 
+        # Only one thread walks the tier chain at a time; the rest wait and
+        # then reuse whatever combination the winner locked in.  The lock is
+        # held only to read/publish the resolved pair — never across a request,
+        # or waiters would serialize behind each other.
+        with self._resolve_lock:
+            resolved = self._resolved
+            if resolved is None:
+                return self._walk_tier_chain(
+                    system_prompt, user_prompt, response_format
+                )
+
+        result = self._try_resolved(resolved, system_prompt, user_prompt)
+        if result is not None:
+            return result
+
+        with self._resolve_lock:
+            resolved = self._resolved
+            if resolved is not None:
+                result = self._try_resolved(resolved, system_prompt, user_prompt)
+                if result is not None:
+                    return result
+            return self._walk_tier_chain(system_prompt, user_prompt, response_format)
+
+    def _try_resolved(
+        self,
+        resolved: Tuple[genai.Client, str],
+        system_prompt: str | None,
+        user_prompt: str,
+    ) -> str | None:
+        """Call the locked-in (client, model) pair.
+
+        Returns None when that pair failed and the full tier chain should be
+        re-entered.
+        """
+        client, model = resolved
+        try:
+            return self._try_model(client, model, system_prompt, user_prompt)
+        except genai_errors.ClientError as e:
+            if getattr(e, "code", None) == 429:
+                logger.warning(
+                    f"Quota exhausted (429) for locked-in model {model}. "
+                    f"Re-entering fallback chain..."
+                )
+            else:
+                logger.warning(
+                    f"Client error for locked-in model {model}: {e}. "
+                    f"Re-entering fallback chain..."
+                )
+        except (
+            genai_errors.ServerError,
+            httpx.ReadError,
+            httpx.ConnectError,
+            httpx.RemoteProtocolError,
+            ConnectionError,
+            OSError,
+        ):
+            logger.warning(
+                f"Locked-in model {model} failed. Re-entering full fallback chain..."
+            )
+        self._invalidate_resolved(resolved)
+        return None
+
+    def _invalidate_resolved(self, expected: Tuple[genai.Client, str]) -> None:
+        """Drop the locked-in pair unless another thread already replaced it."""
+        with self._resolve_lock:
+            if self._resolved is expected:
+                self._resolved = None
+
+    def _client_for(self, key: str) -> genai.Client:
+        """Return a cached client for ``key``, so re-walks do not leak pools."""
+        with self._resolve_lock:
+            if key not in self._clients:
+                self._clients[key] = genai.Client(api_key=key)
+            return self._clients[key]
+
+    def _walk_tier_chain(
+        self,
+        system_prompt: str | None,
+        user_prompt: str,
+        response_format: dict | None = None,
+    ) -> str:
+        """Try every API-key/model tier in order, then OpenRouter as a last resort.
+
+        Callers must hold ``self._resolve_lock``.
+        """
         free_models = [self.model_name] + [
             m for m in self.FALLBACK_MODELS if m != self.model_name
         ]
@@ -139,7 +233,7 @@ class GeminiClientWithFallback:
             api_key_tiers.append((self.backup_api_key, free_models))
 
         for tier_idx, (key, models) in enumerate(api_key_tiers):
-            tier_client = genai.Client(api_key=key)
+            tier_client = self._client_for(key)
             key_label = "primary" if tier_idx == 0 else "backup"
 
             for model_idx, model in enumerate(models):
@@ -147,8 +241,7 @@ class GeminiClientWithFallback:
                     result = self._try_model(
                         tier_client, model, system_prompt, user_prompt
                     )
-                    self._resolved_model = model
-                    self._resolved_client = tier_client
+                    self._resolved = (tier_client, model)
                     logger.info(f"Locked in model: {model} ({key_label} API key)")
                     return result
                 except genai_errors.ClientError as e:
@@ -204,14 +297,20 @@ class GeminiClientWithFallback:
         system_prompt: str | None,
         user_prompt: str,
     ) -> str:
-        """Try a single model with exponential back-off retries (up to 10).
+        """Try a single model with exponential back-off retries (up to 4).
 
         Raises genai_errors.ClientError immediately on 429 so the caller
-        can swap API keys without wasting the retry budget.
+        can swap API keys without wasting the retry budget.  ``Retry-After``
+        is honoured on the OpenRouter path only; this path uses jittered
+        exponential back-off.
+
+        Raises:
+            RuntimeError: When the model returns no text (e.g. a safety block
+                or MAX_TOKENS with no content).
         """
-        max_retries = 10
-        base_delay = 30  # seconds; doubles per attempt
-        max_delay = 600  # 10 minutes cap
+        max_retries = 4
+        base_delay = 5  # seconds; doubles per attempt
+        max_delay = 60  # 1 minute cap
 
         config_kwargs: dict = {"temperature": 0.7}
         if system_prompt:
@@ -224,16 +323,22 @@ class GeminiClientWithFallback:
                     contents=user_prompt,
                     config=types.GenerateContentConfig(**config_kwargs),
                 )
-                return response.text
+                text = response.text
+                if not text:
+                    raise RuntimeError(
+                        f"{model} returned no text "
+                        f"(finish_reason may be SAFETY/MAX_TOKENS)"
+                    )
+                return text
             except genai_errors.ClientError:
                 raise  # includes 429 — bubble up immediately
             except genai_errors.ServerError as e:
                 is_retryable = getattr(e, "code", None) == 503
                 if is_retryable and attempt < max_retries - 1:
-                    delay = min(base_delay * (2**attempt), max_delay)
+                    delay = _jittered(min(base_delay * (2**attempt), max_delay))
                     logger.warning(
                         f"Gemini API unavailable (503) for {model}. "
-                        f"Retrying in {delay}s "
+                        f"Retrying in {delay:.1f}s "
                         f"(attempt {attempt + 1}/{max_retries})..."
                     )
                     time.sleep(delay)
@@ -247,10 +352,10 @@ class GeminiClientWithFallback:
                 OSError,
             ) as e:
                 if attempt < max_retries - 1:
-                    delay = min(base_delay * (2**attempt), max_delay)
+                    delay = _jittered(min(base_delay * (2**attempt), max_delay))
                     logger.warning(
                         f"Network error for {model}: {e}. "
-                        f"Retrying in {delay}s "
+                        f"Retrying in {delay:.1f}s "
                         f"(attempt {attempt + 1}/{max_retries})..."
                     )
                     time.sleep(delay)
@@ -265,14 +370,15 @@ class GeminiClientWithFallback:
     ) -> str:
         """Call OpenRouter (OpenAI-compatible) with exponential back-off retries.
 
-        Retries on 429/5xx and transient network errors up to 10 times.
+        Retries on 429/5xx and transient network errors up to 4 times,
+        honoring a server-supplied ``Retry-After`` header when present.
 
         ``response_format`` is forwarded verbatim (e.g. a ``json_schema``
         structured-output spec) when provided.
         """
-        max_retries = 10
-        base_delay = 30  # seconds; doubles per attempt
-        max_delay = 600  # 10 minutes cap
+        max_retries = 4
+        base_delay = 5  # seconds; doubles per attempt
+        max_delay = 60  # 1 minute cap
 
         messages = []
         if system_prompt:
@@ -290,18 +396,38 @@ class GeminiClientWithFallback:
 
         for attempt in range(max_retries):
             try:
-                response = httpx.post(
+                response = self._http_client.post(
                     self.OPENROUTER_URL,
                     headers=headers,
                     json=payload,
-                    timeout=120,
                 )
                 if response.status_code in (429, 500, 502, 503, 504):
                     if attempt < max_retries - 1:
-                        delay = min(base_delay * (2**attempt), max_delay)
+                        retry_after = _parse_retry_after(
+                            response.headers.get("Retry-After", "")
+                        )
+                        if retry_after is not None:
+                            source = "server Retry-After"
+                            delay = max(retry_after, 0.0)
+                            if delay > max_delay:
+                                logger.warning(
+                                    f"Server-supplied Retry-After of "
+                                    f"{delay:.0f}s exceeds cap; clamping to "
+                                    f"{max_delay}s."
+                                )
+                                delay = max_delay
+                            # Spread concurrent workers without ever
+                            # shortening a server-mandated wait.
+                            delay += random.uniform(0, 1)
+                        else:
+                            source = "exponential backoff"
+                            delay = _jittered(
+                                min(base_delay * (2**attempt), max_delay)
+                            )
                         logger.warning(
                             f"OpenRouter returned {response.status_code} for "
-                            f"{self.openrouter_model}. Retrying in {delay}s "
+                            f"{self.openrouter_model}. Retrying in {delay:.0f}s "
+                            f"via {source} "
                             f"(attempt {attempt + 1}/{max_retries})..."
                         )
                         time.sleep(delay)
@@ -334,10 +460,10 @@ class GeminiClientWithFallback:
                 OSError,
             ) as e:
                 if attempt < max_retries - 1:
-                    delay = min(base_delay * (2**attempt), max_delay)
+                    delay = _jittered(min(base_delay * (2**attempt), max_delay))
                     logger.warning(
                         f"Network error for OpenRouter {self.openrouter_model}: "
-                        f"{e}. Retrying in {delay}s "
+                        f"{e}. Retrying in {delay:.1f}s "
                         f"(attempt {attempt + 1}/{max_retries})..."
                     )
                     time.sleep(delay)
