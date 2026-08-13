@@ -117,7 +117,15 @@ const Player = () => {
     seekTo,
     handleVolumeChange,
     handlePlaybackRateChange,
-  } = useAudioPlayer(audiobook, handleEnded, handleNextTrack);
+  } = useAudioPlayer(audiobook, handleEnded, nextPart ? handleNextTrack : undefined);
+
+  // A slow part-2 `select` can leave a pending auto-play request outstanding
+  // for seconds. If the user pauses during that window, drop the request so
+  // the load effect does not resume playback out from under an explicit pause.
+  const onTogglePlayPause = useCallback(() => {
+    pendingAutoPlayRef.current = false;
+    return togglePlayPause();
+  }, [togglePlayPause]);
 
   // Fetch metadata + a signed URL for the requested audiobook.
   useEffect(() => {
@@ -329,7 +337,7 @@ const Player = () => {
                   isLoading={isLoading}
                   error={error}
                   isSeeking={isSeeking}
-                  onTogglePlayPause={togglePlayPause}
+                  onTogglePlayPause={onTogglePlayPause}
                   onSkip={skip}
                   onSeekTo={seekTo}
                   onVolumeChange={handleVolumeChange}
