@@ -15,6 +15,8 @@ export interface LoadSourceOptions {
   autoPlay?: boolean;
   /** Resume position in seconds, applied once metadata is available. */
   startAt?: number;
+  /** Row that owns the media being loaded. Progress is only saved for this row. */
+  ownerId?: string;
 }
 
 const RATE_STORAGE_KEY = 'audioPlayer.playbackRate';
@@ -65,6 +67,10 @@ export const useAudioPlayer = (
   /** URL currently assigned to the element, so we never re-assign the same one. */
   const appliedSrcRef = useRef<string | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
+  /** id of the audiobook whose media is actually on the element right now. */
+  const loadedBookIdRef = useRef<string | null>(null);
+  /** Last known playback position, kept even after the element detaches. */
+  const lastPositionRef = useRef(0);
 
   useEffect(() => {
     onEndedRef.current = onEnded;
@@ -107,10 +113,17 @@ export const useAudioPlayer = (
 
   const savePlaybackPosition = useCallback(async (positionOverride?: number) => {
     const book = audiobookRef.current;
-    const audio = audioRef.current;
-    if (!book || !audio) return;
+    if (!book) return;
+    // The element can already be playing the next part while `audiobook` state
+    // is still catching up with the route. Never attribute that timeline to
+    // this row.
+    if (loadedBookIdRef.current !== null && loadedBookIdRef.current !== book.id) return;
 
-    const position = Math.floor(positionOverride ?? audio.currentTime);
+    // Fall back to the last known position when the element has already
+    // detached (e.g. the unmount flush, which runs after `attachAudio(null)`).
+    const position = Math.floor(
+      positionOverride ?? audioRef.current?.currentTime ?? lastPositionRef.current,
+    );
     if (!Number.isFinite(position) || position <= 0) return;
 
     const { error: updateError } = await supabase
@@ -149,23 +162,32 @@ export const useAudioPlayer = (
       if (appliedSrcRef.current === url) {
         // Already loaded — most often the route catching up with a transition we
         // performed imperatively. Re-assigning src here would restart the part.
+        if (options.ownerId) loadedBookIdRef.current = options.ownerId;
         if (options.autoPlay && audio.paused) startPlayback();
         return;
       }
 
       appliedSrcRef.current = url;
+      loadedBookIdRef.current = options.ownerId ?? audiobookRef.current?.id ?? null;
       pendingSeekRef.current =
         options.startAt && options.startAt > 0 ? options.startAt : null;
 
       setError(null);
       setDuration(0);
       setCurrentTime(options.startAt ?? 0);
+      lastPositionRef.current = options.startAt ?? 0;
 
       audio.src = url;
       applyPlaybackRate(audio, rateRef.current);
       audio.load();
 
-      if (options.autoPlay) startPlayback();
+      if (options.autoPlay) {
+        startPlayback();
+      } else {
+        // The load algorithm pauses the element without firing `pause`, so the
+        // UI would otherwise keep showing a Pause button over silence.
+        setIsPlaying(false);
+      }
     },
     [applyPlaybackRate],
   );
@@ -177,6 +199,7 @@ export const useAudioPlayer = (
     if (!audio) return;
 
     const handleTimeUpdate = () => {
+      lastPositionRef.current = audio.currentTime;
       if (!isSeekingRef.current) setCurrentTime(audio.currentTime);
     };
 
@@ -251,6 +274,7 @@ export const useAudioPlayer = (
     const handleSeeked = () => {
       isSeekingRef.current = false;
       setIsSeeking(false);
+      lastPositionRef.current = audio.currentTime;
       setCurrentTime(audio.currentTime);
     };
 
