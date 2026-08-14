@@ -269,6 +269,25 @@ def generate_audio_from_text(
         failed = _synthesize_sequential(chunks, voice, speed, device, audio_chunks)
     else:
         logger.info("Using %d worker processes for TTS synthesis", resolved_workers)
+        # set_num_threads(1) in _init_worker only caps ATen intra-op
+        # parallelism; OpenMP/OpenBLAS pools (used by numpy and torch's own
+        # kernels) are sized from these env vars at library init, which in a
+        # spawned child happens during `import torch` — before the
+        # initializer runs. Set them here, in the parent, before the pool
+        # exists, so N workers don't each still try to claim every core.
+        os.environ.setdefault("OMP_NUM_THREADS", "1")
+        os.environ.setdefault("MKL_NUM_THREADS", "1")
+        # Pause markers need no model at all (_synthesize_chunk just returns
+        # silence for them) — fill them in here instead of round-tripping
+        # ~960 KB of zeros through IPC per pause for no reason.
+        work = []
+        for i, chunk in enumerate(chunks):
+            if chunk == PAUSE_MARKER:
+                audio_chunks[i] = np.zeros(
+                    int(SAMPLE_RATE * PAUSE_DURATION_SECONDS), dtype=np.float32
+                )
+            else:
+                work.append((i, chunk))
         try:
             with ProcessPoolExecutor(
                 max_workers=resolved_workers,
@@ -278,7 +297,7 @@ def generate_audio_from_text(
             ) as executor:
                 futures = [
                     executor.submit(_worker_synthesize, i, chunk, voice, speed)
-                    for i, chunk in enumerate(chunks)
+                    for i, chunk in work
                 ]
                 for future in tqdm(
                     as_completed(futures), total=len(futures), desc="TTS", unit="chunk"
@@ -304,6 +323,12 @@ def generate_audio_from_text(
         len(chunks),
         failed,
     )
+
+    if failed and failed / len(chunks) > 0.25:
+        raise RuntimeError(
+            f"{failed}/{len(chunks)} chunks failed to synthesize; refusing to write "
+            "a mostly-silent MP3."
+        )
 
     full_audio = np.concatenate(audio_chunks)
 
