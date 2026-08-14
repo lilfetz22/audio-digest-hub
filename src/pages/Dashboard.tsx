@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,11 +25,7 @@ const Dashboard = () => {
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAudiobooks();
-  }, [user]);
-
-  const fetchAudiobooks = async () => {
+  const fetchAudiobooks = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -50,7 +46,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast]);
+
+  useEffect(() => {
+    fetchAudiobooks();
+  }, [fetchAudiobooks]);
 
   const deleteAudiobook = async (audiobook: Audiobook) => {
     if (!confirm('Are you sure you want to delete this audiobook?')) return;
