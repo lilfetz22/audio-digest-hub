@@ -21,7 +21,6 @@ from research_papers.paper_scorer import EmbeddingPaperScorer
 from research_papers.transcript_generator import GeminiTranscriptGenerator
 from research_papers.feedback import PreferenceProfileManager, FeedbackClient
 from research_papers.pipeline import ResearchPaperPipeline
-from research_papers.wiki_engine.ingestion import WikiIngestionEngine
 
 logger = logging.getLogger(__name__)
 SCOPES = [
@@ -241,25 +240,10 @@ def main():
         top_n_deep_dive=config["top_n_deep_dive"],
     )
 
-    wiki_dir = os.path.join(script_dir, "wiki")
-    # parent_root is the audio-digest-hub repo root (3 levels above script_dir:
-    # research_papers/ -> audiobooks/ -> src/ -> audio-digest-hub/)
-    parent_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
-    wiki_engine = WikiIngestionEngine(
-        wiki_dir=wiki_dir,
-        repo_root=wiki_dir,  # wiki is its own git repo (submodule); commit inside it
-        parent_root=parent_root,
-        api_key=config["gemini_api_key"],
-        model_name=config["wiki_model"],
-        backup_api_key=config["wiki_backup_api_key"],
-        openrouter_api_key=config.get("openrouter_api_key"),
-        openrouter_model=config.get("openrouter_model"),
-        auto_commit=config["wiki_auto_commit"],
-        auto_push=config["wiki_auto_push"],
-        push_parent=config["wiki_push_parent"],
-    )
-
-    # Run pipeline for each date
+    # Run pipeline for each date. Wiki ingestion is intentionally not run
+    # here — it's a separate, slower, less reliable stage (LLM-per-section
+    # over OpenRouter) that must not be able to block or delay the
+    # audiobook. See run_wiki_ingestion.py, invoked as its own later step.
     for date in dates_to_process:
         date_str = date.strftime("%Y-%m-%d")
         try:
@@ -267,25 +251,6 @@ def main():
         except Exception as e:
             logger.error(f"Pipeline failed for {date_str}: {e}", exc_info=True)
             continue
-
-        transcript_path = os.path.join(output_dir, f"research_digest_{date_str}.txt")
-        source_page_path = os.path.join(wiki_dir, "sources", f"digest_{date_str}.md")
-        if os.path.exists(source_page_path):
-            logger.info(f"Wiki already ingested for {date_str}, skipping.")
-        elif os.path.exists(transcript_path):
-            try:
-                result = wiki_engine.ingest_transcript(transcript_path, date_str)
-                logger.info(
-                    f"Wiki ingestion for {date_str}: "
-                    f"{len(result['concepts_created'])} concepts created, "
-                    f"{len(result['concepts_updated'])} updated"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Wiki ingestion failed for {date_str}: {e}", exc_info=True
-                )
-        else:
-            logger.info(f"No transcript found for {date_str}, skipping wiki ingestion")
 
     logger.info("Research paper pipeline finished.")
 
