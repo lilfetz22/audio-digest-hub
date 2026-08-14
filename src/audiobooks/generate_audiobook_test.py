@@ -675,7 +675,7 @@ class TestMainExecution:
             ga.main()
 
         assert self.mock_process_content.call_count == 2
-        assert "An error occurred while processing 2023-05-10" in caplog.text
+        assert "An error occurred during processing for 2023-05-10" in caplog.text
 
 
 class TestCleanup:
