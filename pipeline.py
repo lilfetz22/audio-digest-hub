@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import logging
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -53,6 +54,8 @@ REPO_ROOT = Path(__file__).resolve().parent
 AUDIOBOOKS_DIR = REPO_ROOT / "src" / "audiobooks"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SEEN_PAPERS_CSV = AUDIOBOOKS_DIR / "research_papers" / "seen_papers.csv"
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def find_venv_python() -> Path:
@@ -169,7 +172,7 @@ def resolve_date_range(py: Path) -> Optional[Tuple[str, str]]:
     parts = result.stdout.split()
     if not parts:
         return ("", "")
-    if len(parts) != 2:
+    if len(parts) != 2 or not all(_DATE_RE.match(p) for p in parts):
         logger.warning(
             "Unexpected output from date_range.py (%r); each stage will fall "
             "back to its own default.",
@@ -260,14 +263,28 @@ def main() -> int:
         )
 
     # Resolve the date range once, then hand the same window to every stage.
-    date_range = resolve_date_range(py)
-    if date_range == ("", ""):
-        logger.info("Nothing new to process — pipeline is up to date.")
+    date_window = resolve_date_range(py)
+    if date_window == ("", ""):
+        # The audiobook watermark is current, but that is not a completion
+        # signal for wiki ingestion — it has its own transcript-based
+        # default (resolve_transcript_dates) that can still catch up
+        # anything left unarchived, e.g. after the wiki submodule was
+        # initialised late.
+        logger.info(
+            "Nothing new to process for the audiobook — running wiki ingestion "
+            "with its own transcript-based default in case anything is unarchived."
+        )
+        run_step(
+            "wiki-ingestion",
+            [py, AUDIOBOOKS_DIR / "research_papers" / "run_wiki_ingestion.py"],
+            REPO_ROOT,
+            fatal=False,
+        )
         return 0
 
     date_args: List[Union[str, Path]] = []
-    if date_range is not None:
-        start, end = date_range
+    if date_window is not None:
+        start, end = date_window
         logger.info("Processing %s through %s", start, end)
         date_args = ["--start-date", start, "--end-date", end]
 
