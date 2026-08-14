@@ -27,9 +27,9 @@ from googleapiclient.errors import HttpError
 from generate_tts_audio import generate_audio_from_text
 
 # upload_mp3 has no imports back into generate_audiobook, so importing it at
-# module load time is safe and lets tests patch these names directly on this
+# module load time is safe and lets tests patch this name directly on this
 # module (e.g. `@patch("generate_audiobook.upload_audiobook")`).
-from upload_mp3 import upload_audiobook, _create_chapter_list, _create_metadata
+from upload_mp3 import upload_audiobook
 
 # --- Configuration & Constants ---
 # logger is defined later in setup_logging, so use a placeholder here if needed early.
@@ -594,9 +594,6 @@ def upload_audio(
             logger.error("❌ Upload failed!")
             return False
 
-    except ImportError:
-        logger.error("Could not import upload_audiobook from upload_mp3. Please ensure upload_mp3.py is accessible.")
-        return False
     except Exception as e:
         logger.error(f"❌ Upload error: {e}")
         return False
