@@ -29,6 +29,7 @@ class IndexBuilder:
             "concept": [],
             "source": [],
             "query-result": [],
+            "raw-summary": [],
         }
 
         # Scan all markdown files
@@ -81,8 +82,19 @@ class IndexBuilder:
         for page in queries:
             lines.append(f"- [{page['title']}]({page['path']}) — {page['updated']}\n")
 
+        # Raw daily archives section (the default, no-LLM archive_raw_summary path)
+        raw = sorted(
+            pages_by_type.get("raw-summary", []), key=lambda p: p["updated"], reverse=True
+        )
+        lines.append(f"\n## Raw Daily Archives ({len(raw)} pages)\n\n")
+        for page in raw:
+            lines.append(f"- [{page['title']}]({page['path']}) — {page['updated']}\n")
+
         index_path.write_text("".join(lines), encoding="utf-8")
-        logger.info(f"Rebuilt index: {len(concepts)} concepts, {len(sources)} sources, {len(queries)} queries")
+        logger.info(
+            f"Rebuilt index: {len(concepts)} concepts, {len(sources)} sources, "
+            f"{len(queries)} queries, {len(raw)} raw archives"
+        )
         return index_path
 
     def _extract_meta(self, filepath: Path) -> dict:
