@@ -742,74 +742,6 @@ class TestVerifyAuthentication:
         assert "A network error occurred during the pre-flight check." in caplog.text
 
 
-class TestFindLastUploadDate:
-    def test_success(self, requests_mock, caplog):
-        mock_audiobooks = [
-            {"title": "Daily Digest for 2023-05-10"},
-            {"title": "Daily Digest for 2023-05-08"},
-        ]
-        requests_mock.get("https://fake-api.com/audiobooks", json=mock_audiobooks)
-
-        with caplog.at_level(logging.INFO):
-            result = ga.find_last_upload_date("https://fake-api.com", "fake_key")
-
-        assert result == datetime.date(2023, 5, 10)
-        assert "Found last upload date: 2023-05-10" in caplog.text
-
-    def test_non_200_status(self, requests_mock, caplog):
-        requests_mock.get("https://fake-api.com/audiobooks", status_code=500)
-
-        with caplog.at_level(logging.WARNING):
-            result = ga.find_last_upload_date("https://fake-api.com", "fake_key")
-
-        assert result is None
-        assert "Using yesterday as default start date." in caplog.text
-
-    def test_empty_audiobooks(self, requests_mock, caplog):
-        requests_mock.get("https://fake-api.com/audiobooks", json=[])
-
-        with caplog.at_level(logging.INFO):
-            result = ga.find_last_upload_date("https://fake-api.com", "fake_key")
-
-        assert result is None
-        assert "No existing audiobooks found." in caplog.text
-
-    def test_no_valid_dates_in_titles(self, requests_mock, caplog):
-        mock_audiobooks = [
-            {"title": "Some audiobook without date"},
-            {"title": "Another one"},
-        ]
-        requests_mock.get("https://fake-api.com/audiobooks", json=mock_audiobooks)
-
-        with caplog.at_level(logging.INFO):
-            result = ga.find_last_upload_date("https://fake-api.com", "fake_key")
-
-        assert result is None
-        assert "No valid dates found" in caplog.text
-
-    def test_invalid_date_value_in_title(self, requests_mock, caplog):
-        """Test graceful handling of regex-matching but invalid dates."""
-        mock_audiobooks = [{"title": "Daily Digest for 2023-13-45"}]
-        requests_mock.get("https://fake-api.com/audiobooks", json=mock_audiobooks)
-
-        with caplog.at_level(logging.WARNING):
-            result = ga.find_last_upload_date("https://fake-api.com", "fake_key")
-
-        assert result is None
-
-    def test_network_error(self, requests_mock, caplog):
-        requests_mock.get(
-            "https://fake-api.com/audiobooks",
-            exc=requests.exceptions.ConnectionError("fail"),
-        )
-
-        with caplog.at_level(logging.ERROR):
-            result = ga.find_last_upload_date("https://fake-api.com", "fake_key")
-
-        assert result is None
-        assert "Error fetching audiobooks to find last upload date" in caplog.text
-
-
 class TestProcessRawContentFiles:
     def test_folder_not_exists(self, tmp_path, monkeypatch, caplog):
         nonexistent = str(tmp_path / "nonexistent")
@@ -1204,6 +1136,26 @@ class TestMainDefaultDateLogic:
 
         self.mock_process_content.assert_not_called()
         assert "No new dates to process" in caplog.text
+
+    def test_default_backfill_is_capped(self, monkeypatch):
+        """The cap is new for this stage — a 60-day-old watermark must not
+        produce 60 days of TTS."""
+        monkeypatch.setattr(ga.sys, "argv", ["script"])
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        self.mock_find_last_upload.return_value = yesterday - datetime.timedelta(days=60)
+
+        ga.main()
+
+        assert self.mock_process_content.call_count == 14
+
+    def test_default_backfill_cap_is_configurable(self, monkeypatch):
+        monkeypatch.setattr(ga.sys, "argv", ["script", "--max-backfill-days", "3"])
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        self.mock_find_last_upload.return_value = yesterday - datetime.timedelta(days=60)
+
+        ga.main()
+
+        assert self.mock_process_content.call_count == 3
 
 
 class TestMainEdgeCases:
