@@ -9,7 +9,7 @@ import math
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch, call
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pytest
 import requests
@@ -43,16 +43,6 @@ def fake_mp3(tmp_path):
     mp3 = tmp_path / "test_audio.mp3"
     mp3.write_bytes(b"\x00" * 1024)  # 1 KB
     return mp3
-
-
-@pytest.fixture
-def mock_audio_segment():
-    """Return a MagicMock that behaves like pydub.AudioSegment."""
-    seg = MagicMock()
-    seg.__len__ = MagicMock(return_value=60_000)  # 60 seconds
-    seg.__getitem__ = MagicMock(return_value=seg)
-    seg.export = MagicMock()
-    return seg
 
 
 @pytest.fixture
@@ -93,13 +83,103 @@ class TestLoadConfig:
 
 
 # ---------------------------------------------------------------------------
+# probe_duration_ms
+# ---------------------------------------------------------------------------
+
+
+class TestProbeDurationMs:
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="C:/fake/ffmpeg.exe")
+    def test_parses_duration_from_stderr(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stderr=(
+                "Input #0, mp3, from 'some.mp3':\n"
+                "  Duration: 00:01:30.50, start: 0.000000, bitrate: 128 kb/s\n"
+            ),
+        )
+        ms = upload_mp3.probe_duration_ms("some.mp3")
+        assert ms == 90_500
+
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="ffmpeg")
+    def test_parses_hours_and_minutes(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stderr="  Duration: 01:02:03.00, start: 0.000000, bitrate: 128 kb/s\n",
+        )
+        ms = upload_mp3.probe_duration_ms("some.mp3")
+        assert ms == (1 * 3600 + 2 * 60 + 3) * 1000
+
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="ffmpeg")
+    def test_raises_when_duration_not_found(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stderr="no duration here")
+        with pytest.raises(RuntimeError):
+            upload_mp3.probe_duration_ms("some.mp3")
+
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="C:/fake/ffmpeg.exe")
+    def test_invokes_ffmpeg_with_input_flag(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=1, stderr="  Duration: 00:00:05.00, bitrate: 1 kb/s\n"
+        )
+        upload_mp3.probe_duration_ms("input.mp3")
+        args = mock_run.call_args[0][0]
+        assert args[0] == "C:/fake/ffmpeg.exe"
+        assert "-i" in args
+        assert args[args.index("-i") + 1] == "input.mp3"
+
+
+# ---------------------------------------------------------------------------
+# export_chunk
+# ---------------------------------------------------------------------------
+
+
+class TestExportChunk:
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="C:/fake/ffmpeg.exe")
+    def test_builds_correct_ffmpeg_command(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+
+        result = upload_mp3.export_chunk("input.mp3", 1000, 5000, "output.mp3")
+
+        assert result == "output.mp3"
+        args = mock_run.call_args[0][0]
+        assert args[0] == "C:/fake/ffmpeg.exe"
+        assert "-ss" in args
+        assert args[args.index("-ss") + 1] == "1.0"
+        assert "-t" in args
+        assert args[args.index("-t") + 1] == "4.0"
+        assert "-i" in args
+        assert args[args.index("-i") + 1] == "input.mp3"
+        assert "-c" in args
+        assert args[args.index("-c") + 1] == "copy"
+        assert args[-1] == "output.mp3"
+
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="ffmpeg")
+    def test_raises_on_nonzero_return_code(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stderr="boom")
+        with pytest.raises(RuntimeError):
+            upload_mp3.export_chunk("input.mp3", 0, 1000, "output.mp3")
+
+    @patch("upload_mp3.subprocess.run")
+    @patch("upload_mp3._ffmpeg_exe", return_value="ffmpeg")
+    def test_does_not_raise_on_success(self, mock_exe, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        # Should not raise.
+        upload_mp3.export_chunk("input.mp3", 0, 1000, "output.mp3")
+
+
+# ---------------------------------------------------------------------------
 # create_metadata
 # ---------------------------------------------------------------------------
 
 
 class TestCreateMetadata:
-    def test_basic_metadata(self, mock_audio_segment):
-        md = upload_mp3.create_metadata("My Title", mock_audio_segment)
+    def test_basic_metadata(self):
+        md = upload_mp3.create_metadata("My Title", 60_000)
         assert md["title"] == "My Title"
         assert md["duration_seconds"] == 60
         chapters = json.loads(md["chapters_json"])
@@ -107,9 +187,7 @@ class TestCreateMetadata:
         assert chapters["Part Start"] == 0
 
     def test_duration_rounding(self):
-        seg = MagicMock()
-        seg.__len__ = MagicMock(return_value=90_500)  # 90.5 s
-        md = upload_mp3.create_metadata("Title", seg)
+        md = upload_mp3.create_metadata("Title", 90_500)  # 90.5 s
         assert md["duration_seconds"] == 90
 
 
@@ -154,8 +232,8 @@ class TestCreateChapterList:
 
 
 class TestCreateMetadataWithChapters:
-    def test_includes_chapters(self, mock_audio_segment, sample_text_blocks):
-        md = upload_mp3._create_metadata("Chaptered", mock_audio_segment, sample_text_blocks)
+    def test_includes_chapters(self, sample_text_blocks):
+        md = upload_mp3._create_metadata("Chaptered", 60_000, sample_text_blocks)
         assert md["title"] == "Chaptered"
         assert md["duration_seconds"] == 60
         chapters = json.loads(md["chapters_json"])
@@ -338,10 +416,8 @@ class TestUploadSingleFile:
 
 class TestUploadAudiobook:
     @patch("upload_mp3.upload_single_file", return_value=True)
-    @patch("upload_mp3.AudioSegment.from_mp3")
-    def test_small_file_uploads_directly(self, mock_from_mp3, mock_upload, fake_mp3, mock_audio_segment):
-        mock_from_mp3.return_value = mock_audio_segment
-
+    @patch("upload_mp3.probe_duration_ms", return_value=60_000)
+    def test_small_file_uploads_directly(self, mock_probe, mock_upload, fake_mp3):
         result = upload_mp3.upload_audiobook(
             "https://example.com/api", "key", str(fake_mp3), base_title="Test"
         )
@@ -349,21 +425,19 @@ class TestUploadAudiobook:
         mock_upload.assert_called_once()
 
     @patch("upload_mp3.split_and_upload_chunks", return_value=True)
-    @patch("upload_mp3.AudioSegment.from_mp3")
-    def test_large_file_triggers_chunking(self, mock_from_mp3, mock_split, tmp_path):
+    @patch("upload_mp3.probe_duration_ms", return_value=300_000)
+    def test_large_file_triggers_chunking(self, mock_probe, mock_split, tmp_path):
         # Create a file > MAX_UPLOAD_SIZE_MB
         big_mp3 = tmp_path / "big.mp3"
         big_mp3.write_bytes(b"\x00" * int(40 * 1024 * 1024))  # 40 MB
-
-        seg = MagicMock()
-        seg.__len__ = MagicMock(return_value=300_000)
-        mock_from_mp3.return_value = seg
 
         result = upload_mp3.upload_audiobook(
             "https://example.com/api", "key", str(big_mp3), base_title="Big"
         )
         assert result is True
         mock_split.assert_called_once()
+        # duration_ms should have been threaded through as the 4th positional arg
+        assert mock_split.call_args[0][3] == 300_000
 
     def test_missing_file_returns_false(self):
         result = upload_mp3.upload_audiobook(
@@ -372,32 +446,25 @@ class TestUploadAudiobook:
         assert result is False
 
     @patch("upload_mp3.upload_single_file", return_value=True)
-    @patch("upload_mp3.AudioSegment.from_mp3")
-    def test_default_title_from_filename(self, mock_from_mp3, mock_upload, fake_mp3, mock_audio_segment):
-        mock_from_mp3.return_value = mock_audio_segment
-
+    @patch("upload_mp3.probe_duration_ms", return_value=60_000)
+    def test_default_title_from_filename(self, mock_probe, mock_upload, fake_mp3):
         upload_mp3.upload_audiobook("https://example.com/api", "key", str(fake_mp3))
-        metadata = json.loads(mock_upload.call_args[0][3]["chapters_json"])
         title = mock_upload.call_args[0][3]["title"]
         assert fake_mp3.name in title
 
     @patch("upload_mp3.upload_single_file", return_value=False)
-    @patch("upload_mp3.AudioSegment.from_mp3")
-    def test_upload_failure_returns_false(self, mock_from_mp3, mock_upload, fake_mp3, mock_audio_segment):
-        mock_from_mp3.return_value = mock_audio_segment
-
+    @patch("upload_mp3.probe_duration_ms", return_value=60_000)
+    def test_upload_failure_returns_false(self, mock_probe, mock_upload, fake_mp3):
         result = upload_mp3.upload_audiobook(
             "https://example.com/api", "key", str(fake_mp3), base_title="Fail"
         )
         assert result is False
 
     @patch("upload_mp3.upload_single_file", return_value=True)
-    @patch("upload_mp3.AudioSegment.from_mp3")
+    @patch("upload_mp3.probe_duration_ms", return_value=60_000)
     def test_uses_chapter_metadata_when_text_blocks_provided(
-        self, mock_from_mp3, mock_upload, fake_mp3, mock_audio_segment, sample_text_blocks
+        self, mock_probe, mock_upload, fake_mp3, sample_text_blocks
     ):
-        mock_from_mp3.return_value = mock_audio_segment
-
         upload_mp3.upload_audiobook(
             "https://example.com/api",
             "key",
@@ -411,8 +478,8 @@ class TestUploadAudiobook:
         assert "Chapter 1" in chapters
         assert "Conclusion" in chapters
 
-    @patch("upload_mp3.AudioSegment.from_mp3", side_effect=Exception("corrupt file"))
-    def test_handles_audio_processing_error(self, mock_from_mp3, fake_mp3):
+    @patch("upload_mp3.probe_duration_ms", side_effect=RuntimeError("corrupt file"))
+    def test_handles_audio_processing_error(self, mock_probe, fake_mp3):
         result = upload_mp3.upload_audiobook(
             "https://example.com/api", "key", str(fake_mp3)
         )
@@ -425,50 +492,63 @@ class TestUploadAudiobook:
 
 
 class TestSplitAndUploadChunks:
+    @patch("upload_mp3.probe_duration_ms", return_value=30_000)
+    @patch("upload_mp3.export_chunk")
     @patch("upload_mp3.upload_single_file", return_value=True)
-    def test_splits_into_correct_number_of_chunks(self, mock_upload, mock_audio_segment):
+    def test_splits_into_correct_number_of_chunks(
+        self, mock_upload, mock_export, mock_probe
+    ):
         file_size_mb = 80.0  # should create ceil(80/35) = 3 chunks
         mp3_path = Path("fake_audio.mp3")
+        duration_ms = 300_000
 
         result = upload_mp3.split_and_upload_chunks(
             "https://example.com/api",
             "key",
             mp3_path,
-            mock_audio_segment,
+            duration_ms,
             "Title",
             file_size_mb,
         )
         assert result is True
         num_chunks = math.ceil(file_size_mb / upload_mp3.MAX_UPLOAD_SIZE_MB)
         assert mock_upload.call_count == num_chunks
+        assert mock_export.call_count == num_chunks
 
+    @patch("upload_mp3.probe_duration_ms", return_value=30_000)
+    @patch("upload_mp3.export_chunk")
     @patch("upload_mp3.upload_single_file")
-    def test_stops_on_first_chunk_failure(self, mock_upload, mock_audio_segment):
+    def test_stops_on_first_chunk_failure(self, mock_upload, mock_export, mock_probe):
         mock_upload.side_effect = [True, False, True]  # second chunk fails
         file_size_mb = 105.0  # ceil(105/35) = 3 chunks
         mp3_path = Path("fake_audio.mp3")
+        duration_ms = 300_000
 
         result = upload_mp3.split_and_upload_chunks(
             "https://example.com/api",
             "key",
             mp3_path,
-            mock_audio_segment,
+            duration_ms,
             "Title",
             file_size_mb,
         )
         assert result is False
         assert mock_upload.call_count == 2  # stopped after failure
+        assert mock_export.call_count == 2  # never exported the 3rd chunk
 
+    @patch("upload_mp3.probe_duration_ms", return_value=30_000)
+    @patch("upload_mp3.export_chunk")
     @patch("upload_mp3.upload_single_file", return_value=True)
-    def test_chunk_titles_include_part_numbers(self, mock_upload, mock_audio_segment):
+    def test_chunk_titles_include_part_numbers(self, mock_upload, mock_export, mock_probe):
         file_size_mb = 70.0  # 2 chunks
         mp3_path = Path("my_audio.mp3")
+        duration_ms = 100_000
 
         upload_mp3.split_and_upload_chunks(
             "https://example.com/api",
             "key",
             mp3_path,
-            mock_audio_segment,
+            duration_ms,
             "My Audio",
             file_size_mb,
         )
@@ -476,33 +556,70 @@ class TestSplitAndUploadChunks:
         assert titles[0] == "My Audio (Part 1 of 2)"
         assert titles[1] == "My Audio (Part 2 of 2)"
 
+    @patch("upload_mp3.probe_duration_ms", return_value=30_000)
+    @patch("upload_mp3.export_chunk")
     @patch("upload_mp3.upload_single_file", return_value=True)
-    def test_exports_chunk_files(self, mock_upload, mock_audio_segment):
+    def test_chunk_filenames_follow_part_n_of_m_scheme(
+        self, mock_upload, mock_export, mock_probe
+    ):
+        """The `_part_N_of_M.mp3` naming scheme is a public contract the
+        backend/frontend rely on -- must not change."""
         file_size_mb = 70.0
-        mp3_path = Path("audio.mp3")
+        mp3_path = Path("my_audio.mp3")
+        duration_ms = 100_000
 
         upload_mp3.split_and_upload_chunks(
             "https://example.com/api",
             "key",
             mp3_path,
-            mock_audio_segment,
+            duration_ms,
             "Title",
             file_size_mb,
         )
-        assert mock_audio_segment.export.call_count == 2
+        filenames = [c.args[3] for c in mock_export.call_args_list]
+        assert filenames[0].replace("\\", "/").endswith("my_audio_part_1_of_2.mp3")
+        assert filenames[1].replace("\\", "/").endswith("my_audio_part_2_of_2.mp3")
 
+    @patch("upload_mp3.probe_duration_ms", return_value=30_000)
+    @patch("upload_mp3.export_chunk")
     @patch("upload_mp3.upload_single_file", return_value=True)
-    def test_uses_chapter_metadata_when_text_blocks_provided(
-        self, mock_upload, mock_audio_segment, sample_text_blocks
+    def test_export_chunk_called_with_correct_time_ranges(
+        self, mock_upload, mock_export, mock_probe
     ):
-        file_size_mb = 70.0
+        file_size_mb = 70.0  # 2 chunks
         mp3_path = Path("audio.mp3")
+        duration_ms = 100_000
 
         upload_mp3.split_and_upload_chunks(
             "https://example.com/api",
             "key",
             mp3_path,
-            mock_audio_segment,
+            duration_ms,
+            "Title",
+            file_size_mb,
+        )
+        chunk_duration_ms = math.ceil(duration_ms / 2)
+        expected_calls = [
+            call(mp3_path, 0, chunk_duration_ms, ANY),
+            call(mp3_path, chunk_duration_ms, duration_ms, ANY),
+        ]
+        assert mock_export.call_args_list == expected_calls
+
+    @patch("upload_mp3.probe_duration_ms", return_value=30_000)
+    @patch("upload_mp3.export_chunk")
+    @patch("upload_mp3.upload_single_file", return_value=True)
+    def test_uses_chapter_metadata_when_text_blocks_provided(
+        self, mock_upload, mock_export, mock_probe, sample_text_blocks
+    ):
+        file_size_mb = 70.0
+        mp3_path = Path("audio.mp3")
+        duration_ms = 100_000
+
+        upload_mp3.split_and_upload_chunks(
+            "https://example.com/api",
+            "key",
+            mp3_path,
+            duration_ms,
             "Title",
             file_size_mb,
             text_blocks=sample_text_blocks,

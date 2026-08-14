@@ -6,7 +6,7 @@ Standalone Google OAuth re-authorization for the audio digest pipeline.
 
 Does exactly what `generate_audiobook.py --reauth` does — same SCOPES, same
 InstalledAppFlow, same token.json output — but without importing the TTS stack
-(numpy/soundfile/pydub/tqdm/torch) or requiring a config.ini. That makes it
+(numpy/soundfile/tqdm/torch) or requiring a config.ini. That makes it
 runnable on a bare interpreter with only two dependencies:
 
     pip install google-auth-oauthlib google-api-python-client

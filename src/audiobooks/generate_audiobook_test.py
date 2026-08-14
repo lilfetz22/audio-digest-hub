@@ -255,10 +255,8 @@ class TestApiInteractions:
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=200, json={"status": "ok"}
         )
-        with patch("upload_mp3.AudioSegment.from_mp3") as mock_from_mp3:
-            mock_audio = MagicMock()
-            mock_audio.__len__.return_value = 1000
-            mock_from_mp3.return_value = mock_audio
+        with patch("upload_mp3.probe_duration_ms") as mock_probe:
+            mock_probe.return_value = 1000
 
             with caplog.at_level(logging.INFO):
                 result = ga.upload_audiobook(
@@ -275,10 +273,8 @@ class TestApiInteractions:
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=400, text="Bad Request"
         )
-        with patch("upload_mp3.AudioSegment.from_mp3") as mock_from_mp3:
-            mock_audio = MagicMock()
-            mock_audio.__len__.return_value = 1000
-            mock_from_mp3.return_value = mock_audio
+        with patch("upload_mp3.probe_duration_ms") as mock_probe:
+            mock_probe.return_value = 1000
 
             with caplog.at_level(logging.ERROR):
                 result = ga.upload_audiobook(
@@ -671,6 +667,7 @@ class TestCleanup:
             in caplog.text
         )
 
+    @patch("generate_audiobook.sys.platform", "win32")
     @patch("generate_audiobook.subprocess.run")
     def test_unpin_success(self, mock_run, caplog):
         test_path = Path("my_file.mp3")
@@ -685,6 +682,7 @@ class TestCleanup:
         )
         assert f"Successfully unpinned '{test_path}'" in caplog.text
 
+    @patch("generate_audiobook.sys.platform", "win32")
     @patch("generate_audiobook.subprocess.run", side_effect=FileNotFoundError)
     def test_unpin_attrib_not_found(self, mock_run, caplog):
         test_path = Path("my_file.mp3")
@@ -692,6 +690,7 @@ class TestCleanup:
             ga.unpin_file_from_onedrive(test_path)
         assert "The 'attrib' command was not found." in caplog.text
 
+    @patch("generate_audiobook.sys.platform", "win32")
     @patch("generate_audiobook.subprocess.run")
     def test_unpin_subprocess_error(self, mock_run, caplog):
         test_path = Path("my_file.mp3")

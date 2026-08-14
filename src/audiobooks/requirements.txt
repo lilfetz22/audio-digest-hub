@@ -6,8 +6,10 @@ requests
 mcp<2.0.0
 google-api-python-client
 google-auth-oauthlib
-pydub
 imageio-ffmpeg
+# kokoro 0.9.4 (Apr 2025) declares `transformers` unpinned and was built against 4.x.
+# Cap below the v5 major until kokoro is verified against it.
+transformers<5
 kokoro>=0.9.4
 soundfile
 numpy

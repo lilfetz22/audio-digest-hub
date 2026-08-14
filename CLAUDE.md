@@ -12,6 +12,8 @@ A monorepo with three loosely-coupled subsystems that together turn email newsle
 
 The Python side is the center of gravity; the frontend is mostly a consumer of what the pipeline produces.
 
+**Python is pinned to 3.12 — this is a hard ceiling, not a lag.** `kokoro`/`misaki` (the TTS engine) declare `requires-python <3.13` and have no 3.13+ release; the fix is merged upstream but unreleased with no maintainer response. `curated-tokenizers`, reached via `misaki[en]`, ships cp312 wheels max and was abandoned in 2024. Do not attempt 3.13/3.14 without re-verifying both of those first — see `python_312_migration_plan.md` at the repo root for the full investigation (§7 explains exactly what would need to change to lift the ceiling).
+
 ## Commands
 
 ### Frontend
@@ -168,7 +170,7 @@ Two things that live outside the repo and won't show up in a diff:
 ## Conventions
 
 - **Conventional Commits** for every commit message (from `.cursorrules`).
-- Kokoro TTS requires `espeak-ng` on the host for phonemization; text is chunked to 250 characters before synthesis. Chunks synthesize in parallel across worker processes (`--workers`, default `min(cpu_count, 4)`), each holding its own Kokoro pipeline copy; pass `--workers 1` for the original sequential single-process path.
+- Kokoro TTS requires `espeak-ng` on the host for phonemization; text is chunked to 250 characters before synthesis. Chunks synthesize in parallel across worker processes (`--workers`, default `min(process_cpu_count, 4)`, falling back to `os.cpu_count()` on this project's Python 3.12), each holding its own Kokoro pipeline copy; pass `--workers 1` for the original sequential single-process path.
 - The Friday-only cleanup (`scripts/cleanup-trigger.js` + `scripts/cleanup-local-files.js`) deletes audiobooks older than a Friday at least 7 days back — always a full week of retention. Test it with `node scripts/cleanup-trigger.js --force`.
 
 ## Known quirk

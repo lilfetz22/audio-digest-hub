@@ -1,0 +1,45 @@
+# ============================================================================
+# tests.yml
+# Runs the two pytest suites (src/audiobooks and
+# src/audiobooks/research_papers) on every push and pull request. No secrets
+# or config.ini are used — the suites mock every external call.
+# ============================================================================
+
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends espeak-ng ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install --quiet torch torchaudio \
+            --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet -r src/audiobooks/requirements.txt
+
+      - name: Run audiobooks suite
+        run: |
+          cd src/audiobooks && python -m pytest -v
+
+      - name: Run research_papers suite
+        run: |
+          cd src/audiobooks/research_papers && python -m pytest tests/ -v
