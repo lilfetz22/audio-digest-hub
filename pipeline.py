@@ -8,11 +8,20 @@ invoked directly by cron on the Ubuntu server, or run by hand on either OS.
 Steps, in order:
   1. (Fridays only) `node scripts/cleanup-trigger.js`                            [fatal]
   2. (Fridays only) `node scripts/cleanup-local-files.js`                        [fatal]
-  3. `python src/audiobooks/research_papers/run_research_pipeline.py`           [fatal]
-  4. `python src/audiobooks/generate_audiobook.py`                              [fatal]
-  5. `python src/audiobooks/research_papers/run_wiki_ingestion.py`          [non-fatal]
+  3. `python src/audiobooks/date_range.py` — resolve the date window once
+  4. `python src/audiobooks/research_papers/run_research_pipeline.py`           [fatal]
+  5. `python src/audiobooks/generate_audiobook.py`                              [fatal]
+  6. `python src/audiobooks/research_papers/run_wiki_ingestion.py`          [non-fatal]
 
-Step 5 runs last and is deliberately non-fatal. By default it just archives
+Step 3 decides which days everything else processes — normally "every day
+since the last audiobook upload, through yesterday" — and steps 4-6 are all
+handed that same window as --start-date/--end-date. Resolving it once is what
+keeps the stages in agreement: they used to each work it out for themselves,
+and disagreed, so a missed day produced an audiobook with no research digest
+folded into it. If step 3 can't reach the API, the range is omitted and each
+stage falls back to its own default rather than the run being skipped.
+
+Step 6 runs last and is deliberately non-fatal. By default it just archives
 the day's transcript verbatim into the wiki repo (no LLM calls, cheap) — see
 run_wiki_ingestion.py's docstring for the opt-in `--llm-wiki` full pipeline,
 which is NOT run here by default because it was previously the single
@@ -33,10 +42,11 @@ from __future__ import annotations
 import argparse
 import datetime
 import logging
+import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +54,8 @@ REPO_ROOT = Path(__file__).resolve().parent
 AUDIOBOOKS_DIR = REPO_ROOT / "src" / "audiobooks"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SEEN_PAPERS_CSV = AUDIOBOOKS_DIR / "research_papers" / "seen_papers.csv"
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def find_venv_python() -> Path:
@@ -120,6 +132,54 @@ def reset_latest_research_day() -> int:
         removed, max_date, SEEN_PAPERS_CSV, len(kept),
     )
     return removed
+
+
+def resolve_date_range(py: Path) -> Optional[Tuple[str, str]]:
+    """Ask date_range.py which days the whole pipeline should process.
+
+    Resolved once, here, so every stage is handed the same explicit
+    --start-date/--end-date rather than each working it out for itself. That
+    mismatch is what used to leave holes: generate_audiobook.py backfilled
+    from the last upload while the research stage only ever did yesterday, so
+    a missed day produced an audiobook with no research digest in it.
+
+    Returns (start, end) as YYYY-MM-DD strings, ("", "") when there is
+    nothing new to process, or None if the range could not be determined —
+    in which case the caller should fall back to per-stage defaults rather
+    than skip the run.
+
+    Invoked as a subprocess (not imported) because date_range.py needs the
+    venv's `requests`, and pipeline.py itself may be running under a
+    different interpreter — the same reason every other step is shelled out.
+    """
+    script = AUDIOBOOKS_DIR / "date_range.py"
+    result = subprocess.run(
+        [str(py), str(script)],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if result.stderr:
+        logger.info("date_range.py:\n%s", result.stderr.rstrip())
+    if result.returncode != 0:
+        logger.warning(
+            "Could not resolve the date range (exit code %d); each stage will "
+            "fall back to its own default.",
+            result.returncode,
+        )
+        return None
+
+    parts = result.stdout.split()
+    if not parts:
+        return ("", "")
+    if len(parts) != 2 or not all(_DATE_RE.match(p) for p in parts):
+        logger.warning(
+            "Unexpected output from date_range.py (%r); each stage will fall "
+            "back to its own default.",
+            result.stdout,
+        )
+        return None
+    return (parts[0], parts[1])
 
 
 def run_step(name: str, argv: List[Union[str, Path]], cwd: Path, fatal: bool = True) -> None:
@@ -202,15 +262,41 @@ def main() -> int:
             "Today is %s — skipping cleanup (only runs on Fridays).", weekday
         )
 
+    # Resolve the date range once, then hand the same window to every stage.
+    date_window = resolve_date_range(py)
+    if date_window == ("", ""):
+        # The audiobook watermark is current, but that is not a completion
+        # signal for wiki ingestion — it has its own transcript-based
+        # default (resolve_transcript_dates) that can still catch up
+        # anything left unarchived, e.g. after the wiki submodule was
+        # initialised late.
+        logger.info(
+            "Nothing new to process for the audiobook — running wiki ingestion "
+            "with its own transcript-based default in case anything is unarchived."
+        )
+        run_step(
+            "wiki-ingestion",
+            [py, AUDIOBOOKS_DIR / "research_papers" / "run_wiki_ingestion.py"],
+            REPO_ROOT,
+            fatal=False,
+        )
+        return 0
+
+    date_args: List[Union[str, Path]] = []
+    if date_window is not None:
+        start, end = date_window
+        logger.info("Processing %s through %s", start, end)
+        date_args = ["--start-date", start, "--end-date", end]
+
     run_step(
         "research-pipeline",
-        [py, AUDIOBOOKS_DIR / "research_papers" / "run_research_pipeline.py"],
+        [py, AUDIOBOOKS_DIR / "research_papers" / "run_research_pipeline.py", *date_args],
         REPO_ROOT,
     )
 
     run_step(
         "generate-audiobook",
-        [py, AUDIOBOOKS_DIR / "generate_audiobook.py"],
+        [py, AUDIOBOOKS_DIR / "generate_audiobook.py", *date_args],
         REPO_ROOT,
     )
 
@@ -219,7 +305,7 @@ def main() -> int:
     # block or take down the actual deliverable.
     run_step(
         "wiki-ingestion",
-        [py, AUDIOBOOKS_DIR / "research_papers" / "run_wiki_ingestion.py"],
+        [py, AUDIOBOOKS_DIR / "research_papers" / "run_wiki_ingestion.py", *date_args],
         REPO_ROOT,
         fatal=False,
     )

@@ -22,7 +22,7 @@ An automated pipeline that fetches daily research papers from **Arxiv** and **Hu
 - [Usage](#usage)
   - [Single Date](#single-date)
   - [Date Range](#date-range)
-  - [Default (Yesterday)](#default-yesterday)
+  - [Default (Backfill Since Last Upload)](#default-backfill-since-last-upload)
 - [Output](#output)
 - [Feedback Loop](#feedback-loop)
 - [Design Principles](#design-principles)
@@ -353,13 +353,25 @@ python -m research_papers.run_research_pipeline --date 2026-03-19
 python -m research_papers.run_research_pipeline --start-date 2026-03-15 --end-date 2026-03-19
 ```
 
-### Default (Yesterday)
+### Default (Backfill Since Last Upload)
 
 ```bash
 python -m research_papers.run_research_pipeline
 ```
 
-Processes yesterday's papers. Designed for daily cron job / scheduled task usage.
+Designed for daily cron job / scheduled task usage.
+
+**Normally this branch never runs.** `pipeline.py` resolves the date window once per run and passes it to every stage as `--start-date`/`--end-date`, so the stages cannot disagree about which days to process. This is the fallback for running the script by hand, or for when the orchestrator could not reach the API.
+
+With no date flags, `date_range.resolve_default_dates` queries `{API_URL}/audiobooks` for the most recent date embedded in an audiobook title and processes every day from the day after that through yesterday — the same window `generate_audiobook.py` uses. It returns nothing when that watermark is already current, and falls back to yesterday only if the API is unreachable or has no dated audiobooks.
+
+This matters because the two stages must agree on the date set. `generate_audiobook.py` has always backfilled; when this script only ever ran for yesterday, a missed day (server down, failed run, CI outage) left a permanent hole: the audiobook for that day still got built, just without its research digest folded in.
+
+Re-processing an already-done day is cheap — `pipeline.run()` short-circuits on an existing `raw_content/research_digest_{date}.txt`.
+
+The lookback is capped by `--max-backfill-days` (default 14, matching `dedup.py`'s rolling window — past that, `seen_papers.csv` no longer holds the state that keeps a backfill from re-processing old papers as new). Pass `0` to disable the cap, or use `--start-date` to reach further back explicitly.
+
+The implementation lives in [`date_range.py`](../date_range.py) — one level up, in `src/audiobooks/`, because it is shared with `generate_audiobook.py`.
 
 ### Wiki Archiving (separate step)
 
@@ -368,8 +380,12 @@ Processes yesterday's papers. Designed for daily cron job / scheduled task usage
 ```bash
 python research_papers/run_wiki_ingestion.py --date 2026-03-19
 python research_papers/run_wiki_ingestion.py --start-date 2026-03-15 --end-date 2026-03-19
-python research_papers/run_wiki_ingestion.py                          # defaults to yesterday
+python research_papers/run_wiki_ingestion.py                          # every recent digest on disk
 ```
+
+As with `run_research_pipeline.py`, `pipeline.py` normally passes an explicit `--start-date`/`--end-date`. Run by hand with no date flags, it archives **every `raw_content/research_digest_*.txt` within `--max-backfill-days` of yesterday** (`date_range.resolve_transcript_dates`), so days backfilled by `run_research_pipeline.py` still make it into the wiki. Dates already archived are skipped in the loop.
+
+It deliberately does *not* reuse the audiobook watermark that `run_research_pipeline.py` keys off. This step runs last, after `generate_audiobook.py` has already uploaded the backfilled days — so by the time it looks, the watermark has advanced past exactly the dates it still needs to archive. The transcripts on disk are the honest signal.
 
 By default this just archives the day's transcript verbatim into `wiki/raw_summary/` (`WikiIngestionEngine.archive_raw_summary` — no LLM calls). Pass `--llm-wiki` to opt into the older, slower full pipeline (`WikiIngestionEngine.ingest_transcript`, one classify+extract LLM call per section, described under [Ingesting a New Transcript into the Wiki](#ingesting-a-new-transcript-into-the-wiki) below) — that path was previously the single biggest contributor to multi-hour pipeline runs, so it's opt-in rather than default.
 
