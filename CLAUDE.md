@@ -43,7 +43,7 @@ python src/audiobooks/research_papers/run_wiki_ingestion.py --date 2026-03-19   
 python src/audiobooks/upload_mp3.py "C:\path\to\file.mp3"   # manual upload, auto-splits >35 MB
 ```
 
-With no date flags, `generate_audiobook.py` queries the audiobooks API for the last upload date and processes from the day after through yesterday. `run_research_pipeline.py` and `run_wiki_ingestion.py` both default to yesterday. `generate_tts_audio.py --workers` controls how many worker processes synthesize TTS chunks in parallel (default `min(cpu_count, 4)`; pass `1` for the original sequential path).
+**Date selection lives in one place: `src/audiobooks/date_range.py`.** `pipeline.py` runs it once as a subprocess before any stage, then passes the resolved window to all three stages as `--start-date`/`--end-date`, so they cannot disagree. Standalone, each stage falls back to its own default from the same module. See "Which days get processed" below. `generate_tts_audio.py --workers` controls how many worker processes synthesize TTS chunks in parallel (default `min(cpu_count, 4)`; pass `1` for the original sequential path).
 
 ### Python tests
 
@@ -55,7 +55,10 @@ cd src/audiobooks && python -m pytest generate_audiobook_test.py -v
 cd src/audiobooks/research_papers && pytest tests/ -v
 cd src/audiobooks/research_papers && pytest tests/test_pipeline.py -v
 cd src/audiobooks/research_papers && pytest tests/test_pipeline.py::TestName::test_case -v
+python -m pytest pipeline_test.py                            # root orchestrator (not under src/)
 ```
+
+`pipeline_test.py` sits at the repo root next to the orchestrator it tests, so neither of the two `cd`-based commands above collects it — run it explicitly. It only needs `pytest` + `pytest-mock`, since `pipeline.py` imports nothing outside the stdlib.
 
 `research_papers/tests/conftest.py` inserts `research_papers/` and `src/audiobooks/` into `sys.path` and stubs `sentence_transformers` and `pymupdf` in `pytest_configure`, so tests run without those heavy deps installed. If you add a module that imports a heavy optional dep at import time, add a stub there or collection will break. It also installs an autouse fixture that repoints `dedup._csv_path()` at a temp file, so no test can rewrite the committed `seen_papers.csv`.
 
@@ -92,6 +95,29 @@ raw_content/research_digest_{date}.txt ──→ run_wiki_ingestion.py (last, no
 `pipeline.py` runs `run_wiki_ingestion.py` as its last step, after the audiobook is already generated and uploaded, and never lets it fail the run (see `run_step(..., fatal=False)`). By default it just archives the day's transcript verbatim into `wiki/raw_summary/` — no LLM calls. The old LLM classify+extract pipeline (concept pages under `wiki/concepts/`) is opt-in via `--llm-wiki`.
 
 The two Python stages communicate through the **filesystem**, not function calls: the research pipeline writes `src/audiobooks/raw_content/research_digest_{date}.txt`, and `generate_audiobook.py` picks up any `raw_content/` file whose filename carries that date and concatenates it with the day's newsletter emails. That directory is gitignored.
+
+### Which days get processed
+
+**All date selection lives in `src/audiobooks/date_range.py`, and `pipeline.py` resolves the window exactly once per run.** Because the stages hand work to each other through dated filenames, they have to agree on the date set — and when they each decided for themselves, they didn't. `generate_audiobook.py` backfilled from the last upload while the research stage only ever did yesterday, so a missed run (server down, CI outage) permanently produced an audiobook with no research digest folded into it.
+
+`pipeline.py` shells out to `python src/audiobooks/date_range.py`, which prints `START END` on stdout (logs go to stderr), then passes `--start-date START --end-date END` to all three stages. Three outcomes:
+
+| `date_range.py` result | `pipeline.py` behaviour |
+| --- | --- |
+| `2026-08-11 2026-08-13` | pass that window to every stage |
+| empty stdout, exit 0 | watermark is current — log and skip the whole run |
+| non-zero exit | pass no date flags; each stage falls back to its own default |
+
+That last row is why the per-stage defaults still exist. They are **not** the normal path:
+
+- `resolve_default_dates()` — used by `generate_audiobook.py` and `run_research_pipeline.py`. Queries `/audiobooks`, takes the newest date found in a title as the watermark, and returns day-after-watermark through yesterday. Empty when caught up; yesterday-only if the API is unreachable or has no dated audiobooks.
+- `resolve_transcript_dates()` — used by `run_wiki_ingestion.py`, and deliberately **not** the watermark. Wiki ingestion runs *after* the audiobook upload, so by then the watermark has advanced past exactly the days it still needs to archive. It scans `raw_content/research_digest_*.txt` instead.
+
+All of them cap the lookback at `--max-backfill-days` (default 14, matching `dedup.py`'s rolling window — past that `seen_papers.csv` no longer holds the state that stops a backfill re-processing old papers as new, and it keeps a dormant deployment from synthesizing months of TTS in one go). Note this cap is new for `generate_audiobook.py`, which was previously unbounded; pass `0` to disable it.
+
+Re-feeding an already-done date is safe — `generate_audiobook.py` checks `check_existing_audiobook`, `ResearchPaperPipeline.run` short-circuits on an existing transcript, and wiki ingestion skips dates it has already archived.
+
+`http_utils.requests_get_with_retry` is shared between `generate_audiobook.py` and `date_range.py`; it lives in its own module because `generate_audiobook.py` pulls in Kokoro/torch at import time, which is far too heavy for anything that just wants to call the API.
 
 ### research_papers subsystem
 
