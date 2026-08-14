@@ -109,19 +109,32 @@ def main():
     # research_papers/ -> audiobooks/ -> src/ -> audio-digest-hub/)
     parent_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
 
-    wiki_engine = WikiIngestionEngine(
-        wiki_dir=wiki_dir,
-        repo_root=wiki_dir,  # wiki is its own git repo (submodule); commit inside it
-        parent_root=parent_root,
-        api_key=config["gemini_api_key"],
-        model_name=config["wiki_model"],
-        backup_api_key=config["wiki_backup_api_key"],
-        openrouter_api_key=config.get("openrouter_api_key"),
-        openrouter_model=config.get("openrouter_model"),
-        auto_commit=config["wiki_auto_commit"],
-        auto_push=config["wiki_auto_push"],
-        push_parent=config["wiki_push_parent"],
-    )
+    if not os.path.exists(os.path.join(wiki_dir, ".git")):
+        logger.warning(
+            "Wiki submodule at %s is not initialised — skipping wiki ingestion. "
+            "Run `git submodule update --init` (or add `submodules: true` to the "
+            "checkout step) to enable it.",
+            wiki_dir,
+        )
+        return 0
+
+    try:
+        wiki_engine = WikiIngestionEngine(
+            wiki_dir=wiki_dir,
+            repo_root=wiki_dir,  # wiki is its own git repo (submodule); commit inside it
+            parent_root=parent_root,
+            api_key=config["gemini_api_key"],
+            model_name=config["wiki_model"],
+            backup_api_key=config["wiki_backup_api_key"],
+            openrouter_api_key=config.get("openrouter_api_key"),
+            openrouter_model=config.get("openrouter_model"),
+            auto_commit=config["wiki_auto_commit"],
+            auto_push=config["wiki_auto_push"],
+            push_parent=config["wiki_push_parent"],
+        )
+    except KeyError as exc:
+        logger.error("Missing config key required for wiki ingestion: %s", exc)
+        return 1
 
     if args.llm_wiki:
         logger.info("--llm-wiki set: using the full LLM classify+extract pipeline.")
@@ -158,7 +171,8 @@ def main():
             logger.error(f"Processing failed for {date_str}: {e}", exc_info=True)
 
     logger.info("Wiki ingestion finished.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
