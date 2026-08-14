@@ -31,6 +31,16 @@ from generate_tts_audio import generate_audio_from_text
 # module (e.g. `@patch("generate_audiobook.upload_audiobook")`).
 from upload_mp3 import upload_audiobook
 
+# Date selection is shared with the research pipeline (see date_range.py) so
+# every stage backfills the same window. find_last_upload_date is re-exported
+# here because it used to live in this module.
+from date_range import (
+    DEFAULT_MAX_BACKFILL_DAYS,
+    find_last_upload_date,
+    resolve_default_dates,
+)
+from http_utils import requests_get_with_retry as _requests_get_with_retry
+
 # --- Configuration & Constants ---
 # logger is defined later in setup_logging, so use a placeholder here if needed early.
 # For now, it's safe to assume it's available when needed during main execution.
@@ -144,24 +154,6 @@ def verify_authentication(api_url, api_key):
         )
         return False
 
-def _requests_get_with_retry(url, headers, timeout=30, max_retries=3, backoff_base=2):
-    """Performs a GET request with exponential-backoff retries on transient network errors."""
-    for attempt in range(max_retries):
-        try:
-            with requests.Session() as session:
-                response = session.get(url, headers=headers, timeout=timeout)
-            return response
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-            if attempt < max_retries - 1:
-                wait = backoff_base ** attempt
-                logger.warning(
-                    f"Transient network error on attempt {attempt + 1}/{max_retries}: {exc}. "
-                    f"Retrying in {wait}s..."
-                )
-                time.sleep(wait)
-            else:
-                raise
-
 def fetch_sources(api_url, api_key):
     """Fetches newsletter sources from the Supabase Edge Function."""
     logger.info("Fetching newsletter sources from Web App...")
@@ -174,55 +166,6 @@ def fetch_sources(api_url, api_key):
     except requests.exceptions.RequestException as e:
         logger.error(f"A network error occurred calling {url}", exc_info=True)
         sys.exit(1)
-
-def find_last_upload_date(api_url, api_key):
-    """Finds the last date when an audiobook was uploaded by querying the API."""
-    logger.info("Finding the last upload date from existing audiobooks...")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    url = f"{api_url}/audiobooks"
-
-    try:
-        response = _requests_get_with_retry(url, headers, timeout=30)
-        if response.status_code != 200:
-            logger.warning(
-                f"API returned status {response.status_code}. Using yesterday as default start date."
-            )
-            return None
-
-        audiobooks = response.json()
-        if not audiobooks:
-            logger.info("No existing audiobooks found. Using yesterday as default start date.")
-            return None
-
-        last_date = None
-        date_pattern = re.compile(r"(\d{4}-\d{2}-\d{2})")
-
-        for audiobook in audiobooks:
-            title = audiobook.get("title", "")
-            match = date_pattern.search(title)
-            if match:
-                try:
-                    date_str = match.group(1)
-                    audiobook_date = datetime.datetime.strptime(
-                        date_str, "%Y-%m-%d"
-                    ).date()
-                    if last_date is None or audiobook_date > last_date:
-                        last_date = audiobook_date
-                except ValueError:
-                    logger.warning(f"Could not parse date from title: {title}")
-                    continue
-
-        if last_date:
-            logger.info(f"Found last upload date: {last_date}")
-            return last_date
-        else:
-            logger.info("No valid dates found in existing audiobooks. Using yesterday as default start date.")
-            return None
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching audiobooks to find last upload date: {e}")
-        logger.info("Using yesterday as default start date due to API error.")
-        return None
 
 def check_existing_audiobook(api_url, api_key, title):
     """Check if an audiobook with the same title already exists."""
@@ -781,6 +724,15 @@ def main():
         help="The end of the date range (YYYY-MM-DD). Defaults to yesterday if --start-date is used.",
     )
     parser.add_argument(
+        "--max-backfill-days",
+        type=int,
+        default=DEFAULT_MAX_BACKFILL_DAYS,
+        help=(
+            "Cap on how far back the automatic backfill reaches when no date\n"
+            "flags are given (0 disables the cap)."
+        ),
+    )
+    parser.add_argument(
         "--reauth",
         action="store_true",
         help=(
@@ -797,6 +749,10 @@ Default behavior (when no dates are specified):
 - Start date will be the day after the last upload
 - End date will be yesterday
 - If no previous uploads exist, only yesterday will be processed
+- The backfill reaches back at most --max-backfill-days (default 14)
+
+pipeline.py normally resolves this range once (via date_range.py) and passes
+it to every stage as --start-date/--end-date, so all stages agree on the days.
 """
     args = parser.parse_args()
 
@@ -854,33 +810,23 @@ Default behavior (when no dates are specified):
         if not verify_authentication(config["api_url"], config["api_key"]):
             sys.exit(1)
 
-        # Determine date range based on last upload if not explicitly provided
+        # Determine date range based on last upload if not explicitly provided.
+        # Shared with the research pipeline via date_range.py so both stages
+        # backfill the same window; pipeline.py normally resolves it once up
+        # front and passes it in as --start-date/--end-date, in which case
+        # this branch is skipped entirely.
         if not args.start_date and not args.date:
-            last_upload_date = find_last_upload_date(
-                config["api_url"], config["api_key"]
+            dates_to_process = resolve_default_dates(
+                config["api_url"],
+                config["api_key"],
+                dates_to_process[-1],  # end of the initial calculation (yesterday)
+                max_backfill_days=args.max_backfill_days,
             )
-            if last_upload_date:
-                start_date = last_upload_date + datetime.timedelta(days=1)
-                # Ensure end_date is the last one from the initial calculation (yesterday)
-                end_date = dates_to_process[-1] # Use the last date calculated initially
-
-                if start_date <= end_date:
-                    dates_to_process = []
-                    current_date = start_date
-                    while current_date <= end_date:
-                        dates_to_process.append(current_date)
-                        current_date += datetime.timedelta(days=1)
-                    logger.info(
-                        f"Adjusted date range based on last upload: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
-                    )
-                else:
-                    logger.info(
-                        f"Last upload date ({last_upload_date}) is recent. No new dates to process."
-                    )
-                    return # Exit if no new dates needed
-            else:
-                logger.info("No previous uploads found or error determining last upload date. Processing yesterday only.")
-                # dates_to_process already contains yesterday, so no change needed
+            if not dates_to_process:
+                return
+            logger.info(
+                f"Will process the following date(s): {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
+            )
 
         sources = fetch_sources(config["api_url"], config["api_key"])
         if not sources:
