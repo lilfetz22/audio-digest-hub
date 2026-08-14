@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import soundfile as sf
@@ -43,6 +45,7 @@ LANG_CODE = "a"  # American English
 SAMPLE_RATE = 24000  # Kokoro outputs at 24 kHz
 MAX_CHUNK_LENGTH = 250
 DEFAULT_BITRATE = "64k"
+MAX_TTS_WORKERS = 4  # default cap; each worker holds its own Kokoro pipeline copy
 
 # Interrogator Q&A: insert silence after each question line (Q1:, Q2:, ...)
 # so the listener has time to think before the answer is read.
@@ -131,6 +134,40 @@ def _synthesize_chunk(pipeline, text: str, voice: str, speed: float) -> np.ndarr
     return np.array(audio, dtype=np.float32)
 
 
+# Per-worker-process Kokoro pipeline, populated by _init_worker. Each worker
+# process in the ProcessPoolExecutor loads its own copy once and reuses it
+# for every chunk it's asked to synthesize.
+_worker_pipeline = None
+
+
+def _init_worker(device: str) -> None:
+    """ProcessPoolExecutor initializer: load one Kokoro pipeline per process.
+
+    Also caps this process's own intra-op thread pool to 1 so N worker
+    processes don't each try to claim every CPU core and thrash each other.
+    """
+    global _worker_pipeline
+    torch.set_num_threads(1)
+    _worker_pipeline = _load_pipeline(device)
+
+
+def _worker_synthesize(
+    index: int, text: str, voice: str, speed: float
+) -> Tuple[int, np.ndarray, Optional[str]]:
+    """Run in a worker process: synthesize one chunk.
+
+    Returns (index, audio, error) rather than raising or logging directly —
+    logging from a worker process wouldn't reach the main process's handlers,
+    so the caller logs using the returned error message instead.
+    """
+    try:
+        with torch.no_grad():
+            audio = _synthesize_chunk(_worker_pipeline, text, voice, speed)
+        return index, audio, None
+    except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
+        return index, np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32), str(exc)
+
+
 def generate_audio_from_text(
     text_content: str,
     output_mp3_path: PathLike,
@@ -140,10 +177,16 @@ def generate_audio_from_text(
     device: str = "cpu",
     bitrate: str = DEFAULT_BITRATE,
     keep_wav: bool = False,
+    max_workers: Optional[int] = None,
 ) -> Path:
     """
     Synthesize TTS audio for `text_content` and write it to `output_mp3_path`.
     Returns the absolute path to the generated MP3.
+
+    `max_workers` controls how many worker processes synthesize chunks in
+    parallel (each holds its own Kokoro pipeline). Defaults to
+    `min(os.cpu_count(), MAX_TTS_WORKERS)`; pass `1` to force the original
+    single-process sequential path.
     """
     if not text_content or not text_content.strip():
         raise ValueError("text_content is empty")
@@ -155,10 +198,9 @@ def generate_audio_from_text(
     if not chunks:
         raise ValueError("No valid speech chunks after preprocessing")
 
-    pipeline = _load_pipeline(device)
-
-    logger.info("Warming up model...")
-    _ = _synthesize_chunk(pipeline, "Warm up.", voice, speed)
+    resolved_workers = (
+        max_workers if max_workers is not None else min(os.cpu_count() or 1, MAX_TTS_WORKERS)
+    )
 
     logger.info(
         "Synthesizing %d chunks on %s (CPU synthesis can take a while)...",
@@ -166,17 +208,40 @@ def generate_audio_from_text(
         device,
     )
     start = time.time()
-    audio_chunks: List[np.ndarray] = []
+    audio_chunks: List[Optional[np.ndarray]] = [None] * len(chunks)
     failed = 0
-    # Wrap the synthesis loop in torch.no_grad() to prevent gradient accumulation
-    with torch.no_grad():
-        for chunk in tqdm(chunks, desc="TTS", unit="chunk"):
-            try:
-                audio_chunks.append(_synthesize_chunk(pipeline, chunk, voice, speed))
-            except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
-                logger.error("Chunk failed (%s): %.80s", exc, chunk)
-                audio_chunks.append(np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32))
-                failed += 1
+
+    if resolved_workers <= 1:
+        pipeline = _load_pipeline(device)
+        logger.info("Warming up model...")
+        _ = _synthesize_chunk(pipeline, "Warm up.", voice, speed)
+        # Wrap the synthesis loop in torch.no_grad() to prevent gradient accumulation
+        with torch.no_grad():
+            for i, chunk in enumerate(tqdm(chunks, desc="TTS", unit="chunk")):
+                try:
+                    audio_chunks[i] = _synthesize_chunk(pipeline, chunk, voice, speed)
+                except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
+                    logger.error("Chunk failed (%s): %.80s", exc, chunk)
+                    audio_chunks[i] = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
+                    failed += 1
+    else:
+        logger.info("Using %d worker processes for TTS synthesis", resolved_workers)
+        with ProcessPoolExecutor(
+            max_workers=resolved_workers,
+            initializer=_init_worker,
+            initargs=(device,),
+        ) as executor:
+            futures = [
+                executor.submit(_worker_synthesize, i, chunk, voice, speed)
+                for i, chunk in enumerate(chunks)
+            ]
+            for future in tqdm(as_completed(futures), total=len(futures), desc="TTS", unit="chunk"):
+                index, audio, error = future.result()
+                audio_chunks[index] = audio
+                if error is not None:
+                    logger.error("Chunk %d failed (%s): %.80s", index, error, chunks[index])
+                    failed += 1
+
     synth_seconds = time.time() - start
     logger.info(
         "Synthesis complete in %.1fs (%d chunks, %d failed)",
@@ -251,6 +316,16 @@ def main() -> int:
         action="store_true",
         help="Keep the intermediate WAV alongside the MP3.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=(
+            "Worker processes for parallel TTS synthesis "
+            f"(default: min(cpu_count, {MAX_TTS_WORKERS})). Use 1 for the "
+            "original sequential single-process path."
+        ),
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -267,6 +342,7 @@ def main() -> int:
         device=args.device,
         bitrate=args.bitrate,
         keep_wav=args.keep_wav,
+        max_workers=args.workers,
     )
     print(str(output_path))
     return 0
