@@ -31,6 +31,7 @@ import sys
 # matching run_research_pipeline.py's sys.path setup.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from research_papers.paths import RAW_CONTENT_DIR
 from research_papers.run_research_pipeline import load_config
 from research_papers.wiki_engine.ingestion import WikiIngestionEngine
 
@@ -57,8 +58,6 @@ def setup_logging():
 
 
 def main():
-    setup_logging()
-
     parser = argparse.ArgumentParser(description="Archive the research digest into the wiki repo")
     date_group = parser.add_mutually_exclusive_group()
     date_group.add_argument("--date", help="Process a single date (YYYY-MM-DD)")
@@ -74,6 +73,11 @@ def main():
         ),
     )
     args = parser.parse_args()
+
+    if args.end_date and not args.start_date:
+        parser.error("--end-date requires --start-date")
+
+    setup_logging()
 
     yesterday = datetime.date.today() - datetime.timedelta(days=1)
     dates_to_process = []
@@ -103,7 +107,7 @@ def main():
     config = load_config()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.join(os.path.dirname(script_dir), "raw_content")
+    output_dir = RAW_CONTENT_DIR
     wiki_dir = os.path.join(script_dir, "wiki")
     # parent_root is the audio-digest-hub repo root (3 levels above script_dir:
     # research_papers/ -> audiobooks/ -> src/ -> audio-digest-hub/)
