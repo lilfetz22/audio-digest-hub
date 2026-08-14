@@ -1,5 +1,9 @@
 requests
-mcp
+# mcp 2.0.0 renamed the exception class McpError -> MCPError and changed its
+# constructor signature (code, message, data=...) instead of (ErrorData). Pin
+# below that until wiki_engine/mcp_server.py and its tests are ported to the
+# new API. Verified working against 1.29.0 (the latest 1.x release).
+mcp<2.0.0
 google-api-python-client
 google-auth-oauthlib
 pydub

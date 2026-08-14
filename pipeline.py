@@ -5,11 +5,20 @@ pipeline.py — daily orchestrator for the audio digest hub.
 Cross-platform replacement for the Windows `.bat` workflow. Designed to be
 invoked directly by cron on the Ubuntu server, or run by hand on either OS.
 
-Steps, in order, with fail-fast semantics:
-  1. (Fridays only) `node scripts/cleanup-trigger.js`
-  2. (Fridays only) `node scripts/cleanup-local-files.js`
-  3. `python src/audiobooks/research_papers/run_research_pipeline.py`
-  4. `python src/audiobooks/generate_audiobook.py`
+Steps, in order:
+  1. (Fridays only) `node scripts/cleanup-trigger.js`                            [fatal]
+  2. (Fridays only) `node scripts/cleanup-local-files.js`                        [fatal]
+  3. `python src/audiobooks/research_papers/run_research_pipeline.py`           [fatal]
+  4. `python src/audiobooks/generate_audiobook.py`                              [fatal]
+  5. `python src/audiobooks/research_papers/run_wiki_ingestion.py`          [non-fatal]
+
+Step 5 runs last and is deliberately non-fatal. By default it just archives
+the day's transcript verbatim into the wiki repo (no LLM calls, cheap) — see
+run_wiki_ingestion.py's docstring for the opt-in `--llm-wiki` full pipeline,
+which is NOT run here by default because it was previously the single
+biggest contributor to multi-hour pipeline runs. Being last + non-fatal
+means this step can never block or fail the audiobook, which by this point
+has already been generated and uploaded.
 
 The two Python steps are invoked via the project venv's interpreter directly,
 so no shell activation (`source ... activate`) is required — that activation
@@ -113,7 +122,14 @@ def reset_latest_research_day() -> int:
     return removed
 
 
-def run_step(name: str, argv: List[Union[str, Path]], cwd: Path) -> None:
+def run_step(name: str, argv: List[Union[str, Path]], cwd: Path, fatal: bool = True) -> None:
+    """Run one pipeline step.
+
+    When `fatal` is False, a nonzero exit code is logged as an error and
+    swallowed instead of raising `SystemExit` — used for steps (like wiki
+    ingestion) that must never be able to take the rest of the pipeline
+    down with them.
+    """
     pretty = " ".join(str(a) for a in argv)
     logger.info("=== %s ===", name)
     logger.info("$ %s   (cwd=%s)", pretty, cwd)
@@ -125,9 +141,10 @@ def run_step(name: str, argv: List[Union[str, Path]], cwd: Path) -> None:
             signum = -result.returncode
             sig_name = _signal.Signals(signum).name if signum in _signal.Signals._value2member_map_ else f"signal {signum}"
             signal_info = f" (killed by {sig_name} — likely OOM / kernel termination)"
-        raise SystemExit(
-            f"{name} failed with exit code {result.returncode}{signal_info}; aborting pipeline."
-        )
+        message = f"{name} failed with exit code {result.returncode}{signal_info}"
+        if fatal:
+            raise SystemExit(f"{message}; aborting pipeline.")
+        logger.error("%s; continuing (non-fatal step).", message)
 
 
 def main() -> int:
@@ -195,6 +212,16 @@ def main() -> int:
         "generate-audiobook",
         [py, AUDIOBOOKS_DIR / "generate_audiobook.py"],
         REPO_ROOT,
+    )
+
+    # Runs last and non-fatal: the audiobook above is already generated and
+    # uploaded by this point, so a slow or failing wiki stage can no longer
+    # block or take down the actual deliverable.
+    run_step(
+        "wiki-ingestion",
+        [py, AUDIOBOOKS_DIR / "research_papers" / "run_wiki_ingestion.py"],
+        REPO_ROOT,
+        fatal=False,
     )
 
     logger.info("Pipeline complete.")

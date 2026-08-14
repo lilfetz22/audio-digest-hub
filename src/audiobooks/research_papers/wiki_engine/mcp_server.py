@@ -200,7 +200,7 @@ class WikiMcpServer:
         page_type_filter = (arguments.get("page_type") or "").strip().lower()
         pages = []
 
-        for subdir in ("sources", "concepts", "queries"):
+        for subdir in ("sources", "concepts", "queries", "raw_summary"):
             folder = self.wiki_dir / subdir
             if not folder.exists():
                 continue

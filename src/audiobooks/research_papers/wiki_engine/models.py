@@ -10,7 +10,7 @@ class WikiPageMeta:
     """YAML frontmatter metadata for a wiki page."""
 
     title: str
-    type: Literal["concept", "source", "query-result"]
+    type: Literal["concept", "source", "query-result", "raw-summary"]
     sources: List[str] = field(default_factory=list)
     created: str = ""
     updated: str = ""

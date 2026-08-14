@@ -403,58 +403,11 @@ class TestHelperFunctions:
 
 
 class TestAudioAndMetadata:
-    def test__create_chapter_list(self):
-        text_blocks = [
-            {"title": "Intro", "text": "a" * 25},
-            {"title": "Middle", "text": "b" * 50},
-            {"title": "End", "text": "c" * 25},
-        ]
-        total_duration_ms = 100000  # 100 seconds
-        chapters = ga._create_chapter_list(total_duration_ms, text_blocks)
-        assert len(chapters) == 3
-        assert chapters[0] == {"title": "Intro", "start_time_ms": 0.0}
-        assert chapters[1] == {"title": "Middle", "start_time_ms": 25000.0}
-        assert chapters[2] == {"title": "End", "start_time_ms": 75000.0}
-
-    def test__create_metadata(self):
-        """
-        Tests that metadata is created with the correct format,
-        especially the chapters_json dictionary.
-        """
-        mock_segment = MagicMock()
-        mock_segment.__len__.return_value = 123000  # 123 seconds
-        text_blocks = [
-            {"title": "Chapter 1", "text": "text..."},
-            {"title": "Chapter 2", "text": "more text..."},
-        ]
-
-        # This predefined list is what we WANT _create_chapter_list to return.
-        mock_chapter_list = [
-            {"title": "Chapter 1", "start_time_ms": 0},
-            {
-                "title": "Chapter 2",
-                "start_time_ms": 61500,
-            },  # We want to test with 61.5s
-        ]
-
-        # --- FIX: Use `patch` to correctly mock the function ---
-        # The target string should be 'module_alias._function_name'
-        with patch(
-            "upload_mp3._create_chapter_list", return_value=mock_chapter_list
-        ):
-            # Inside this block, any call to ga._create_chapter_list will return our predefined list.
-            metadata = ga._create_metadata("My Title", mock_segment, text_blocks)
-
-        # The rest of the test remains the same, but will now pass.
-        assert metadata["title"] == "My Title"
-        assert metadata["duration_seconds"] == 123
-
-        chapters_dict = json.loads(metadata["chapters_json"])
-        expected_chapters = {
-            "Chapter 1": 0,
-            "Chapter 2": 61,  # 61500ms / 1000 = 61.5, cast to int is 61
-        }
-        assert chapters_dict == expected_chapters
+    # _create_chapter_list / _create_metadata are tested directly against
+    # upload_mp3 (where they live) in upload_mp3_test.py — see
+    # TestCreateChapterList / TestCreateMetadataWithChapters. generate_audiobook
+    # only imports upload_audiobook, so it has no reason to exercise those
+    # private helpers through its own namespace.
 
     def test_generate_and_upload_audio_empty_text(self, caplog):
         """Returns empty list for blank text."""
@@ -675,7 +628,7 @@ class TestMainExecution:
             ga.main()
 
         assert self.mock_process_content.call_count == 2
-        assert "An error occurred while processing 2023-05-10" in caplog.text
+        assert "An error occurred during processing for 2023-05-10" in caplog.text
 
 
 class TestCleanup:

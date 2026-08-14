@@ -223,7 +223,7 @@ On any Gemini failure (429 quota, other client errors, or exhausted retries), th
 
 **Model locking:** once a model succeeds, it is reused for all subsequent calls in the same run. If the locked-in model later fails, the full fallback chain is re-entered. The locked-in `(client, model)` pair is stored as a single tuple behind a lock, so concurrent callers (e.g. parallel wiki section analysis) never see a half-updated combination and only one thread walks the tier chain at a time.
 
-**Wiki ingestion uses OpenRouter exclusively:** when `[OpenRouter]` is configured, the wiki ingestion engine bypasses the Gemini tiers entirely and uses `OPENROUTER_MODEL` as its only LLM option.
+**Wiki ingestion uses OpenRouter exclusively:** when `[OpenRouter]` is configured, the wiki ingestion engine bypasses the Gemini tiers entirely and uses `OPENROUTER_MODEL` as its only LLM option. This only applies to the opt-in `--llm-wiki` / `ingest_transcript` path — the default `archive_raw_summary` path makes no LLM calls at all.
 
 **Structured JSON outputs (wiki engine):** the section analyzer, classifier, concept extractor, and linter request OpenRouter [structured outputs](https://openrouter.ai/docs/features/structured-outputs) via `response_format` with a `json_schema` derived from Pydantic models (the single source of truth for both the schema and response validation). Responses are validated against those models; fields that fail validation are skipped or fall back rather than corrupting a page. If a response is empty or unparseable, the same `OPENROUTER_MODEL` is called again once (code fences and surrounding prose are also tolerated) before the call gives up and logs the raw snippet — so a malformed reply is retried instead of silently dropped.
 
@@ -361,6 +361,18 @@ python -m research_papers.run_research_pipeline
 
 Processes yesterday's papers. Designed for daily cron job / scheduled task usage.
 
+### Wiki Archiving (separate step)
+
+`run_research_pipeline.py` no longer triggers wiki ingestion itself — that's a standalone step, `run_wiki_ingestion.py`, run afterwards (in `pipeline.py`, non-fatally, after the audiobook is already generated and uploaded):
+
+```bash
+python research_papers/run_wiki_ingestion.py --date 2026-03-19
+python research_papers/run_wiki_ingestion.py --start-date 2026-03-15 --end-date 2026-03-19
+python research_papers/run_wiki_ingestion.py                          # defaults to yesterday
+```
+
+By default this just archives the day's transcript verbatim into `wiki/raw_summary/` (`WikiIngestionEngine.archive_raw_summary` — no LLM calls). Pass `--llm-wiki` to opt into the older, slower full pipeline (`WikiIngestionEngine.ingest_transcript`, one classify+extract LLM call per section, described under [Ingesting a New Transcript into the Wiki](#ingesting-a-new-transcript-into-the-wiki) below) — that path was previously the single biggest contributor to multi-hour pipeline runs, so it's opt-in rather than default.
+
 ---
 
 ## Output
@@ -463,8 +475,9 @@ pytest tests/test_feedback.py -v
 | `test_pipeline.py` | Full end-to-end orchestration, per-category selection, idempotency, Supabase metadata push, error scenarios |
 | `test_feedback.py` | Profile loading/writing, interest extraction, growth capping, FeedbackClient API calls |
 | `test_gemini_client_retry.py` | `Retry-After` parsing (delta-seconds, HTTP-date, past dates, unparseable values), model locking, and thread-safe resolution under concurrent `generate()` calls |
+| `test_run_wiki_ingestion.py` | `run_wiki_ingestion.py` CLI: default no-LLM archive path (idempotency skip, date-range iteration, per-date failure isolation), opt-in `--llm-wiki` path, correct done-marker per mode |
 | `test_wiki_classifier.py` | Section classification, `split_transcript_into_sections`, `extract_source_urls_from_section` (arXiv/HF markers, deduplication, malformed markers) |
-| `test_wiki_ingestion.py` | Source page creation, concept extraction, upsert, index rebuild, auto-commit, WIKI_SOURCE_URL marker preservation in concept frontmatter, combined section analysis (single call per section, legacy two-call path, parallel ordering, per-section failure isolation), `llm_merge_updates` behaviour |
+| `test_wiki_ingestion.py` | Source page creation, concept extraction, upsert, index rebuild, auto-commit, WIKI_SOURCE_URL marker preservation in concept frontmatter, combined section analysis (single call per section, legacy two-call path, parallel ordering, per-section failure isolation), `llm_merge_updates` behaviour, `archive_raw_summary` (verbatim write, frontmatter, never calls the LLM, auto-commit gating) |
 | `test_wiki_e2e.py` | Full ingestion pipeline, index rebuild, search, query save/find, lint |
 | `test_wiki_git_hooks.py` | WikiGitManager auto-commit on new/modified files, change detection |
 | `test_wiki_mcp_server.py` | Tool listing, `wiki_search`, `wiki_get_page`, `wiki_list_pages`, `wiki_save_query`, dispatch/error resilience |
@@ -485,8 +498,9 @@ The wiki pipeline transforms daily transcripts into a versioned knowledge base a
 ```
 wiki/
 ├── index.md          # Auto-rebuilt on every ingestion run
-├── sources/          # One page per daily transcript
-├── concepts/         # Synthesized concept pages (upserted, never overwritten)
+├── raw_summary/      # Default: verbatim daily transcript archive (no LLM), from run_wiki_ingestion.py
+├── sources/          # One page per daily transcript (--llm-wiki path only)
+├── concepts/         # Synthesized concept pages, upserted, never overwritten (--llm-wiki path only)
 └── queries/          # Saved Q&A exchanges
 ```
 
@@ -507,8 +521,10 @@ Install the MCP Python SDK (one-time):
 
 ```powershell
 cd src\audiobooks
-pip install mcp
+pip install "mcp<2.0.0"
 ```
+
+Pinned below 2.0 because that release renamed `McpError` to `MCPError` and changed its constructor signature; `wiki_engine/mcp_server.py` targets the 1.x API (verified against 1.29.0). See `requirements.txt`.
 
 ---
 
@@ -602,6 +618,8 @@ Restart Claude Desktop and the wiki tools will appear in the tool palette.
 
 ### Ingesting a New Transcript into the Wiki
 
+This is the opt-in full LLM pipeline (`--llm-wiki` on `run_wiki_ingestion.py`, or call it directly as below). The default, no-LLM path used by the daily pipeline is `WikiIngestionEngine.archive_raw_summary()`, which writes the transcript verbatim to `wiki/raw_summary/digest_{date}.md` with no LLM calls — see [Wiki Archiving](#wiki-archiving-separate-step) above.
+
 ```powershell
 cd src\audiobooks\research_papers
 python -c "
@@ -636,6 +654,7 @@ Core Python packages (see `requirements.txt` in parent directory):
 | `requests` | HTTP calls for paper downloads and Supabase API |
 | `google-api-python-client` | Gmail API access |
 | `google-auth-oauthlib` | Gmail OAuth authentication |
+| `mcp` (`<2.0.0`) | MCP stdio server SDK for `wiki_engine/mcp_server.py` |
 | `pytest` | Test framework |
 
 ---
@@ -654,6 +673,7 @@ research_papers/
 ├── feedback.py                  # Preference profile management + Supabase feedback client
 ├── pipeline.py                  # Pipeline orchestrator (wires everything together)
 ├── run_research_pipeline.py     # CLI entry point (config loading, Gmail auth, arg parsing)
+├── run_wiki_ingestion.py        # Standalone CLI: archives transcripts into the wiki (default no-LLM; --llm-wiki opt-in)
 ├── PLAN.md                      # Original implementation plan and design decisions
 ├── README.md                    # This file
 ├── prompts/
@@ -685,6 +705,7 @@ research_papers/
     ├── test_pipeline.py
     ├── test_feedback.py
     ├── test_gemini_client_retry.py
+    ├── test_run_wiki_ingestion.py
     ├── test_wiki_classifier.py
     ├── test_wiki_ingestion.py
     ├── test_wiki_e2e.py
