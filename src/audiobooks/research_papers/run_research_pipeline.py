@@ -18,6 +18,7 @@ from googleapiclient.discovery import build
 from research_papers.email_parser import ArxivHFEmailParser
 from research_papers.paper_downloader import PaperContentDownloader
 from research_papers.paper_scorer import EmbeddingPaperScorer
+from research_papers.paths import RAW_CONTENT_DIR
 from research_papers.transcript_generator import GeminiTranscriptGenerator
 from research_papers.feedback import PreferenceProfileManager, FeedbackClient
 from research_papers.pipeline import ResearchPaperPipeline
@@ -159,6 +160,9 @@ def main():
     parser.add_argument("--end-date", help="End of date range (YYYY-MM-DD)")
     args = parser.parse_args()
 
+    if args.end_date and not args.start_date:
+        parser.error("--end-date requires --start-date")
+
     # Determine dates to process
     yesterday = datetime.date.today() - datetime.timedelta(days=1)
     dates_to_process = []
@@ -194,7 +198,7 @@ def main():
 
     # Wire up components
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.join(os.path.dirname(script_dir), "raw_content")
+    output_dir = RAW_CONTENT_DIR
     profile_path = os.path.join(script_dir, "preference_profile.json")
 
     email_parser = ArxivHFEmailParser(
