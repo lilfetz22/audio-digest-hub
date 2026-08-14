@@ -667,6 +667,7 @@ class TestCleanup:
             in caplog.text
         )
 
+    @patch("generate_audiobook.sys.platform", "win32")
     @patch("generate_audiobook.subprocess.run")
     def test_unpin_success(self, mock_run, caplog):
         test_path = Path("my_file.mp3")
@@ -681,6 +682,7 @@ class TestCleanup:
         )
         assert f"Successfully unpinned '{test_path}'" in caplog.text
 
+    @patch("generate_audiobook.sys.platform", "win32")
     @patch("generate_audiobook.subprocess.run", side_effect=FileNotFoundError)
     def test_unpin_attrib_not_found(self, mock_run, caplog):
         test_path = Path("my_file.mp3")
@@ -688,6 +690,7 @@ class TestCleanup:
             ga.unpin_file_from_onedrive(test_path)
         assert "The 'attrib' command was not found." in caplog.text
 
+    @patch("generate_audiobook.sys.platform", "win32")
     @patch("generate_audiobook.subprocess.run")
     def test_unpin_subprocess_error(self, mock_run, caplog):
         test_path = Path("my_file.mp3")
