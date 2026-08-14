@@ -173,6 +173,7 @@ class WikiIngestionEngine:
         self.wiki_dir = Path(wiki_dir)
         self.sources_dir = self.wiki_dir / "sources"
         self.concepts_dir = self.wiki_dir / "concepts"
+        self.raw_summary_dir = self.wiki_dir / "raw_summary"
         self.model_name = model_name
         # The wiki portion uses OpenRouter exclusively when configured; fall
         # back to a Gemini fallback client, then a bare llm_client for tests.
@@ -347,6 +348,40 @@ class WikiIngestionEngine:
         content = format_page(meta, transcript_text)
         filepath.write_text(content, encoding="utf-8")
         logger.info(f"Created source page: {filepath}")
+        return filepath
+
+    def archive_raw_summary(self, transcript_path: str, date_str: str) -> Path:
+        """Archive a daily transcript verbatim into wiki/raw_summary/ — no LLM
+        calls at all.
+
+        This is the default, cheap alternative to `ingest_transcript` (which
+        does one LLM classify+extract call per section and upserts concept
+        pages). It exists so the daily pipeline can keep a durable record of
+        each day's research digest without paying for or waiting on the
+        LLM-wiki machinery, which is opt-in via `--llm-wiki` on
+        run_wiki_ingestion.py.
+        """
+        with open(transcript_path, "r", encoding="utf-8") as f:
+            transcript_text = f.read()
+
+        self.raw_summary_dir.mkdir(parents=True, exist_ok=True)
+        filepath = self.raw_summary_dir / f"digest_{date_str}.md"
+
+        meta = WikiPageMeta(
+            title=f"Research Digest {date_str}",
+            type="raw-summary",
+            sources=[],
+            categories=["daily-digest"],
+        )
+        content = format_page(meta, transcript_text)
+        filepath.write_text(content, encoding="utf-8")
+        logger.info(f"Archived raw summary: {filepath}")
+
+        if self.auto_commit:
+            self.git_manager.auto_commit(
+                message=f"wiki: archive raw summary {date_str}"
+            )
+
         return filepath
 
     def _extract_concepts(self, section: ClassifiedSection) -> List[ExtractedConcept]:
