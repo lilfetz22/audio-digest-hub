@@ -26,6 +26,11 @@ from googleapiclient.errors import HttpError
 # Local CPU-based TTS generation (replaces the Colab handoff workflow)
 from generate_tts_audio import generate_audio_from_text
 
+# upload_mp3 has no imports back into generate_audiobook, so importing it at
+# module load time is safe and lets tests patch these names directly on this
+# module (e.g. `@patch("generate_audiobook.upload_audiobook")`).
+from upload_mp3 import upload_audiobook, _create_chapter_list, _create_metadata
+
 # --- Configuration & Constants ---
 # logger is defined later in setup_logging, so use a placeholder here if needed early.
 # For now, it's safe to assume it's available when needed during main execution.
@@ -68,7 +73,11 @@ def _resolve_config_relative_path(config_dir, path_value):
     """Resolve config-relative paths without altering absolute paths."""
     if not path_value:
         return path_value
-    return path_value if os.path.isabs(path_value) else os.path.join(config_dir, path_value)
+    return (
+        os.path.normpath(path_value)
+        if os.path.isabs(path_value)
+        else os.path.normpath(os.path.join(config_dir, path_value))
+    )
 
 
 def load_config(config_path=None):
@@ -299,6 +308,7 @@ def process_raw_content_files(target_date):
     """
     logger.info(f"Processing raw content files for date: {target_date.strftime('%Y-%m-%d')}")
     if not os.path.exists(RAW_CONTENT_FOLDER):
+        logger.info(f"Raw content folder '{RAW_CONTENT_FOLDER}' does not exist. Creating it.")
         os.makedirs(RAW_CONTENT_FOLDER, exist_ok=True)
         return "", []
 
@@ -315,7 +325,11 @@ def process_raw_content_files(target_date):
             file_date = _extract_date_from_filename(file_path)
             date_source = "filename"
             if file_date is None:
-                file_stat = os.path.getctime(file_path)
+                try:
+                    file_stat = os.path.getctime(file_path)
+                except OSError as e:
+                    logger.error(f"Could not get creation time for file {file_path}: {e}")
+                    continue
                 file_date = datetime.datetime.fromtimestamp(file_stat).date()
                 date_source = "creation time"
 
@@ -557,17 +571,12 @@ def upload_audio(
     """
     Uploads the generated MP3 using the tried and true upload_mp3.py functionality.
     Returns True if successful, False otherwise.
-    """
-    if not os.path.exists(mp3_filepath):
-        logger.error(f"MP3 file not found at expected path: {mp3_filepath}")
-        return False
 
+    File-existence is validated by upload_mp3.upload_audiobook() itself, so we
+    don't duplicate that check here.
+    """
     logger.info(f"🚀 Starting upload of: {mp3_filepath}")
     try:
-        # Dynamically import upload_mp3 to avoid circular dependency if it's in the same directory
-        # or if it has complex imports itself. Assume upload_mp3 is importable.
-        from upload_mp3 import upload_audiobook # type: ignore
-
         title = f"Daily Digest for {date_str}"
 
         success = upload_audiobook(
@@ -889,7 +898,6 @@ Default behavior (when no dates are specified):
         for process_date in dates_to_process:
             date_str = process_date.strftime("%Y-%m-%d")
             logger.info(f"--- Starting process for date: {date_str} ---")
-            mp3_filepath_generated = None # Store path to the generated MP3
 
             try:
                 # Check if audiobook already exists for this date
@@ -918,37 +926,18 @@ Default behavior (when no dates are specified):
                     cleaned_full_text, text_blocks, config, date_str
                 )
 
-                if not mp3_filepath_generated:
-                    logger.error(f"TTS synthesis failed for {date_str}. Skipping upload.")
+                if not files_created:
+                    logger.error(f"TTS synthesis or upload failed for {date_str}.")
                     continue # Move to the next date
 
-                logger.info(f"TTS synthesis successful: {mp3_filepath_generated} ({mp3_size_mb:.2f} MB)")
-
-                # --- Upload Audio ---
-                # Use the generated MP3 directly
-                success = upload_audio(
-                    mp3_filepath_generated, config, date_str, text_blocks
-                )
-
-                if success:
-                    logger.info(f"Successfully completed process for {date_str}.")
-                    # Optional: remove the locally generated mp3 after successful upload
-                    try:
-                        if os.path.exists(mp3_filepath_generated):
-                            os.remove(mp3_filepath_generated)
-                            logger.info(f"Removed temporary generated file: {mp3_filepath_generated}")
-                    except OSError as e:
-                        logger.warning(f"Could not remove temporary file {mp3_filepath_generated}: {e}")
-                else:
-                    logger.error(f"Upload failed for {date_str}.")
+                logger.info(f"Successfully completed process for {date_str}.")
+                cleanup(files_created)
 
             except Exception as e:
                 logger.error(
                     f"An error occurred during processing for {date_str}. Moving to next date.",
                     exc_info=True,
                 )
-            # Note: Local cleanup of generated files is now handled after successful upload.
-            # No need for a separate cleanup call here as in the hybrid workflow.
 
     except Exception:
         logger.critical(
