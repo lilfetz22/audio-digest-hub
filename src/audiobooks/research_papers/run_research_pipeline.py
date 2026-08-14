@@ -15,6 +15,10 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+# date_range lives one level up, in src/audiobooks/, because it is shared with
+# generate_audiobook.py — this is the same sys.path entry inserted above.
+from date_range import DEFAULT_MAX_BACKFILL_DAYS, resolve_default_dates
+
 from research_papers.email_parser import ArxivHFEmailParser
 from research_papers.paper_downloader import PaperContentDownloader
 from research_papers.paper_scorer import EmbeddingPaperScorer
@@ -158,10 +162,23 @@ def main():
     date_group.add_argument("--date", help="Process a single date (YYYY-MM-DD)")
     date_group.add_argument("--start-date", help="Start of date range (YYYY-MM-DD)")
     parser.add_argument("--end-date", help="End of date range (YYYY-MM-DD)")
+    parser.add_argument(
+        "--max-backfill-days",
+        type=int,
+        default=DEFAULT_MAX_BACKFILL_DAYS,
+        help=(
+            "Cap on how far back the automatic backfill reaches when no date "
+            "flags are given (0 disables the cap). Defaults to dedup.py's "
+            "14-day rolling window."
+        ),
+    )
     args = parser.parse_args()
 
     if args.end_date and not args.start_date:
         parser.error("--end-date requires --start-date")
+
+    # Load config
+    config = load_config()
 
     # Determine dates to process
     yesterday = datetime.date.today() - datetime.timedelta(days=1)
@@ -183,14 +200,24 @@ def main():
             dates_to_process.append(current)
             current += datetime.timedelta(days=1)
     else:
-        dates_to_process.append(yesterday)
+        # No explicit dates: backfill every day since the last audiobook
+        # upload, matching generate_audiobook.py. Without this, a missed run
+        # left a permanent hole — the audiobook stage would still process the
+        # skipped days, but with no research digest to fold in.
+        dates_to_process = resolve_default_dates(
+            config["api_url"],
+            config["api_key"],
+            yesterday,
+            max_backfill_days=args.max_backfill_days,
+        )
+
+    if not dates_to_process:
+        logger.info("No dates to process. Exiting.")
+        return
 
     logger.info(
         f"Processing dates: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
     )
-
-    # Load config
-    config = load_config()
 
     # Authenticate Gmail
     creds = authenticate_gmail(config["token_file"], config["credentials_file"])
