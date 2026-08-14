@@ -1167,8 +1167,11 @@ class TestMainDefaultDateLogic:
             "generate_audiobook.remove_markdown_links", side_effect=lambda x: x
         )
         mocker.patch("generate_audiobook.check_existing_audiobook", return_value=False)
+        # main() resolves its default dates through date_range.resolve_default_dates,
+        # which is shared with the research pipeline — so the watermark lookup it
+        # calls is the seam to patch, not generate_audiobook's re-export of it.
         self.mock_find_last_upload = mocker.patch(
-            "generate_audiobook.find_last_upload_date"
+            "date_range.find_last_upload_date"
         )
 
     def test_default_with_last_upload(self, monkeypatch):
