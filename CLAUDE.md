@@ -38,11 +38,12 @@ Individual stages:
 python src/audiobooks/research_papers/run_research_pipeline.py --date 2026-03-19
 python src/audiobooks/generate_audiobook.py --start-date 2026-03-15 --end-date 2026-03-19
 python src/audiobooks/generate_audiobook.py --reauth   # force Google OAuth, rewrite token.json, exit
-python src/audiobooks/generate_tts_audio.py path/to/digest.txt --voice af_heart
+python src/audiobooks/generate_tts_audio.py path/to/digest.txt --voice af_heart --workers 4
+python src/audiobooks/research_papers/run_wiki_ingestion.py --date 2026-03-19   # default: no-LLM verbatim archive
 python src/audiobooks/upload_mp3.py "C:\path\to\file.mp3"   # manual upload, auto-splits >35 MB
 ```
 
-With no date flags, `generate_audiobook.py` queries the audiobooks API for the last upload date and processes from the day after through yesterday. `run_research_pipeline.py` defaults to yesterday.
+With no date flags, `generate_audiobook.py` queries the audiobooks API for the last upload date and processes from the day after through yesterday. `run_research_pipeline.py` and `run_wiki_ingestion.py` both default to yesterday. `generate_tts_audio.py --workers` controls how many worker processes synthesize TTS chunks in parallel (default `min(cpu_count, 4)`; pass `1` for the original sequential path).
 
 ### Python tests
 
@@ -84,7 +85,11 @@ Gmail ──┬─ arxiv/HF digest emails ─→ research_papers pipeline ─→
                               upload → Supabase /audiobooks edge function → storage + DB
                                                      ▼
                               React player (chapters = one text block per source)
+
+raw_content/research_digest_{date}.txt ──→ run_wiki_ingestion.py (last, non-fatal) ──→ wiki/raw_summary/*.md
 ```
+
+`pipeline.py` runs `run_wiki_ingestion.py` as its last step, after the audiobook is already generated and uploaded, and never lets it fail the run (see `run_step(..., fatal=False)`). By default it just archives the day's transcript verbatim into `wiki/raw_summary/` — no LLM calls. The old LLM classify+extract pipeline (concept pages under `wiki/concepts/`) is opt-in via `--llm-wiki`.
 
 The two Python stages communicate through the **filesystem**, not function calls: the research pipeline writes `src/audiobooks/raw_content/research_digest_{date}.txt`, and `generate_audiobook.py` picks up any `raw_content/` file whose filename carries that date and concatenates it with the day's newsletter emails. That directory is gitignored.
 
@@ -103,6 +108,8 @@ All Gemini calls go through `gemini_client.GeminiClientWithFallback`, which walk
 
 `src/audiobooks/research_papers/wiki_engine/` ingests generated transcripts into a Markdown knowledge base and exposes it over MCP (`python -m wiki_engine.mcp_server`, 4 tools). The `wiki/` directory is a **git submodule** pointing at a separate private repo — treat it as external state, and expect it to be absent or empty in fresh clones that skipped `--recurse-submodules`.
 
+Ingestion is triggered by `run_wiki_ingestion.py`, a standalone CLI script (not by `run_research_pipeline.py`, which used to call `WikiIngestionEngine` directly but no longer imports it at all). Default behavior is `WikiIngestionEngine.archive_raw_summary()` — a cheap, no-LLM verbatim copy of the day's transcript into `wiki/raw_summary/`. The old per-section LLM classify+extract flow (`WikiIngestionEngine.ingest_transcript()`, writing `wiki/sources/` + `wiki/concepts/`) is opt-in via `--llm-wiki`, since it was previously the single biggest contributor to multi-hour pipeline runs. The `mcp` package is pinned to `<2.0.0` in `requirements.txt` (2.0 renamed `McpError`/changed its constructor; `wiki_engine/mcp_server.py` hasn't been ported).
+
 Provenance relies on `<!-- WIKI_SOURCE_URL: ... -->` markers that `transcript_generator.py` embeds per deep-dive section and `ingestion.py` parses in Python. Do not remove those markers or ask the LLM to re-derive URLs from prose.
 
 ### Backend auth model
@@ -120,9 +127,9 @@ Frontend config comes from `.env.local` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANO
 ## Conventions
 
 - **Conventional Commits** for every commit message (from `.cursorrules`).
-- Kokoro TTS requires `espeak-ng` on the host for phonemization; text is chunked to 250 characters before synthesis.
+- Kokoro TTS requires `espeak-ng` on the host for phonemization; text is chunked to 250 characters before synthesis. Chunks synthesize in parallel across worker processes (`--workers`, default `min(cpu_count, 4)`), each holding its own Kokoro pipeline copy; pass `--workers 1` for the original sequential single-process path.
 - The Friday-only cleanup (`scripts/cleanup-trigger.js` + `scripts/cleanup-local-files.js`) deletes audiobooks older than a Friday at least 7 days back — always a full week of retention. Test it with `node scripts/cleanup-trigger.js --force`.
 
 ## Known quirk
 
-`generate_audiobook.py` defines `process_emails` **twice** (around lines 350 and 443). The second definition wins at import time; the first is dead code. Edit the later one, or the change silently does nothing.
+`generate_audiobook.py` defines `process_emails` **twice** (around lines 364 and 457). The second definition wins at import time; the first is dead code. Edit the later one, or the change silently does nothing.
