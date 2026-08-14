@@ -337,6 +337,68 @@ class TestWikiIngestionEngine:
         """Slugify converts names to filesystem-safe slugs."""
         assert WikiIngestionEngine._slugify("Mixture of Experts") == "mixture_of_experts"
         assert WikiIngestionEngine._slugify("State Space Models") == "state_space_models"
+
+
+class TestArchiveRawSummary:
+    """Tests for archive_raw_summary — the default, no-LLM alternative to
+    ingest_transcript. Should never touch the LLM client even when one is
+    configured."""
+
+    def test_writes_verbatim_transcript_to_raw_summary_dir(self, tmp_wiki, sample_transcript):
+        engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=None)
+        filepath = engine.archive_raw_summary(str(sample_transcript), "2026-04-10")
+
+        assert filepath.exists()
+        assert filepath.parent.name == "raw_summary"
+        content = filepath.read_text(encoding="utf-8")
+        assert "Mixture of Experts" in content  # original transcript text preserved
+
+    def test_frontmatter_is_valid_and_typed_raw_summary(self, tmp_wiki, sample_transcript):
+        engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=None)
+        filepath = engine.archive_raw_summary(str(sample_transcript), "2026-04-10")
+
+        content = filepath.read_text(encoding="utf-8")
+        assert content.startswith("---")
+        parts = content.split("---", 2)
+        meta = yaml.safe_load(parts[1])
+        assert meta["type"] == "raw-summary"
+        assert "title" in meta
+        assert "created" in meta
+
+    def test_never_calls_llm_even_when_client_configured(self, tmp_wiki, sample_transcript, mock_llm_client):
+        """archive_raw_summary must be a pure Python operation — no LLM
+        calls — even when the engine has a real LLM client wired up."""
+        engine = WikiIngestionEngine(wiki_dir=str(tmp_wiki), llm_client=mock_llm_client)
+        engine.archive_raw_summary(str(sample_transcript), "2026-04-10")
+
+        mock_llm_client.models.generate_content.assert_not_called()
+
+    def test_calls_auto_commit_when_enabled(self, tmp_wiki, sample_transcript):
+        mock_git_manager = MagicMock()
+        mock_git_manager.auto_commit.return_value = True
+
+        engine = WikiIngestionEngine(
+            wiki_dir=str(tmp_wiki),
+            llm_client=None,
+            git_manager=mock_git_manager,
+            auto_commit=True,
+        )
+        engine.archive_raw_summary(str(sample_transcript), "2026-04-10")
+
+        mock_git_manager.auto_commit.assert_called_once()
+
+    def test_does_not_auto_commit_when_disabled(self, tmp_wiki, sample_transcript):
+        mock_git_manager = MagicMock()
+
+        engine = WikiIngestionEngine(
+            wiki_dir=str(tmp_wiki),
+            llm_client=None,
+            git_manager=mock_git_manager,
+            auto_commit=False,
+        )
+        engine.archive_raw_summary(str(sample_transcript), "2026-04-10")
+
+        mock_git_manager.auto_commit.assert_not_called()
         assert WikiIngestionEngine._slugify("GPT-4 Architecture") == "gpt-4_architecture"
 
     def test_wiki_source_url_marker_preserved_in_concept(
