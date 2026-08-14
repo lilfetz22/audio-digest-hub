@@ -32,13 +32,8 @@ from generate_tts_audio import generate_audio_from_text
 from upload_mp3 import upload_audiobook
 
 # Date selection is shared with the research pipeline (see date_range.py) so
-# every stage backfills the same window. find_last_upload_date is re-exported
-# here because it used to live in this module.
-from date_range import (
-    DEFAULT_MAX_BACKFILL_DAYS,
-    find_last_upload_date,
-    resolve_default_dates,
-)
+# every stage backfills the same window.
+from date_range import DEFAULT_MAX_BACKFILL_DAYS, resolve_default_dates
 from http_utils import requests_get_with_retry as _requests_get_with_retry
 
 # --- Configuration & Constants ---
@@ -819,7 +814,7 @@ it to every stage as --start-date/--end-date, so all stages agree on the days.
             dates_to_process = resolve_default_dates(
                 config["api_url"],
                 config["api_key"],
-                dates_to_process[-1],  # end of the initial calculation (yesterday)
+                end_date,  # yesterday, or --end-date if given alone
                 max_backfill_days=args.max_backfill_days,
             )
             if not dates_to_process:
