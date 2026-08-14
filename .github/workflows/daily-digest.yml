@@ -110,6 +110,10 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          # This runner is sized for one Kokoro pipeline (see the header
+          # comment above); cap parallel TTS workers so peak memory doesn't
+          # roughly double and risk an OOM kill of the worker pool.
+          TTS_MAX_WORKERS: "2"
 
       # -----------------------------------------------------------------------
       # 7. Commit updated seen_papers.csv so dedup state persists across runs
