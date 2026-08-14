@@ -255,10 +255,8 @@ class TestApiInteractions:
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=200, json={"status": "ok"}
         )
-        with patch("upload_mp3.AudioSegment.from_mp3") as mock_from_mp3:
-            mock_audio = MagicMock()
-            mock_audio.__len__.return_value = 1000
-            mock_from_mp3.return_value = mock_audio
+        with patch("upload_mp3.probe_duration_ms") as mock_probe:
+            mock_probe.return_value = 1000
 
             with caplog.at_level(logging.INFO):
                 result = ga.upload_audiobook(
@@ -275,10 +273,8 @@ class TestApiInteractions:
         requests_mock.post(
             "https://fake-api.com/audiobooks", status_code=400, text="Bad Request"
         )
-        with patch("upload_mp3.AudioSegment.from_mp3") as mock_from_mp3:
-            mock_audio = MagicMock()
-            mock_audio.__len__.return_value = 1000
-            mock_from_mp3.return_value = mock_audio
+        with patch("upload_mp3.probe_duration_ms") as mock_probe:
+            mock_probe.return_value = 1000
 
             with caplog.at_level(logging.ERROR):
                 result = ga.upload_audiobook(

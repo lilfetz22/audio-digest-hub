@@ -11,16 +11,17 @@ Usage examples:
 """
 import argparse
 import configparser
-import gc
 import json
 import logging
 import math
 import os
+import re
+import subprocess
 import sys
 import time
 from pathlib import Path
 
-from pydub import AudioSegment
+import imageio_ffmpeg
 import requests
 
 # Local defaults (kept small and explicit so this script is lightweight)
@@ -29,8 +30,80 @@ CONFIG_FILE = ".\\src\\audiobooks\\config.ini"
 ARCHIVE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "archive_mp3")
 MAX_UPLOAD_SIZE_MB = 35.0
 
+_DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
+
 
 logger = logging.getLogger(__name__)
+
+
+def _ffmpeg_exe():
+    """Return the path to the ffmpeg binary bundled with imageio-ffmpeg.
+
+    We deliberately don't rely on a system `ffmpeg`/`ffprobe` on PATH -- it
+    isn't guaranteed to exist (e.g. this Windows dev machine has neither).
+    """
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def probe_duration_ms(mp3_path):
+    """Return the duration of an MP3 file in milliseconds, via ffmpeg.
+
+    There is no ffprobe binary bundled with imageio-ffmpeg, only ffmpeg. But
+    running `ffmpeg -i <file>` with no output prints a `Duration:
+    HH:MM:SS.ss` line to stderr and then exits non-zero because no output was
+    given -- that non-zero exit is expected here, not a failure; we only care
+    about parsing stderr for the Duration line.
+    """
+    cmd = [_ffmpeg_exe(), "-i", str(mp3_path)]
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    match = _DURATION_RE.search(result.stderr or "")
+    if not match:
+        raise RuntimeError(
+            f"Could not determine duration of '{mp3_path}' from ffmpeg output:\n"
+            f"{result.stderr}"
+        )
+    hours, minutes, seconds = match.groups()
+    total_seconds = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    return int(round(total_seconds * 1000))
+
+
+def export_chunk(mp3_path, start_ms, end_ms, chunk_filename):
+    """Extract [start_ms, end_ms) of mp3_path into chunk_filename via ffmpeg.
+
+    Uses `-c copy` (stream copy) rather than decoding and re-encoding: stream
+    copy is lossless and much faster than a decode+re-encode round trip.
+    Because it operates on frame boundaries, the resulting chunk's actual
+    duration can differ from the arithmetic (end_ms - start_ms) target by a
+    few milliseconds -- that is expected, not a bug.
+    """
+    start_s = start_ms / 1000.0
+    duration_s = (end_ms - start_ms) / 1000.0
+    cmd = [
+        _ffmpeg_exe(),
+        "-y",
+        "-ss", str(start_s),
+        "-t", str(duration_s),
+        "-i", str(mp3_path),
+        "-c", "copy",
+        str(chunk_filename),
+    ]
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg failed to export chunk '{chunk_filename}' (exit "
+            f"{result.returncode}):\n{result.stderr}"
+        )
+    return chunk_filename
 
 
 def load_config(config_path=CONFIG_FILE):
@@ -143,7 +216,7 @@ def upload_audiobook(api_url, api_key, mp3_path, base_title=None, text_blocks=No
         file_size_mb = mp3_path.stat().st_size / (1024 * 1024)
         logger.info("Detected MP3 size: %.2f MB", file_size_mb)
 
-        audio = AudioSegment.from_mp3(mp3_path)
+        duration_ms = probe_duration_ms(mp3_path)
 
         if base_title is None:
             base_title = f"Manual Upload: {mp3_path.name}"
@@ -152,9 +225,9 @@ def upload_audiobook(api_url, api_key, mp3_path, base_title=None, text_blocks=No
             # Upload single file
             logger.info("File size is within the upload limit; uploading directly.")
             metadata = (
-                _create_metadata(base_title, audio, text_blocks)
+                _create_metadata(base_title, duration_ms, text_blocks)
                 if text_blocks
-                else create_metadata(base_title, audio)
+                else create_metadata(base_title, duration_ms)
             )
             success = upload_single_file(api_url, api_key, str(mp3_path), metadata)
             if not success:
@@ -168,7 +241,7 @@ def upload_audiobook(api_url, api_key, mp3_path, base_title=None, text_blocks=No
                 api_url,
                 api_key,
                 mp3_path,
-                audio,
+                duration_ms,
                 base_title,
                 file_size_mb,
                 text_blocks,
@@ -180,7 +253,7 @@ def upload_audiobook(api_url, api_key, mp3_path, base_title=None, text_blocks=No
 
 
 def split_and_upload_chunks(
-    api_url, api_key, mp3_path, audio, base_title, file_size_mb, text_blocks=None
+    api_url, api_key, mp3_path, duration_ms, base_title, file_size_mb, text_blocks=None
 ):
     """Split audio into chunks and upload each chunk separately.
     Returns True if all chunks uploaded successfully, False otherwise.
@@ -189,12 +262,11 @@ def split_and_upload_chunks(
     logger.info(
         "File exceeds %.1f MB. Splitting into %s parts.", MAX_UPLOAD_SIZE_MB, num_chunks
     )
-    chunk_duration_ms = math.ceil(len(audio) / num_chunks)
+    chunk_duration_ms = math.ceil(duration_ms / num_chunks)
 
     for i in range(num_chunks):
         start_ms = i * chunk_duration_ms
-        end_ms = min((i + 1) * chunk_duration_ms, len(audio))
-        chunk = audio[start_ms:end_ms]
+        end_ms = min((i + 1) * chunk_duration_ms, duration_ms)
         chunk_filename = os.path.join(
             ARCHIVE_FOLDER, f"{mp3_path.stem}_part_{i+1}_of_{num_chunks}.mp3"
         )
@@ -205,18 +277,20 @@ def split_and_upload_chunks(
             start_ms,
             end_ms,
         )
-        chunk.export(chunk_filename, format="mp3")
+        export_chunk(mp3_path, start_ms, end_ms, chunk_filename)
+        # Stream-copy chunk boundaries land on frame edges, so the actual
+        # duration can differ slightly from the arithmetic target -- probe
+        # the real file rather than trusting (end_ms - start_ms).
+        actual_chunk_duration_ms = probe_duration_ms(chunk_filename)
 
         chunk_title = f"{base_title} (Part {i+1} of {num_chunks})"
         metadata = (
-            _create_metadata(chunk_title, chunk, text_blocks)
+            _create_metadata(chunk_title, actual_chunk_duration_ms, text_blocks)
             if text_blocks
-            else create_metadata(chunk_title, chunk)
+            else create_metadata(chunk_title, actual_chunk_duration_ms)
         )
 
         success = upload_single_file(api_url, api_key, chunk_filename, metadata)
-        del chunk
-        gc.collect()
         if not success:
             logger.error("Upload failed for chunk %s. Stopping further uploads.", i + 1)
             return False
@@ -225,8 +299,8 @@ def split_and_upload_chunks(
     return True
 
 
-def create_metadata(title, audio_segment):
-    duration_s = len(audio_segment) / 1000.0
+def create_metadata(title, duration_ms):
+    duration_s = duration_ms / 1000.0
     # Simple single-chapter metadata to make it playable in the web UI
     chapters_dict = {"Part Start": 0}
     return {
@@ -252,10 +326,10 @@ def _create_chapter_list(total_duration_ms, text_blocks):
     return chapters
 
 
-def _create_metadata(title, audio_segment, text_blocks):
+def _create_metadata(title, duration_ms, text_blocks):
     """Create chapter-aware metadata for an audiobook."""
-    duration_s = len(audio_segment) / 1000.0
-    chapters = _create_chapter_list(len(audio_segment), text_blocks)
+    duration_s = duration_ms / 1000.0
+    chapters = _create_chapter_list(duration_ms, text_blocks)
 
     chapters_dict = {c["title"]: int(c["start_time_ms"] / 1000) for c in chapters}
 
