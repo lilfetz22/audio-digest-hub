@@ -31,6 +31,10 @@ import sys
 # matching run_research_pipeline.py's sys.path setup.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# date_range lives one level up, in src/audiobooks/, because it is shared with
+# generate_audiobook.py — this is the same sys.path entry inserted above.
+from date_range import DEFAULT_MAX_BACKFILL_DAYS, resolve_transcript_dates
+
 from research_papers.paths import RAW_CONTENT_DIR
 from research_papers.run_research_pipeline import load_config
 from research_papers.wiki_engine.ingestion import WikiIngestionEngine
@@ -63,6 +67,15 @@ def main():
     date_group.add_argument("--date", help="Process a single date (YYYY-MM-DD)")
     date_group.add_argument("--start-date", help="Start of date range (YYYY-MM-DD)")
     parser.add_argument("--end-date", help="End of date range (YYYY-MM-DD)")
+    parser.add_argument(
+        "--max-backfill-days",
+        type=int,
+        default=DEFAULT_MAX_BACKFILL_DAYS,
+        help=(
+            "Cap on how far back the automatic backfill reaches when no date "
+            "flags are given (0 disables the cap)."
+        ),
+    )
     parser.add_argument(
         "--llm-wiki",
         action="store_true",
@@ -98,7 +111,18 @@ def main():
             dates_to_process.append(current)
             current += datetime.timedelta(days=1)
     else:
-        dates_to_process.append(yesterday)
+        # Archive every recent digest on disk, not just yesterday's, so days
+        # backfilled by run_research_pipeline.py still make it into the wiki.
+        # Keyed off the transcripts rather than the audiobook watermark that
+        # run_research_pipeline.py uses: this step runs *after*
+        # generate_audiobook.py has already uploaded those backfilled days,
+        # so the watermark would have advanced right past them. Dates already
+        # archived are skipped in the loop below.
+        dates_to_process = resolve_transcript_dates(
+            RAW_CONTENT_DIR,
+            yesterday,
+            max_backfill_days=args.max_backfill_days,
+        )
 
     logger.info(
         f"Processing dates: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
