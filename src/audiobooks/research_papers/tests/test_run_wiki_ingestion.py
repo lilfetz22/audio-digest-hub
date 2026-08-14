@@ -45,6 +45,10 @@ def _fake_exists(done_exists: bool, transcript_exists: bool):
 
     def fake_exists(path):
         normalized = str(path).replace("\\", "/")
+        if normalized.endswith("/wiki/.git"):
+            # Simulate an initialised wiki submodule so the submodule guard
+            # in main() doesn't short-circuit these tests.
+            return True
         if "/wiki/sources/" in normalized or "/wiki/raw_summary/" in normalized:
             return done_exists
         if "/raw_content/" in normalized:
