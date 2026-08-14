@@ -155,5 +155,6 @@ jobs:
           path: |
             audiobook_generator.log
             research_pipeline.log
+            wiki_ingestion.log
           if-no-files-found: ignore
           retention-days: 7
