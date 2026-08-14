@@ -54,6 +54,16 @@ _DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2})")
 DEFAULT_MAX_BACKFILL_DAYS = 14
 
 
+class WatermarkUnavailable(Exception):
+    """The audiobooks API could not be reached or returned an unusable body.
+
+    Raised only by `resolve_default_dates(..., strict=True)` — the CLI's
+    contract with `pipeline.py`. Everywhere else, "could not determine the
+    watermark" is treated as "no previous uploads" and degrades to
+    processing `end_date` only.
+    """
+
+
 def find_last_upload_date(api_url: str, api_key: str) -> Optional[datetime.date]:
     """Finds the last date when an audiobook was uploaded by querying the API.
 
@@ -76,9 +86,18 @@ def find_last_upload_date(api_url: str, api_key: str) -> Optional[datetime.date]
         if not audiobooks:
             logger.info("No existing audiobooks found. Using yesterday as default start date.")
             return None
+        if not isinstance(audiobooks, list):
+            logger.warning(
+                f"Unexpected /audiobooks payload type {type(audiobooks).__name__}; "
+                "using yesterday as default start date."
+            )
+            return None
 
         last_date = None
         for audiobook in audiobooks:
+            if not isinstance(audiobook, dict):
+                logger.warning(f"Skipping non-object audiobook entry: {audiobook!r}")
+                continue
             title = audiobook.get("title", "")
             match = _DATE_PATTERN.search(title)
             if not match:
@@ -100,7 +119,7 @@ def find_last_upload_date(api_url: str, api_key: str) -> Optional[datetime.date]
         logger.info("No valid dates found in existing audiobooks. Using yesterday as default start date.")
         return None
 
-    except (requests.exceptions.RequestException, ValueError) as e:
+    except (requests.exceptions.RequestException, ValueError, TypeError, AttributeError) as e:
         logger.error(f"Error fetching audiobooks to find last upload date: {e}")
         logger.info("Using yesterday as default start date due to API error.")
         return None
@@ -111,6 +130,7 @@ def resolve_default_dates(
     api_key: str,
     end_date: datetime.date,
     max_backfill_days: int = DEFAULT_MAX_BACKFILL_DAYS,
+    strict: bool = False,
 ) -> List[datetime.date]:
     """Dates to process when the caller passed no explicit date flags.
 
@@ -118,9 +138,24 @@ def resolve_default_dates(
     `end_date` (normally yesterday), inclusive. Returns an empty list when
     the watermark is already current — every stage is individually
     idempotent, but there is no point spinning them up with nothing to do.
+
+    `strict=True` is the CLI's contract with `pipeline.py`: rather than
+    silently degrading to "process `end_date` only" when the watermark
+    can't be determined, it raises `WatermarkUnavailable` so `date_range.py`
+    exits non-zero and `pipeline.py` omits the range entirely, letting each
+    stage fall back to its own default instead of having a yesterday-only
+    window pinned onto it. Other callers (generate_audiobook.py,
+    run_research_pipeline.py) keep the lenient default.
     """
+    if max_backfill_days < 0:
+        raise ValueError(f"max_backfill_days must be >= 0, got {max_backfill_days}")
+
     last_upload_date = find_last_upload_date(api_url, api_key)
     if last_upload_date is None:
+        if strict:
+            raise WatermarkUnavailable(
+                "Could not determine the last upload date from the audiobooks API."
+            )
         logger.info(
             "No previous uploads found or error determining last upload date. "
             f"Processing {end_date.strftime('%Y-%m-%d')} only."
@@ -177,6 +212,9 @@ def resolve_transcript_dates(
     `end_date`) — a transcript dated later than `end_date` is still worth
     archiving, e.g. one produced by a manual `--date` run.
     """
+    if max_backfill_days < 0:
+        raise ValueError(f"max_backfill_days must be >= 0, got {max_backfill_days}")
+
     floor = (
         end_date - datetime.timedelta(days=max_backfill_days - 1)
         if max_backfill_days > 0
@@ -259,9 +297,17 @@ def main(argv=None) -> int:
         return 1
 
     yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    dates = resolve_default_dates(
-        api_url, api_key, yesterday, max_backfill_days=args.max_backfill_days
-    )
+    try:
+        dates = resolve_default_dates(
+            api_url,
+            api_key,
+            yesterday,
+            max_backfill_days=args.max_backfill_days,
+            strict=True,
+        )
+    except WatermarkUnavailable as e:
+        logger.error("%s Each stage will resolve its own dates.", e)
+        return 1
     if dates:
         print(f"{dates[0].strftime('%Y-%m-%d')} {dates[-1].strftime('%Y-%m-%d')}")
     return 0
