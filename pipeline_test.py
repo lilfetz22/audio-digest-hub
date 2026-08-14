@@ -49,6 +49,7 @@ def test_resolve_date_range_empty_stdout_means_nothing_to_do(mocker):
         _completed(returncode=1, stderr="config missing"),
         _completed(stdout="2026-08-11"),  # only one date
         _completed(stdout="a b c"),
+        _completed(stdout="a b"),  # two tokens, but not dates
     ],
 )
 def test_resolve_date_range_returns_none_when_undeterminable(mocker, result):
@@ -97,14 +98,19 @@ def test_main_passes_the_same_range_to_every_stage(mocker, stub_main):
         ], stage
 
 
-def test_main_skips_all_stages_when_caught_up(mocker, stub_main):
+def test_main_skips_audiobook_stages_but_still_runs_wiki_when_caught_up(mocker, stub_main):
+    """The audiobook watermark being current isn't a completion signal for
+    wiki ingestion, which has its own transcript-based default and can still
+    catch up anything left unarchived."""
     mocker.patch.object(pipeline, "resolve_date_range", return_value=("", ""))
     mocker.patch.object(pipeline.sys, "argv", ["pipeline.py"])
 
     assert pipeline.main() == 0
 
-    for stage in _STAGES:
-        assert stage not in stub_main
+    assert "research-pipeline" not in stub_main
+    assert "generate-audiobook" not in stub_main
+    assert "wiki-ingestion" in stub_main
+    assert "--start-date" not in stub_main["wiki-ingestion"]
 
 
 def test_main_omits_date_flags_when_range_is_undeterminable(mocker, stub_main):
