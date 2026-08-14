@@ -19,15 +19,17 @@ def _titles(*dates):
 # --- find_last_upload_date ---------------------------------------------------
 
 
-def test_find_last_upload_date_returns_max_date(requests_mock):
+def test_find_last_upload_date_returns_max_date(requests_mock, caplog):
     requests_mock.get(
         "https://fake-api.com/audiobooks",
         json=_titles("2026-08-08", "2026-08-10", "2026-08-09"),
     )
 
-    assert date_range.find_last_upload_date(
-        "https://fake-api.com", "fake_key"
-    ) == datetime.date(2026, 8, 10)
+    with caplog.at_level(logging.INFO):
+        result = date_range.find_last_upload_date("https://fake-api.com", "fake_key")
+
+    assert result == datetime.date(2026, 8, 10)
+    assert "Found last upload date: 2026-08-10" in caplog.text
 
 
 def test_find_last_upload_date_skips_untitled_and_unparseable(requests_mock):
@@ -47,18 +49,30 @@ def test_find_last_upload_date_skips_untitled_and_unparseable(requests_mock):
 
 
 @pytest.mark.parametrize(
-    "kwargs",
+    "kwargs,expected_log",
     [
-        {"status_code": 500},
-        {"json": []},
-        {"json": [{"title": "No dates at all"}]},
-        {"text": "not json"},
+        ({"status_code": 500}, "Using yesterday as default start date."),
+        ({"json": []}, "No existing audiobooks found."),
+        ({"json": [{"title": "No dates at all"}]}, "No valid dates found"),
+        ({"text": "not json"}, "Error fetching audiobooks to find last upload date"),
+        # A 200 response whose body isn't the expected list shape must not
+        # raise out of this function (it used to: `for x in audiobooks`
+        # iterates a dict's keys as strings, and a non-dict list element has
+        # no `.get`, both raising AttributeError past the caught exceptions).
+        ({"json": {"error": "rate limited"}}, "Unexpected /audiobooks payload type"),
+        ({"json": ["not-a-dict-entry"]}, "Using yesterday as default start date."),
     ],
 )
-def test_find_last_upload_date_returns_none_on_unusable_response(requests_mock, kwargs):
+def test_find_last_upload_date_returns_none_on_unusable_response(
+    requests_mock, caplog, kwargs, expected_log
+):
     requests_mock.get("https://fake-api.com/audiobooks", **kwargs)
 
-    assert date_range.find_last_upload_date("https://fake-api.com", "fake_key") is None
+    with caplog.at_level(logging.INFO):
+        result = date_range.find_last_upload_date("https://fake-api.com", "fake_key")
+
+    assert result is None
+    assert expected_log in caplog.text
 
 
 def test_find_last_upload_date_swallows_network_error(requests_mock, caplog):
@@ -162,6 +176,38 @@ def test_resolve_max_backfill_days_zero_disables_the_cap(mocker):
     assert len(dates) == 12
 
 
+@pytest.mark.parametrize("max_backfill_days", [-1, -14])
+def test_resolve_default_dates_rejects_negative_max_backfill_days(max_backfill_days):
+    with pytest.raises(ValueError, match="max_backfill_days must be >= 0"):
+        date_range.resolve_default_dates(
+            "https://api", "key", datetime.date(2026, 8, 13),
+            max_backfill_days=max_backfill_days,
+        )
+
+
+def test_resolve_default_dates_strict_raises_when_watermark_unavailable(mocker):
+    """strict=True is date_range.py's CLI contract with pipeline.py: an
+    undeterminable watermark must be surfaced as an exception (so the CLI
+    exits non-zero and pipeline.py omits the range) rather than silently
+    collapsing to a yesterday-only range."""
+    mocker.patch.object(date_range, "find_last_upload_date", return_value=None)
+
+    with pytest.raises(date_range.WatermarkUnavailable):
+        date_range.resolve_default_dates(
+            "https://api", "key", datetime.date(2026, 8, 13), strict=True
+        )
+
+
+def test_resolve_default_dates_non_strict_still_falls_back(mocker):
+    """Non-CLI callers (generate_audiobook.py, run_research_pipeline.py) keep
+    the lenient default even with the strict machinery present."""
+    mocker.patch.object(date_range, "find_last_upload_date", return_value=None)
+
+    assert date_range.resolve_default_dates(
+        "https://api", "key", datetime.date(2026, 8, 13)
+    ) == [datetime.date(2026, 8, 13)]
+
+
 # --- resolve_transcript_dates ------------------------------------------------
 
 
@@ -220,6 +266,17 @@ def test_resolve_transcript_dates_handles_missing_directory(tmp_path):
     )
 
 
+@pytest.mark.parametrize("max_backfill_days", [-1, -14])
+def test_resolve_transcript_dates_rejects_negative_max_backfill_days(
+    tmp_path, max_backfill_days
+):
+    with pytest.raises(ValueError, match="max_backfill_days must be >= 0"):
+        date_range.resolve_transcript_dates(
+            str(tmp_path), datetime.date(2026, 8, 13),
+            max_backfill_days=max_backfill_days,
+        )
+
+
 # --- CLI (what pipeline.py shells out to) ------------------------------------
 
 
@@ -249,6 +306,34 @@ def test_cli_prints_nothing_when_caught_up(tmp_path, capsys, mocker):
     mocker.patch.object(date_range, "resolve_default_dates", return_value=[])
 
     assert date_range.main(["--config", str(config)]) == 0
+    assert capsys.readouterr().out.strip() == ""
+
+
+def test_cli_calls_resolve_default_dates_with_strict_true(tmp_path, mocker):
+    """The CLI is pipeline.py's contract: an undeterminable watermark must be
+    surfaced as a non-zero exit, not silently collapsed to a yesterday-only
+    range, so pipeline.py can tell the two cases apart."""
+    config = tmp_path / "config.ini"
+    _write_webapp_config(config)
+    mock_resolve = mocker.patch.object(
+        date_range, "resolve_default_dates", return_value=[]
+    )
+
+    date_range.main(["--config", str(config)])
+
+    assert mock_resolve.call_args.kwargs["strict"] is True
+
+
+def test_cli_exits_nonzero_when_watermark_unavailable(tmp_path, capsys, mocker):
+    config = tmp_path / "config.ini"
+    _write_webapp_config(config)
+    mocker.patch.object(
+        date_range,
+        "resolve_default_dates",
+        side_effect=date_range.WatermarkUnavailable("could not reach the API"),
+    )
+
+    assert date_range.main(["--config", str(config)]) == 1
     assert capsys.readouterr().out.strip() == ""
 
 
