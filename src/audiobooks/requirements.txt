@@ -7,7 +7,14 @@ mcp<2.0.0
 google-api-python-client
 google-auth-oauthlib
 pydub
+# pydub imports the stdlib `audioop` module, which PEP 594 removed in Python 3.13.
+# pydub 0.25.1 (2021) is the last release and will not be fixed upstream, so supply
+# `audioop` ourselves on 3.13+. No-op on 3.12. Remove once WP4/WP5 drop pydub entirely.
+audioop-lts; python_version >= "3.13"
 imageio-ffmpeg
+# kokoro 0.9.4 (Apr 2025) declares `transformers` unpinned and was built against 4.x.
+# Cap below the v5 major until kokoro is verified against it.
+transformers<5
 kokoro>=0.9.4
 soundfile
 numpy
