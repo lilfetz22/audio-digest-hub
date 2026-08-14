@@ -26,6 +26,7 @@ import logging
 import multiprocessing
 import os
 import re
+import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -33,9 +34,9 @@ from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
+import imageio_ffmpeg
 import numpy as np
 import soundfile as sf
-from pydub import AudioSegment
 from tqdm.auto import tqdm
 import torch # Import torch for no_grad
 
@@ -213,6 +214,34 @@ def _synthesize_sequential(
     return failed
 
 
+def _encode_mp3(wav_path: Path, output_mp3_path: Path, bitrate: str) -> None:
+    """Encode `wav_path` to `output_mp3_path` via a direct ffmpeg subprocess.
+
+    We call the `imageio_ffmpeg`-bundled binary directly, rather than relying
+    on a PATH-based lookup (as our previous MP3 encoder did), because this
+    repo's environments do not reliably have ffmpeg on PATH.
+    """
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    cmd = [
+        ffmpeg_exe,
+        "-y",  # overwrite output if it exists
+        "-i", str(wav_path),
+        "-b:a", bitrate,
+        str(output_mp3_path),
+    ]
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg failed to encode MP3 (exit code {result.returncode}): "
+            f"{result.stdout}"
+        )
+
+
 def generate_audio_from_text(
     text_content: str,
     output_mp3_path: PathLike,
@@ -333,14 +362,11 @@ def generate_audio_from_text(
     full_audio = np.concatenate(audio_chunks)
 
     wav_path = output_mp3_path.with_suffix(".wav")
-    sf.write(str(wav_path), full_audio, SAMPLE_RATE)
+    sf.write(str(wav_path), full_audio, SAMPLE_RATE, subtype="PCM_16")
 
-    audio_segment = AudioSegment.from_wav(str(wav_path))
-    if audio_segment.sample_width > 2:
-        audio_segment = audio_segment.set_sample_width(2)
-    audio_segment.export(str(output_mp3_path), format="mp3", bitrate=bitrate)
+    _encode_mp3(wav_path, output_mp3_path, bitrate)
 
-    duration_min = len(audio_segment) / 1000.0 / 60.0
+    duration_min = len(full_audio) / SAMPLE_RATE / 60.0
     mp3_size_mb = output_mp3_path.stat().st_size / (1024 * 1024)
     logger.info(
         "Wrote MP3: %s (%.1f min, %.2f MB, bitrate=%s)",
