@@ -122,7 +122,22 @@ Edge functions (`supabase/functions/{audiobooks,sources,research-papers,cleanup}
 
 In CI, `.github/workflows/daily-digest.yml` reconstructs all three files from the `CONFIG_INI`, `GOOGLE_CREDENTIALS_JSON`, and `GOOGLE_TOKEN_JSON` secrets, and writes the refreshed OAuth token back to `GOOGLE_TOKEN_JSON` via `GH_PAT` after every run. If you change what the pipeline reads from disk, update that workflow step too.
 
-Frontend config comes from `.env.local` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+The frontend has **no build-time env vars**. Despite what older docs implied, nothing in `src/` reads `import.meta.env.VITE_*` — the Supabase URL and anon key are hardcoded in `src/integrations/supabase/client.ts`. Don't add a `.env.local` requirement without also wiring it into Vercel.
+
+## Frontend deployment (Vercel)
+
+The frontend is hosted on **Vercel**, built from `main`. `vercel.json` pins the whole build (`framework: vite`, `npm ci`, `npm run build`, `dist`) plus the catch-all rewrite to `/index.html` that React Router deep links depend on — removing that rewrite makes every route except `/` 404 on refresh.
+
+**`npm ci` must keep working without `--legacy-peer-deps`.** It used to fail: `cmdk`, `next-themes` and `vaul` declared `react@^18` peers while the app runs React 19, and the lockfile pinned exactly those pre-React-19 versions. Those three were bumped (`^1.1.1`, `^0.4.6`, `^1.1.2`) and the rest of the tree re-resolved inside its existing `^` ranges. If `npm ci` starts throwing `ERESOLVE` again, a dependency has regressed into a React 19 peer conflict — bump that dependency instead of restoring the flag, which would let Vercel install a tree npm considers invalid.
+
+npm is pinned on purpose as well: a stale `bun.lockb` from the original Lovable scaffold is still committed, and pinning the install command keeps Vercel on npm and `package-lock.json` no matter which lockfiles it detects.
+
+Two things that live outside the repo and won't show up in a diff:
+
+- **Supabase Auth URL configuration.** `useAuth.tsx` derives its signup redirect from `window.location.origin`, so every domain the app is served from must be allow-listed under Authentication → URL Configuration. Changing domains means updating Supabase, not code.
+- **Lovable is still connected** as a visual editor. `lovable-tagger` is a dev-mode-only vite plugin and has no effect on the production build, so leave it unless you're cutting Lovable loose entirely.
+
+**`react-day-picker` is on v9, not the shadcn-scaffold v8 — its classNames/component API is unrelated to the old one.** v8 styled the day *button* directly through classNames keys like `day_selected`/`day_today`; v9 only auto-applies modifier classes (`selected`/`today`/`outside`/`disabled`) to the day *cell*, so `components/ui/calendar.tsx` overrides `DayButton` and reads `modifiers` directly to reapply the same Tailwind states. `date-fns` moved to `^4.2.1` in lockstep — v9 (and v10) depend on `date-fns@^4.1.0` directly, which is what forced the bump in the first place (v8 pinned `date-fns@^2||^3` as a peer, which is why this was stuck on v3 for a while). Nothing in `src/` renders `Calendar` today, so none of this is exercised by the running app — verify any future change to this file by mounting it directly (there's no route for it) rather than trusting a production build that tree-shakes it away.
 
 ## Conventions
 
