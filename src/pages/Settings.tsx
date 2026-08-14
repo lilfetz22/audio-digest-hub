@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -31,12 +31,7 @@ const Settings = () => {
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [generatedApiKey, setGeneratedApiKey] = useState('');
 
-  useEffect(() => {
-    fetchSources();
-    fetchApiKeys();
-  }, [user]);
-
-  const fetchSources = async () => {
+  const fetchSources = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -57,9 +52,9 @@ const Settings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast]);
 
-  const fetchApiKeys = async () => {
+  const fetchApiKeys = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -73,7 +68,12 @@ const Settings = () => {
     } catch (error) {
       console.error('Error fetching API keys:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchSources();
+    fetchApiKeys();
+  }, [fetchSources, fetchApiKeys]);
 
   const addSource = async (e: React.FormEvent) => {
     e.preventDefault();
