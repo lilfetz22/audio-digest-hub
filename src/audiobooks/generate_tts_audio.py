@@ -28,6 +28,7 @@ import re
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -168,6 +169,34 @@ def _worker_synthesize(
         return index, np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32), str(exc)
 
 
+def _synthesize_sequential(
+    chunks: List[str],
+    voice: str,
+    speed: float,
+    device: str,
+    audio_chunks: List[Optional[np.ndarray]],
+) -> int:
+    """Synthesize every chunk in this process. Returns the failed-chunk count.
+
+    Used both as the normal single-process path (resolved_workers <= 1) and
+    as the fallback when the worker pool dies (BrokenProcessPool).
+    """
+    pipeline = _load_pipeline(device)
+    logger.info("Warming up model...")
+    _ = _synthesize_chunk(pipeline, "Warm up.", voice, speed)
+    failed = 0
+    # Wrap the synthesis loop in torch.no_grad() to prevent gradient accumulation
+    with torch.no_grad():
+        for i, chunk in enumerate(tqdm(chunks, desc="TTS", unit="chunk")):
+            try:
+                audio_chunks[i] = _synthesize_chunk(pipeline, chunk, voice, speed)
+            except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
+                logger.error("Chunk failed (%s): %.80s", exc, chunk)
+                audio_chunks[i] = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
+                failed += 1
+    return failed
+
+
 def generate_audio_from_text(
     text_content: str,
     output_mp3_path: PathLike,
@@ -212,35 +241,35 @@ def generate_audio_from_text(
     failed = 0
 
     if resolved_workers <= 1:
-        pipeline = _load_pipeline(device)
-        logger.info("Warming up model...")
-        _ = _synthesize_chunk(pipeline, "Warm up.", voice, speed)
-        # Wrap the synthesis loop in torch.no_grad() to prevent gradient accumulation
-        with torch.no_grad():
-            for i, chunk in enumerate(tqdm(chunks, desc="TTS", unit="chunk")):
-                try:
-                    audio_chunks[i] = _synthesize_chunk(pipeline, chunk, voice, speed)
-                except Exception as exc:  # noqa: BLE001 — keep going on bad chunks
-                    logger.error("Chunk failed (%s): %.80s", exc, chunk)
-                    audio_chunks[i] = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
-                    failed += 1
+        failed = _synthesize_sequential(chunks, voice, speed, device, audio_chunks)
     else:
         logger.info("Using %d worker processes for TTS synthesis", resolved_workers)
-        with ProcessPoolExecutor(
-            max_workers=resolved_workers,
-            initializer=_init_worker,
-            initargs=(device,),
-        ) as executor:
-            futures = [
-                executor.submit(_worker_synthesize, i, chunk, voice, speed)
-                for i, chunk in enumerate(chunks)
-            ]
-            for future in tqdm(as_completed(futures), total=len(futures), desc="TTS", unit="chunk"):
-                index, audio, error = future.result()
-                audio_chunks[index] = audio
-                if error is not None:
-                    logger.error("Chunk %d failed (%s): %.80s", index, error, chunks[index])
-                    failed += 1
+        try:
+            with ProcessPoolExecutor(
+                max_workers=resolved_workers,
+                initializer=_init_worker,
+                initargs=(device,),
+            ) as executor:
+                futures = [
+                    executor.submit(_worker_synthesize, i, chunk, voice, speed)
+                    for i, chunk in enumerate(chunks)
+                ]
+                for future in tqdm(
+                    as_completed(futures), total=len(futures), desc="TTS", unit="chunk"
+                ):
+                    index, audio, error = future.result()
+                    audio_chunks[index] = audio
+                    if error is not None:
+                        logger.error("Chunk %d failed (%s): %.80s", index, error, chunks[index])
+                        failed += 1
+        except BrokenProcessPool as exc:
+            logger.error(
+                "TTS worker pool died (%s) — likely an OOM kill. Retrying the whole "
+                "text with single-process synthesis.",
+                exc,
+            )
+            audio_chunks[:] = [None] * len(chunks)
+            failed = _synthesize_sequential(chunks, voice, speed, device, audio_chunks)
 
     synth_seconds = time.time() - start
     logger.info(
