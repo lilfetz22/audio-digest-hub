@@ -7,10 +7,14 @@ Default behavior is the cheap, no-LLM verbatim archive
 pipeline (WikiIngestionEngine.ingest_transcript) is opt-in via --llm-wiki.
 """
 
+import datetime
+
 import run_wiki_ingestion as rwi
 
 
 _FAKE_CONFIG = {
+    "api_url": "https://fake-api.com",
+    "api_key": "fake-api-key",
     "gemini_api_key": "fake-gemini-key",
     "wiki_model": "fake-model",
     "wiki_backup_api_key": None,
@@ -122,6 +126,40 @@ def test_default_date_range_processes_each_date(mocker, monkeypatch):
         call.args[1] for call in mock_engine.archive_raw_summary.call_args_list
     }
     assert processed_dates == {"2026-04-10", "2026-04-11"}
+
+
+def test_default_archives_every_recent_transcript(mocker, monkeypatch):
+    """With no date flags, wiki ingestion archives every recent digest on
+    disk — not just yesterday's — so days backfilled by
+    run_research_pipeline.py still make it into the wiki."""
+    mock_engine = _patch_common(mocker, monkeypatch, ["script"])
+    mock_resolve = mocker.patch.object(
+        rwi, "resolve_transcript_dates",
+        return_value=[datetime.date(2026, 4, 10), datetime.date(2026, 4, 11)],
+    )
+    mocker.patch.object(
+        rwi.os.path, "exists", side_effect=_fake_exists(done_exists=False, transcript_exists=True)
+    )
+
+    rwi.main()
+
+    assert mock_resolve.call_args.args[0] == rwi.RAW_CONTENT_DIR
+    processed_dates = {
+        call.args[1] for call in mock_engine.archive_raw_summary.call_args_list
+    }
+    assert processed_dates == {"2026-04-10", "2026-04-11"}
+
+
+def test_explicit_date_skips_transcript_scan(mocker, monkeypatch):
+    _patch_common(mocker, monkeypatch, ["script", "--date", "2026-04-10"])
+    mock_resolve = mocker.patch.object(rwi, "resolve_transcript_dates")
+    mocker.patch.object(
+        rwi.os.path, "exists", side_effect=_fake_exists(done_exists=False, transcript_exists=True)
+    )
+
+    rwi.main()
+
+    mock_resolve.assert_not_called()
 
 
 def test_default_archive_failure_is_isolated_per_date(mocker, monkeypatch):
