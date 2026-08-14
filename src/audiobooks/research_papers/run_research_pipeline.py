@@ -34,9 +34,9 @@ def _resolve_config_relative_path(config_dir, path_value):
     if not path_value:
         return path_value
     return (
-        path_value
+        os.path.normpath(path_value)
         if os.path.isabs(path_value)
-        else os.path.join(config_dir, path_value)
+        else os.path.normpath(os.path.join(config_dir, path_value))
     )
 
 
