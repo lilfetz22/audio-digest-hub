@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import multiprocessing
 import os
 import re
 import sys
@@ -169,6 +170,21 @@ def _worker_synthesize(
         return index, np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32), str(exc)
 
 
+def _default_workers() -> int:
+    """Worker count when the caller didn't pass max_workers explicitly.
+
+    Honours TTS_MAX_WORKERS so CI/cron can cap parallelism (e.g. on a
+    memory-constrained runner) without a code change or redeploy.
+    """
+    override = os.environ.get("TTS_MAX_WORKERS")
+    if override:
+        try:
+            return max(1, int(override))
+        except ValueError:
+            logger.warning("Ignoring non-integer TTS_MAX_WORKERS=%r", override)
+    return min(os.cpu_count() or 1, MAX_TTS_WORKERS)
+
+
 def _synthesize_sequential(
     chunks: List[str],
     voice: str,
@@ -214,8 +230,11 @@ def generate_audio_from_text(
 
     `max_workers` controls how many worker processes synthesize chunks in
     parallel (each holds its own Kokoro pipeline). Defaults to
-    `min(os.cpu_count(), MAX_TTS_WORKERS)`; pass `1` to force the original
-    single-process sequential path.
+    `min(os.cpu_count(), MAX_TTS_WORKERS)`, overridable via the
+    `TTS_MAX_WORKERS` env var; pass `1` to force the original
+    single-process sequential path. Never exceeds the number of chunks, and
+    for any non-"cpu" device this defaults to a single process (one
+    accelerator context) unless `max_workers` is set explicitly.
     """
     if not text_content or not text_content.strip():
         raise ValueError("text_content is empty")
@@ -227,9 +246,15 @@ def generate_audio_from_text(
     if not chunks:
         raise ValueError("No valid speech chunks after preprocessing")
 
-    resolved_workers = (
-        max_workers if max_workers is not None else min(os.cpu_count() or 1, MAX_TTS_WORKERS)
-    )
+    resolved_workers = max_workers if max_workers is not None else _default_workers()
+    # Never start more pipelines than there is work for — each one costs a
+    # full model load before it does anything useful.
+    resolved_workers = min(resolved_workers, len(chunks))
+    if device != "cpu" and max_workers is None:
+        logger.info(
+            "device=%s: using a single process (one accelerator context).", device
+        )
+        resolved_workers = 1
 
     logger.info(
         "Synthesizing %d chunks on %s (CPU synthesis can take a while)...",
@@ -247,6 +272,7 @@ def generate_audio_from_text(
         try:
             with ProcessPoolExecutor(
                 max_workers=resolved_workers,
+                mp_context=multiprocessing.get_context("spawn"),
                 initializer=_init_worker,
                 initargs=(device,),
             ) as executor:
