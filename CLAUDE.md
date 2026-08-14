@@ -130,6 +130,8 @@ Two things that live outside the repo and won't show up in a diff:
 - **Supabase Auth URL configuration.** `useAuth.tsx` derives its signup redirect from `window.location.origin`, so every domain the app is served from must be allow-listed under Authentication → URL Configuration. Changing domains means updating Supabase, not code.
 - **Lovable is still connected** as a visual editor. `lovable-tagger` is a dev-mode-only vite plugin and has no effect on the production build, so leave it unless you're cutting Lovable loose entirely.
 
+**`react-day-picker` is on v9, not the shadcn-scaffold v8 — its classNames/component API is unrelated to the old one.** v8 styled the day *button* directly through classNames keys like `day_selected`/`day_today`; v9 only auto-applies modifier classes (`selected`/`today`/`outside`/`disabled`) to the day *cell*, so `components/ui/calendar.tsx` overrides `DayButton` and reads `modifiers` directly to reapply the same Tailwind states. `date-fns` moved to `^4.2.1` in lockstep — v9 (and v10) depend on `date-fns@^4.1.0` directly, which is what forced the bump in the first place (v8 pinned `date-fns@^2||^3` as a peer, which is why this was stuck on v3 for a while). Nothing in `src/` renders `Calendar` today, so none of this is exercised by the running app — verify any future change to this file by mounting it directly (there's no route for it) rather than trusting a production build that tree-shakes it away.
+
 ## Conventions
 
 - **Conventional Commits** for every commit message (from `.cursorrules`).
