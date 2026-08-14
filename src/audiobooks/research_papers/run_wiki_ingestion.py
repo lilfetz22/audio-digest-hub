@@ -124,6 +124,10 @@ def main():
             max_backfill_days=args.max_backfill_days,
         )
 
+    if not dates_to_process:
+        logger.info("No transcripts to archive. Exiting.")
+        return 0
+
     logger.info(
         f"Processing dates: {[d.strftime('%Y-%m-%d') for d in dates_to_process]}"
     )
