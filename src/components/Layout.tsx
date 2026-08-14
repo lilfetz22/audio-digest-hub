@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 export const Layout = ({ children }: LayoutProps) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, devBypassActive } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,6 +25,12 @@ export const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {devBypassActive && (
+        <div className="bg-amber-500 text-amber-950 text-sm font-medium text-center py-1">
+          Dev auth bypass active — signed in as a mock user, no real Supabase session. Add{' '}
+          <code>?devauth=0</code> to the URL to disable.
+        </div>
+      )}
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
