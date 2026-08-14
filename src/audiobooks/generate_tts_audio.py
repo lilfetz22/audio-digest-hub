@@ -183,7 +183,11 @@ def _default_workers() -> int:
             return max(1, int(override))
         except ValueError:
             logger.warning("Ignoring non-integer TTS_MAX_WORKERS=%r", override)
-    return min(os.cpu_count() or 1, MAX_TTS_WORKERS)
+    # os.process_cpu_count() (3.13+) respects CPU affinity, unlike
+    # os.cpu_count(), which can over-provision workers on affinity-limited
+    # runners. Fall back to os.cpu_count() while we're on 3.12.
+    cpu_count = getattr(os, "process_cpu_count", os.cpu_count)()
+    return min(cpu_count or 1, MAX_TTS_WORKERS)
 
 
 def _synthesize_sequential(
@@ -259,7 +263,8 @@ def generate_audio_from_text(
 
     `max_workers` controls how many worker processes synthesize chunks in
     parallel (each holds its own Kokoro pipeline). Defaults to
-    `min(os.cpu_count(), MAX_TTS_WORKERS)`, overridable via the
+    `min(process_cpu_count(), MAX_TTS_WORKERS)` (falls back to `os.cpu_count()`
+    on Python <3.13), overridable via the
     `TTS_MAX_WORKERS` env var; pass `1` to force the original
     single-process sequential path. Never exceeds the number of chunks, and
     for any non-"cpu" device this defaults to a single process (one
@@ -428,8 +433,8 @@ def main() -> int:
         default=None,
         help=(
             "Worker processes for parallel TTS synthesis "
-            f"(default: min(cpu_count, {MAX_TTS_WORKERS})). Use 1 for the "
-            "original sequential single-process path."
+            f"(default: min(process_cpu_count, {MAX_TTS_WORKERS})). Use 1 for "
+            "the original sequential single-process path."
         ),
     )
     parser.add_argument("--verbose", "-v", action="store_true")
