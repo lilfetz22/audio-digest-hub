@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-08-01,https://huggingface.co/papers/2607.28618,AskChem: Claim-Centered Infrastructure for Chemistry Literature Synthesis (285▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.28227,Qwen-UI-Agent Technical Report: Toward Next-Generation Real-World Centric Foundation GUI Agents (265▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.26760,Metis: Memory Foundation Model (240▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.28624,PhiZero: A World Model Built Around Physical Language (150▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.28568,Frontis-MA1: Training an AI4AI Model towards Recursive Self-Improvement in Machine Learning Engineering (144▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.27380,VideoCoCo: Code-as-CoT for Physically-Consistent Video Generation via an Agentic Dual-Engine System (61▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.27919,"Memory Decoder at Scale: A Pretrained, Parametric Long-Term Memory (45▲)",huggingface,
-2026-08-01,https://huggingface.co/papers/2607.28595,Beacon: Knowing When and How to Perform Agentic Visual Reasoning (44▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.26497,BM25 Wins at Scale: A Scaling Study of Retrieval-Augmented Generation Paradigms (38▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.28022,Flux-OPD: On-Policy Distillation with Evolving Contexts (37▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.28625,ACE-Data-0: Human-Centric Ambient Capture as Embodied Data Engine (34▲),huggingface,
-2026-08-01,https://huggingface.co/papers/2607.27616,MPIE-Bench: Benchmarking Anatomically Plausible Multi-Person Interaction Editing (34▲),huggingface,
 2026-08-03,https://arxiv.org/abs/2211.11278,POSSE-kNN: Pathwise Out-of-Bag Selected Subspace Ensembles for Binary Classification,arxiv,stat
 2026-08-03,https://arxiv.org/abs/2401.04890,"Nonparametric Partial Disentanglement via Mechanism Sparsity: Sparse Actions, Interventions and Sparse Temporal Dependencies",arxiv,stat
 2026-08-03,https://arxiv.org/abs/2404.14603,Quantifying the Internal Validity of Weighted Estimands,arxiv,stat
@@ -4205,3 +4193,15 @@ date,url,title,source,category
 2026-08-14,https://huggingface.co/papers/2608.11350,Self-Evolving Embodied Agents via Skill-Harness Evolution (9▲),huggingface,
 2026-08-14,https://huggingface.co/papers/2608.11878,ToolHazard: Scaling Adversarial Environments for Security Evaluation and Alignment of LLM-based Agents (7▲),huggingface,
 2026-08-14,https://huggingface.co/papers/2608.09926,Learning How the World Evolves: Extrapolative Video World Models via Latent Dynamics Reasoning (6▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.13546,Alaya-EVOKE: From Linear-Scaling Supervision to Endless World (82▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.07545,DarwinX: Evolving Agent Harnesses Through Natural Selection (59▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.13505,Intern-S2-Preview: Scientific Agentic Foundation Model (43▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.06867,"LLMRouter: Unified Infrastructure for Developing, Evaluating, and Deploying LLM Routers (43▲)",huggingface,
+2026-08-15,https://huggingface.co/papers/2608.08975,How Can Rhetoric Reward-Hack AI Reviewers? Dissecting Rhetorical Sensitivity in AI-Based Peer Review (39▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.13489,DreamX-Phi 1.0: Action-Conditioned Video World Model for Robotic Manipulation (39▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.13552,PlayWorld: Benchmarking World Models with Agent Players over Long-Horizon Objectives (33▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.13560,AutoDesign: Meta-Harness Optimization for Long-Horizon Agentic Design (32▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.12743,Spatial Memory Agent: Experience-Grounded Procedure Memory for Spatial Intelligence (19▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.12149,Massive Activations in Hybrid Linear Attention Large Language Models: Pre-Attention Spikes and Inter-Spike Plateaus (17▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.11752,UniSwap: Streaming Audio-Visual Identity Swapping for Talking Videos (11▲),huggingface,
+2026-08-15,https://huggingface.co/papers/2608.11745,LiveAnimate: Stable Long-Form Streaming Human Animation in Real-Time (10▲),huggingface,
