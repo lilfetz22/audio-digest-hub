@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-08-08,https://huggingface.co/papers/2608.05987,AgentOPSD: Recursive Self-Distillation for Agentic Reinforcement Learning (67▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2607.28609,OSReward: Instituting Standardized Evaluation for Cross-Platform Computer-Use Reward Models (51▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.01481,Interpretable MEG Decoding of Perceived Speech: Cortical Sources and the Stimulus Features That Drive Retrieval (46▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.05248,WorldClaw: Agentic 3D Open-World Generation at Scale (46▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.05747,GST-Bench: Can VLMs Develop Global Spatial Awareness from Video? (30▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.06197,EnvACE: Internalizing Environment Dynamics via World Rehearsal for Agentic Reinforcement Learning (28▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.06060,Learning from Failures: Retrieval-Centric CoT via Hard Negatives for Unified Multimodal Retrieval (26▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.05631,ChronoVision: Temporal Reasoning via Latent State Reconstruction (24▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.06020,From Economic Agents to Agentic Economies: A Systems Blueprint for Economic World Models (20▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.06301,HarnessOpt-Bench: Evaluating LLMs at Harness Optimization (20▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.05802,On-Policy Delta Distillation for Multilingual Math Reasoning (20▲),huggingface,
-2026-08-08,https://huggingface.co/papers/2608.05138,"Teaching Nemotron Greek: Mining a Corpus, Adapting Retrieval, and Grounding Generation for Modern Greek across Specialist Domains (17▲)",huggingface,
 2026-08-10,https://arxiv.org/abs/2404.03805,Blessing of dimension in Bayesian inference on covariance matrices,arxiv,stat
 2026-08-10,https://arxiv.org/abs/2408.12792,Boundary Density Likelihood for Direct Event-Time Supervision,arxiv,stat
 2026-08-10,https://arxiv.org/abs/2408.14402,Quasi-Bayesian sequential deconvolution,arxiv,stat
@@ -3941,3 +3929,15 @@ date,url,title,source,category
 2026-08-21,https://huggingface.co/papers/2608.18171,Looped Language Models Improve Compositional Tool Calling (15▲),huggingface,
 2026-08-21,https://huggingface.co/papers/2608.14229,"The More Popular, The Harder to Forget: Adaptive Popularity for LLM Unlearning (13▲)",huggingface,
 2026-08-21,https://huggingface.co/papers/2608.13947,Scaling Creative Writing Beyond Story-Centric Data with Attribute-Guided Genre Expansion (13▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.19880,EnvHarness: Awakening Static Worlds for Agent Learning (235▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.18580,FACET: Preserving Source Intent and Executable State in Terminal Task Synthesis (105▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.20335,4DAnyone: Create Anyone in 4D from a Casual Monocular Video (58▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.19799,SWE-bench Science: Can Coding Agents Resolve Engineering Tasks in Science? (56▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.20336,WithEveryone: Unified Planning and Identity Grounding for Group Image Generation (38▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.20202,MemTrapBench: Benchmarking Cognitive Traps in LLM Memory Use (29▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.13120,SkillEvo: Self-Renewing Evolution Gradients from Multi-Turn Interaction Feedback (25▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.14022,ForgeWM: Progressive Causal Training for Few-Step Action-Conditioned Video World Models (18▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.19854,Repo0: Design-Driven Zero-to-All Code Generation (15▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.19758,FlashPrefill V2: Block-Sparse Prefill Attention for Long-Context LLM Serving (13▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.19891,EXIMO: VLM Guided Exploration of VLA Policies (10▲),huggingface,
+2026-08-22,https://huggingface.co/papers/2608.17744,"Thinking in a Low-Resource Language: What SFT Builds, What RL Fixes, What Accuracy Cannot See (10▲)",huggingface,
