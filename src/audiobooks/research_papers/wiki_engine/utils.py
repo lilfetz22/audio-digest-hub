@@ -114,7 +114,9 @@ def parse_json_response(
     for attempt in range(retries + 1):
         try:
             raw = generate_fn()
-        except Exception as e:  # LLM boundary: a client failure must not crash ingestion
+        except (
+            Exception
+        ) as e:  # LLM boundary: a client failure must not crash ingestion
             last_raw = None
             if attempt < retries:
                 logger.warning(
