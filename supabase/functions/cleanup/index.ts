@@ -96,52 +96,68 @@ serve(async (req) => {
     paperCutoff.setHours(0, 0, 0, 0)
     console.log(`Deleting research-paper metadata older than: ${paperCutoff.toISOString()}`)
 
-    const { data: userFolders, error: folderError } = await supabaseClient.storage
-      .from('research-papers')
-      .list('', { limit: 1000 })
+    const pageSize = 1000
+    const userFolders = []
+    let folderOffset = 0
 
-    if (folderError) {
-      errors.push(`Failed to list research-paper user folders: ${folderError.message}`)
-    } else {
-      for (const userFolder of userFolders ?? []) {
-        let offset = 0
-        const pageSize = 1000
+    while (true) {
+      const { data: folderPage, error: folderError } = await supabaseClient.storage
+        .from('research-papers')
+        .list('', { limit: pageSize, offset: folderOffset })
 
-        while (true) {
-          const { data: paperFiles, error: listError } = await supabaseClient.storage
-            .from('research-papers')
-            .list(userFolder.name, { limit: pageSize, offset })
+      if (folderError) {
+        errors.push(`Failed to list research-paper user folders: ${folderError.message}`)
+        break
+      }
 
-          if (listError) {
-            errors.push(`Failed to list research papers for ${userFolder.name}: ${listError.message}`)
-            break
-          }
+      userFolders.push(...(folderPage ?? []))
+      if (!folderPage || folderPage.length < pageSize) break
+      folderOffset += pageSize
+    }
 
-          for (const paperFile of paperFiles ?? []) {
-            const match = paperFile.name.match(RESEARCH_PAPER_DATE_PATTERN)
-            if (!match) continue
+    for (const userFolder of userFolders) {
+      let offset = 0
+      const stalePaperPaths = []
 
-            const fileDate = new Date(`${match[1]}T00:00:00.000Z`)
-            if (fileDate >= paperCutoff) continue
+      while (true) {
+        const { data: paperFiles, error: listError } = await supabaseClient.storage
+          .from('research-papers')
+          .list(userFolder.name, { limit: pageSize, offset })
 
-            const filePath = `${userFolder.name}/${paperFile.name}`
-            const { error: removeError } = await supabaseClient.storage
-              .from('research-papers')
-              .remove([filePath])
-
-            if (removeError) {
-              console.error(`Failed to delete ${filePath}:`, removeError)
-              errors.push(`Research-paper deletion failed for ${filePath}`)
-              continue
-            }
-
-            cleanedResearchPaperCount++
-            console.log(`Deleted research-paper metadata: ${filePath}`)
-          }
-
-          if (!paperFiles || paperFiles.length < pageSize) break
-          offset += pageSize
+        if (listError) {
+          errors.push(`Failed to list research papers for ${userFolder.name}: ${listError.message}`)
+          break
         }
+
+        for (const paperFile of paperFiles ?? []) {
+          const match = paperFile.name.match(RESEARCH_PAPER_DATE_PATTERN)
+          if (!match) continue
+
+          const fileDate = new Date(`${match[1]}T00:00:00.000Z`)
+          if (fileDate >= paperCutoff) continue
+
+          stalePaperPaths.push(`${userFolder.name}/${paperFile.name}`)
+        }
+
+        if (!paperFiles || paperFiles.length < pageSize) break
+        offset += pageSize
+      }
+
+      if (stalePaperPaths.length === 0) continue
+
+      const { error: removeError } = await supabaseClient.storage
+        .from('research-papers')
+        .remove(stalePaperPaths)
+
+      if (removeError) {
+        console.error(`Failed to delete research papers for ${userFolder.name}:`, removeError)
+        errors.push(`Research-paper deletion failed for ${userFolder.name}`)
+        continue
+      }
+
+      cleanedResearchPaperCount += stalePaperPaths.length
+      for (const filePath of stalePaperPaths) {
+        console.log(`Deleted research-paper metadata: ${filePath}`)
       }
     }
 
