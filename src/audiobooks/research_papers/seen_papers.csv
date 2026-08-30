@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-08-15,https://huggingface.co/papers/2608.13546,Alaya-EVOKE: From Linear-Scaling Supervision to Endless World (82▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.07545,DarwinX: Evolving Agent Harnesses Through Natural Selection (59▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.13505,Intern-S2-Preview: Scientific Agentic Foundation Model (43▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.06867,"LLMRouter: Unified Infrastructure for Developing, Evaluating, and Deploying LLM Routers (43▲)",huggingface,
-2026-08-15,https://huggingface.co/papers/2608.08975,How Can Rhetoric Reward-Hack AI Reviewers? Dissecting Rhetorical Sensitivity in AI-Based Peer Review (39▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.13489,DreamX-Phi 1.0: Action-Conditioned Video World Model for Robotic Manipulation (39▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.13552,PlayWorld: Benchmarking World Models with Agent Players over Long-Horizon Objectives (33▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.13560,AutoDesign: Meta-Harness Optimization for Long-Horizon Agentic Design (32▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.12743,Spatial Memory Agent: Experience-Grounded Procedure Memory for Spatial Intelligence (19▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.12149,Massive Activations in Hybrid Linear Attention Large Language Models: Pre-Attention Spikes and Inter-Spike Plateaus (17▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.11752,UniSwap: Streaming Audio-Visual Identity Swapping for Talking Videos (11▲),huggingface,
-2026-08-15,https://huggingface.co/papers/2608.11745,LiveAnimate: Stable Long-Form Streaming Human Animation in Real-Time (10▲),huggingface,
 2026-08-17,https://arxiv.org/abs/2403.18115,Assessing Vaccine Effectiveness in Observational Studies via Nested Trial Emulation,arxiv,stat
 2026-08-17,https://arxiv.org/abs/2404.17429,Separation capacity of linear reservoirs with random connectivity matrix,arxiv,stat
 2026-08-17,https://arxiv.org/abs/2502.07580,Generative Modeling with Bayesian Sample Inference,arxiv,stat
@@ -4852,3 +4840,15 @@ date,url,title,source,category
 2026-08-28,https://huggingface.co/papers/2608.25529,Video-IFBench: Evaluating Instruction Following of Multimodal LLMs in Video Understanding Scenarios (16▲),huggingface,
 2026-08-28,https://huggingface.co/papers/2608.26067,StreamPI: Streaming Multimodal Temporal Modeling for Vision-Language-Action Models (16▲),huggingface,
 2026-08-28,https://huggingface.co/papers/2608.25927,Code World Model: Coding Agent as World Brain (16▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.25518,Agentic Game Development as a Verifiable Trajectory Data Engine for Scaling World Models (119▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.27345,PAWBench: How Far Are We from Probabilistically Aligned World Modeling? (74▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.27456,UrbanGround: From Local Perception to Spatial Agency in a Real-Scale City (70▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.27448,TTPO: Test-Time Policy Optimization (64▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.26872,Self-OPD: On-Policy Distillation for Flow Matching Models without Teacher (56▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.27260,What Makes Good Agentic Data? An ACE Lens on Data Generation for LLM Agents (55▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.26200,GameWAM: A World Action Model for Video Games (37▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.26530,PILOT in the Loop: Live Self-Improvement for Long-Horizon Agents (25▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.26103,Zero-WAM: In-Context World-Action Modeling from Human Videos for Open-Ended Task Generalization (16▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.27351,Understanding Evolution Strategies for LLM Reasoning: Broader Reasoning Coverage than GRPO (15▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.15763,Training Agents to Evolve with Their Harness: TaoLive Digital Avatar Agent Technical Report (14▲),huggingface,
+2026-08-29,https://huggingface.co/papers/2608.27454,WikiSkill: Compiling Agent Experience into Persistent Knowledge for Skill Evolution (9▲),huggingface,
