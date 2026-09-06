@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-08-22,https://huggingface.co/papers/2608.19880,EnvHarness: Awakening Static Worlds for Agent Learning (235▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.18580,FACET: Preserving Source Intent and Executable State in Terminal Task Synthesis (105▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.20335,4DAnyone: Create Anyone in 4D from a Casual Monocular Video (58▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.19799,SWE-bench Science: Can Coding Agents Resolve Engineering Tasks in Science? (56▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.20336,WithEveryone: Unified Planning and Identity Grounding for Group Image Generation (38▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.20202,MemTrapBench: Benchmarking Cognitive Traps in LLM Memory Use (29▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.13120,SkillEvo: Self-Renewing Evolution Gradients from Multi-Turn Interaction Feedback (25▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.14022,ForgeWM: Progressive Causal Training for Few-Step Action-Conditioned Video World Models (18▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.19854,Repo0: Design-Driven Zero-to-All Code Generation (15▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.19758,FlashPrefill V2: Block-Sparse Prefill Attention for Long-Context LLM Serving (13▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.19891,EXIMO: VLM Guided Exploration of VLA Policies (10▲),huggingface,
-2026-08-22,https://huggingface.co/papers/2608.17744,"Thinking in a Low-Resource Language: What SFT Builds, What RL Fixes, What Accuracy Cannot See (10▲)",huggingface,
 2026-08-24,https://arxiv.org/abs/2210.08639,Design-Based Confidence Sequences: A General Approach to Risk Mitigation in Panel Experiments,arxiv,stat
 2026-08-24,https://arxiv.org/abs/2310.12032,Exact and general decoupled solutions of the LMC Multitask Gaussian Process model,arxiv,stat
 2026-08-24,https://arxiv.org/abs/2405.07359,Forecasting with an N-dimensional Langevin Equation and a Neural-Ordinary Differential Equation,arxiv,stat
@@ -5225,3 +5213,15 @@ date,url,title,source,category
 2026-09-04,https://huggingface.co/papers/2608.31100,S3Gym: Can LLMs Turn Self-Testing and Self-Judging into Self-Improvement? (26▲),huggingface,
 2026-09-04,https://huggingface.co/papers/2609.01657,NeoMME: A Single-Tower Multimodal-Native Multilingual Foundation Encoder for Efficient Fine-Tuning and Inference (22▲),huggingface,
 2026-09-04,https://huggingface.co/papers/2609.01740,ZipTok3D: High-Fidelity 3D Tokenization with Compact Token Prefixes (21▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04199,Compile by Training: Turning Natural-Language Specifications into Local Neural Functions (256▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04148,Terminal-Universe: Turning Agent Trajectories into Scalable Terminal Environments (213▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.03796,LLaDA-Image: Building Strong Image Generators with Fully Open Training Recipes (195▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2608.26730,Knowing When Not to Reuse: Conditional Experience Transfer in Autonomous LLM Post-Training (145▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.01507,LatentPress: Context Compression Beyond Text and Vision (101▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.03430,Random Attention: Rethinking KV Cache Eviction for Efficient Reasoning (87▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04098,Why Gated DeltaNet Survives 4-Bit Quantization: NVFP4 W4A4 for the Recurrent Half of a Hybrid 27B LLM (66▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04172,Rethinking On-Policy Distillation of Large Language Models II: One Training Example (65▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04196,Puffin-World: Scaling a Unified Multimodal Model with Native 3D World States (59▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04201,Scal3R: Learning Efficient Multi-Relative Pose Query for Scalable Online 3D Reconstruction (34▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04034,Editable Visual Design (32▲),huggingface,
+2026-09-05,https://huggingface.co/papers/2609.04131,Beyond Retrieval: Progressive Latent Memory Evolution for Streaming Video Understanding (22▲),huggingface,
