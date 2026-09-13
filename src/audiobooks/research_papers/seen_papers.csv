@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-08-29,https://huggingface.co/papers/2608.25518,Agentic Game Development as a Verifiable Trajectory Data Engine for Scaling World Models (119▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.27345,PAWBench: How Far Are We from Probabilistically Aligned World Modeling? (74▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.27456,UrbanGround: From Local Perception to Spatial Agency in a Real-Scale City (70▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.27448,TTPO: Test-Time Policy Optimization (64▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.26872,Self-OPD: On-Policy Distillation for Flow Matching Models without Teacher (56▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.27260,What Makes Good Agentic Data? An ACE Lens on Data Generation for LLM Agents (55▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.26200,GameWAM: A World Action Model for Video Games (37▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.26530,PILOT in the Loop: Live Self-Improvement for Long-Horizon Agents (25▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.26103,Zero-WAM: In-Context World-Action Modeling from Human Videos for Open-Ended Task Generalization (16▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.27351,Understanding Evolution Strategies for LLM Reasoning: Broader Reasoning Coverage than GRPO (15▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.15763,Training Agents to Evolve with Their Harness: TaoLive Digital Avatar Agent Technical Report (14▲),huggingface,
-2026-08-29,https://huggingface.co/papers/2608.27454,WikiSkill: Compiling Agent Experience into Persistent Knowledge for Skill Evolution (9▲),huggingface,
 2026-08-31,https://arxiv.org/abs/2201.13259,Trajectory balance: Improved credit assignment in GFlowNets,arxiv,stat
 2026-08-31,https://arxiv.org/abs/2305.17010,Let the Flows Tell: Solving Graph Combinatorial Optimization Problems with GFlowNets,arxiv,stat
 2026-08-31,https://arxiv.org/abs/2305.19366,Joint Bayesian Inference of Graphical Structure and Parameters with a Single Generative Flow Network,arxiv,stat
@@ -4698,3 +4686,15 @@ date,url,title,source,category
 2026-09-11,https://huggingface.co/papers/2609.06703,"DianShi-RxnDB: A Large-Scale, Fine-Grained Organic Reaction Data Platform Built via a Fully Automated Pipeline for Researchers and AI Agents (9▲)",huggingface,
 2026-09-11,https://huggingface.co/papers/2609.07103,Revisiting Complete Reasoning Traces for Post-Training (8▲),huggingface,
 2026-09-11,https://huggingface.co/papers/2609.08126,SchemeArena: Factorized Stress Testing of Scheming in LLM Agents (7▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.10715,NCP-ArchPreview Technical Report: Moving towards Latent Space Language Models through Next Concept Prediction (177▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11929,SenseNova-U1.5: Towards Native Unified Visual Intelligence (139▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.07064,SpatialBlock: Enhancing Spatial Intelligence in LVLMs via Synthetic Block-Stacking Problem (66▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11317,Mi-Ripple: Restoring Images Degraded by Iterative AI Editing (19▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11412,X-AuT: Progressive Audio-Encoder Compression for Speech LLMs with Cross-Scale Distillation (13▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.05903,EvoSafeHarness: Evolving Model- and Domain-Specific Harnesses for Securing Agents (11▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11561,Memory as Plans: World-Action Modeling with Memory-Grounded Planning (10▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11499,Recursive Code World Models: Building Complex Worlds through Recursive Scene Programs (7▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.01515,TempCloze: Can Video-LLMs Identify the Missing Middle? (6▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.10712,An Open Recipe for IMO Gold: Training Nemotron for Olympiad Mathematics (6▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11486,FreeFlow: A Bias-free Hierarchical Transformer for Optical Flow Estimation (5▲),huggingface,
+2026-09-12,https://huggingface.co/papers/2609.11548,World in World: Explore the World with World Models (5▲),huggingface,
