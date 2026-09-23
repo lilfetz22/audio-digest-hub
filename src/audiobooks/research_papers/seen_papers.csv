@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-09-08,https://huggingface.co/papers/2609.02750,Bilevel Coordinated Reflection: A Game-Theoretic Approach to Multi-Agent LLM Systems (94▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.04304,Iris: Climbing to the Search Frontier (50▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.04250,Motion-Omni: End-to-End Joint Speech and Full-Body Motion for Spoken Dialogue (34▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.03586,The Attention Triangle in Audio-Video Models (25▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.05416,WorldSculpt: Generating Compositional Worlds from Grounded Videos (21▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.05275,Don't Drop Dropout: Optimizing Layer Sparsity for Efficient LLM Training and Inference (15▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.05258,Ask Before You Optimize: Dynamic Pre-Formulation Clarification for Interactive Optimization (15▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.00581,Enoki: Efficient Multi-Level Hallucination Detection (15▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.05415,UniMate: One Unified Model to Animate Diverse Skeletons (11▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.04753,Beneath the Surface of Chains-of-Thought: A Mechanistic Interpretation of Reasoning Operations in LLMs (10▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.05295,RISE: Recursive Improvement via Self-Extrapolating Policy Distillation (9▲),huggingface,
-2026-09-08,https://huggingface.co/papers/2609.04523,MaxKernel: Agentic Kernel Generation for TPUs (9▲),huggingface,
 2026-09-09,https://arxiv.org/abs/1601.08057,On the Geometric Ergodicity of Hamiltonian Monte Carlo,arxiv,stat
 2026-09-09,https://arxiv.org/abs/1705.09840,Tail Estimation via Sample Splitting: A Two-Sample Framework for Stable-like Distributions,arxiv,stat
 2026-09-09,https://arxiv.org/abs/1906.02590,Linear and Quadratic Discriminant Analysis: Tutorial,arxiv,stat
@@ -2894,3 +2882,256 @@ date,url,title,source,category
 2026-09-21,https://arxiv.org/abs/2609.21976,Multiplicative Optimism for Constant Regret in Games,arxiv,math
 2026-09-21,https://arxiv.org/abs/2609.22028,Spherical Harmonic Sliced Wasserstein Displacement Interpolation for Acoustic Source and Reflection Density Modeling,arxiv,math
 2026-09-21,https://arxiv.org/abs/2609.22058,Lyapunov stability of polynomial vector fields is undecidable,arxiv,math
+2026-09-22,https://arxiv.org/abs/1812.09632,Arxiv Paper 1812.09632,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2102.07356,Arxiv Paper 2102.07356,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2111.08157,Arxiv Paper 2111.08157,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2204.04309,Arxiv Paper 2204.04309,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2209.00197,Arxiv Paper 2209.00197,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2301.12254,Arxiv Paper 2301.12254,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2302.07477,Arxiv Paper 2302.07477,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2405.08253,Arxiv Paper 2405.08253,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2406.03678,Arxiv Paper 2406.03678,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2407.13314,Arxiv Paper 2407.13314,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2408.08823,Arxiv Paper 2408.08823,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2412.00945,Arxiv Paper 2412.00945,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2502.07977,Arxiv Paper 2502.07977,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2504.00919,Arxiv Paper 2504.00919,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2505.18918,Arxiv Paper 2505.18918,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2507.00524,Arxiv Paper 2507.00524,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2507.02248,Arxiv Paper 2507.02248,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2509.12884,Arxiv Paper 2509.12884,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2509.20634,Arxiv Paper 2509.20634,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2509.24634,Arxiv Paper 2509.24634,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2510.03095,Arxiv Paper 2510.03095,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2510.11587,Arxiv Paper 2510.11587,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2510.11676,Arxiv Paper 2510.11676,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2511.06808,Arxiv Paper 2511.06808,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2512.13853,Arxiv Paper 2512.13853,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2512.18403,Arxiv Paper 2512.18403,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2601.00287,Arxiv Paper 2601.00287,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2601.02828,Arxiv Paper 2601.02828,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2601.13519,Arxiv Paper 2601.13519,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2601.18952,Arxiv Paper 2601.18952,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2602.04125,Arxiv Paper 2602.04125,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2603.02069,Arxiv Paper 2603.02069,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2603.11229,Arxiv Paper 2603.11229,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2604.00133,Arxiv Paper 2604.00133,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2604.10308,Arxiv Paper 2604.10308,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2605.15240,Arxiv Paper 2605.15240,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2605.22795,Arxiv Paper 2605.22795,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2605.29371,Arxiv Paper 2605.29371,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2605.31079,Arxiv Paper 2605.31079,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2606.14053,Arxiv Paper 2606.14053,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2606.26478,Arxiv Paper 2606.26478,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2606.30615,Arxiv Paper 2606.30615,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2607.04743,Arxiv Paper 2607.04743,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2607.10735,Arxiv Paper 2607.10735,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2607.20152,Arxiv Paper 2607.20152,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2608.03360,Arxiv Paper 2608.03360,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2608.08463,Arxiv Paper 2608.08463,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2608.08779,Arxiv Paper 2608.08779,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2608.11991,Arxiv Paper 2608.11991,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2608.20445,Arxiv Paper 2608.20445,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22156,Arxiv Paper 2609.22156,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22182,Arxiv Paper 2609.22182,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22183,Arxiv Paper 2609.22183,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22217,Arxiv Paper 2609.22217,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22226,Arxiv Paper 2609.22226,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22228,Arxiv Paper 2609.22228,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22232,Arxiv Paper 2609.22232,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22240,Arxiv Paper 2609.22240,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22337,When and Why Do Linear Bias Probes Fail? A Geometric and Statistical Theory of Bias Detectability in Large Language Model Representations,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22338,Arxiv Paper 2609.22338,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22383,Bridging Local and Population Causal Effects: A Proximal Instrumental Variable Approach,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22444,Arxiv Paper 2609.22444,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22545,Adaptive online kernel changepoint detection,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22547,"RLVR is a Kernel, Not a Function: Statistical Inference for pass@$k$ Crossovers",arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22563,Stochastic Epidemic Model Criticism with Neural Evidence Estimation,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22632,Arxiv Paper 2609.22632,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22637,Orthogonal Policy Learning with Ordinal Outcomes,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22642,Locally Private Inference for Riemannian Stochastic Optimization,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22643,Arxiv Paper 2609.22643,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22654,A Bayesian Vertical Federated Learning Framework for Multivariate Reduced-Rank High-Dimensional Regression,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22658,Arxiv Paper 2609.22658,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22686,Validity of MMRM-based hypothesis testing under missing-not-at-random mechanisms,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22690,Arxiv Paper 2609.22690,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22985,Lorentz Hyperbolic Weighted Regression: Theory for Fixed and Estimated Representations,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.22990,Arxiv Paper 2609.22990,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23070,Max-Test-Calibrated Stein Shrinkage with Honest Submodel Selection in Ultra-High-Dimensional Regression,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23089,Calibration of Time-Varying SEIR Models,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23120,Modeling bounded well-being indices using Bayesian double generalized beta regression with spatial and temporal borrowing,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23163,"Toscani-Fourier Distance on Probability Measures: Wasserstein Control, Topological Equivalence on Model Classes, and Duality",arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23170,Arxiv Paper 2609.23170,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23211,Heterogeneous survivor average causal effects beyond monotonicity: Applications to a clinical trial evaluating mechanical ventilation strategies,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23212,Arxiv Paper 2609.23212,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23220,Consistent Order Selection under Non-Identifiability and Dependence,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23232,Arxiv Paper 2609.23232,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23254,Arxiv Paper 2609.23254,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23284,Unbiased Treatment Effect Estimation under Network Interference via Neighborhood-Excluded Cross-Fitting,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23290,Arxiv Paper 2609.23290,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23332,Streaming PCA: averaging from a geometric perspective,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23350,Arxiv Paper 2609.23350,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23383,Arxiv Paper 2609.23383,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23473,tteICE: An R Package for Estimating Treatment Effects on Time-to-Event Outcomes with Intercurrent Events in Two-Arm Trials,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23524,Distributional Balancing with Machine Learning for Clinical Trial Augmentation Using Real-World Data,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23535,Arxiv Paper 2609.23535,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23557,Arxiv Paper 2609.23557,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23574,Arxiv Paper 2609.23574,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23635,Model-free and Distributionally Robust Feature Screening with False Discovery Control for High-Dimensional Heterogeneous Data,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23701,Arxiv Paper 2609.23701,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23705,PAR2COX: Survival-Informed Tensor Decomposition for Phenotyping and Risk Prediction from Irregular Longitudinal Data,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23747,A Stochastic EM Algorithm with Sampling-Importance Resampling for Missing Data in Regression with Nonlinear Predictors,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23789,Arxiv Paper 2609.23789,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23798,Optimal Biological Dose Combination Finding: A Design Roadmap and Robust Cross-Indication Bayesian Borrowing,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23812,Arxiv Paper 2609.23812,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23819,Arxiv Paper 2609.23819,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23857,Bayesian Posterior Learning of Mixed Graphical Models,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23862,Arxiv Paper 2609.23862,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23897,Proxy-Adjusted Causal Discovery from Targeted Interventions,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23926,Arxiv Paper 2609.23926,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23937,Arxiv Paper 2609.23937,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23970,Arxiv Paper 2609.23970,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23985,Spectral divide-and-conquer MCMC for long stationary time series,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.23998,Arxiv Paper 2609.23998,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24053,When bad adjustment looks good: what goes wrong in Plasmode 0.1.0 simulations,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24086,Doubly robust target inference for generalized linear regression with completely missing covariates,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24112,Arxiv Paper 2609.24112,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24126,Arxiv Paper 2609.24126,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24128,Arxiv Paper 2609.24128,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24153,Quantifying Long-Range Dependence in Object-Valued Time Series,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24260,Arxiv Paper 2609.24260,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24305,Arxiv Paper 2609.24305,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24328,Arxiv Paper 2609.24328,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24419,A Three-Way Testing Framework for Quantifying Epistemic Calibration Uncertainty in SBI,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24422,Arxiv Paper 2609.24422,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24496,Conformalized Safe Feasible Sets in Uncertain Decision Systems,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24501,Tensor Completion using Subspace Information,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24528,Arxiv Paper 2609.24528,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24556,Arxiv Paper 2609.24556,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24571,Filtering and Smoothing with Score-Driven Models,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24590,Arxiv Paper 2609.24590,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24641,Statistical Depth for Interval Data: A Closeness-Based Approach and Its Applications,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24676,Arxiv Paper 2609.24676,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24758,On the use of meaningful score regions to interpret treatment effects on continuous clinical outcome assessments,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24816,Arxiv Paper 2609.24816,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24929,Arxiv Paper 2609.24929,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24945,Structured Screen-and-Select for Ultra-High-Dimensional Variable Selection,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24949,Selective Inference for CART with Binary Outcomes,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24954,Arxiv Paper 2609.24954,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2609.24999,Bounding the Risk Difference Bias Given Incomplete Parameters for Externally Adjusting Uncontrolled Confounding,arxiv,stat
+2026-09-22,https://arxiv.org/abs/2003.06935,Control of chaos with minimal information transfer,arxiv,math
+2026-09-22,https://arxiv.org/abs/2012.06647,"The Operational Impact of Registry size, Cycle length, and Blood Type Distribution in Multi-Registry Kidney Exchange Programs",arxiv,math
+2026-09-22,https://arxiv.org/abs/2310.13147,On Data-Driven Model Identification for Nonlinear Optimal Control,arxiv,math
+2026-09-22,https://arxiv.org/abs/2402.13988,Frictionless Hamiltonian Descent and Coordinate Hamiltonian Descent for Strongly Convex Quadratic Problems,arxiv,math
+2026-09-22,https://arxiv.org/abs/2403.01805,Tsallis Entropy Regularization for Linear Quadratic Regulator and Kullback-Leibler Control,arxiv,math
+2026-09-22,https://arxiv.org/abs/2410.16231,A Quantum Optimization Algorithm for Optimal Electric Vehicle Charging Station Placement for Intercity Trips,arxiv,math
+2026-09-22,https://arxiv.org/abs/2411.08435,Dynamic Programming-Compatible Uncertainty Sets in Robust Markov Decision Processes,arxiv,math
+2026-09-22,https://arxiv.org/abs/2412.02079,A simple and practical adaptive trust-region method,arxiv,math
+2026-09-22,https://arxiv.org/abs/2412.13371,A polynomial approximation scheme for nonlinear model reduction by moment matching,arxiv,math
+2026-09-22,https://arxiv.org/abs/2501.11903,Computing the nearest scattering passive system,arxiv,math
+2026-09-22,https://arxiv.org/abs/2502.06726,Rough Stochastic Pontryagin Maximum Principle and an Indirect Shooting Method,arxiv,math
+2026-09-22,https://arxiv.org/abs/2503.16977,Parallel splitting method for large-scale quadratic programs,arxiv,math
+2026-09-22,https://arxiv.org/abs/2507.21543,On Policy Stochasticity in Mutual Information Optimal Control of Linear Systems,arxiv,math
+2026-09-22,https://arxiv.org/abs/2508.03242,Robust stabilization of hyperbolic PDE-ODE systems via Neural Operator-approximated gain kernels,arxiv,math
+2026-09-22,https://arxiv.org/abs/2508.18643,Hierarchical Pod Routing for Modular Transit Systems,arxiv,math
+2026-09-22,https://arxiv.org/abs/2509.22076,A Sensitivity Calculus for Optimal Control of the Generalized Riemann Problem for Hyperbolic Systems of Conservation Laws,arxiv,math
+2026-09-22,https://arxiv.org/abs/2510.16866,"One-dimensional optimisation of indefinite-weight principal eigenvalues with asymmetric Robin parameters and a Schr\""odinger-type perturbation",arxiv,math
+2026-09-22,https://arxiv.org/abs/2511.02983,A geometric characterization of unbounded integer cubic optimization problems via thin rays,arxiv,math
+2026-09-22,https://arxiv.org/abs/2511.11384,First-Order Characterizations of Strong Quasiconvexity and a Quasimonotonicity Gap,arxiv,math
+2026-09-22,https://arxiv.org/abs/2512.09443,A Human-AI Collaborative Workflow for Mathematical Discovery: A Case Study in Grover-Compatible Riemannian Optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2601.09223,Boundary adaptive observer design for semilinear hyperbolic rolling contact ODE-PDE systems with uncertain friction,arxiv,math
+2026-09-22,https://arxiv.org/abs/2601.10375,Dynamic reinsurance via martingale transport,arxiv,math
+2026-09-22,https://arxiv.org/abs/2603.13980,Quantification of the Resource Theory of Imaginarity Revisited,arxiv,math
+2026-09-22,https://arxiv.org/abs/2603.18503,Computationally Efficient Density-Driven Optimal Control via Analytical KKT Reduction and Contractive MPC,arxiv,math
+2026-09-22,https://arxiv.org/abs/2603.25954,Online Learning for Dynamic Constellation Topologies,arxiv,math
+2026-09-22,https://arxiv.org/abs/2603.29567,A Mollification Approach to Ramified Transport and Tree Shape Optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2604.02407,Scaled Relative Graphs in Normed Spaces,arxiv,math
+2026-09-22,https://arxiv.org/abs/2604.03415,Two-Timescale Asymptotic Simulations of Hybrid Inclusions with Applications to Stochastic Hybrid Optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2604.05140,Constraint-Induced Redistribution of Social Influence in Nonlinear Opinion Dynamics,arxiv,math
+2026-09-22,https://arxiv.org/abs/2604.21065,On the dynamic behavior of the network SIRS epidemic model,arxiv,math
+2026-09-22,https://arxiv.org/abs/2604.27180,Efficient Graph Partitioning under Resource Constraints: A Cutting-Plane Framework for Distribution Grids,arxiv,math
+2026-09-22,https://arxiv.org/abs/2605.00532,"Linking PageRank, Time Reversal, and Policy Evaluation",arxiv,math
+2026-09-22,https://arxiv.org/abs/2605.01928,Training Non-Differentiable Networks via Optimal Transport,arxiv,math
+2026-09-22,https://arxiv.org/abs/2605.30355,Cosm: Collective switched motion for sparse Ising optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2606.09815,Limit Theory for $N$-Player $\alpha$-Potential Games,arxiv,math
+2026-09-22,https://arxiv.org/abs/2606.17317,Transformer-Based Warm-Starting for Feasible and Optimal Terminal Approach to Tumbling Objects with Space Manipulators,arxiv,math
+2026-09-22,https://arxiv.org/abs/2606.24493,Trade-off invariance for weighted scalarizations in multi-objective optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2606.25707,Equilibrium and Infeasibility: A new solution concept for games,arxiv,math
+2026-09-22,https://arxiv.org/abs/2606.26919,"The parental parsimony problem on binary, tree-child phylogenetic networks",arxiv,math
+2026-09-22,https://arxiv.org/abs/2607.13810,Bayesian Risk Preference Persuasion,arxiv,math
+2026-09-22,https://arxiv.org/abs/2607.16625,Dynamic mean-variance portfolio selection with no-shorting constraints and unknown investment opportunity sets,arxiv,math
+2026-09-22,https://arxiv.org/abs/2608.00740,Dynamic-Threshold Algorithms for the Continuous Quadratic Knapsack Problem: Reset Mechanisms and Complexity,arxiv,math
+2026-09-22,https://arxiv.org/abs/2608.11141,Certificate-based Synthesis of Coordinated Droop Control for Heterogeneous Radial Distribution Networks,arxiv,math
+2026-09-22,https://arxiv.org/abs/2608.26943,Data-driven Koopman mode approximation: A neural power iteration algorithm,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.00439,Models and Algorithms for Reserve Deliverability in Cross-Zonal Balancing Capacity Markets,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22130,Hierarchical Bayesian optimization of an aircraft-based multi-agent system-of-systems,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22310,Differentiable Synthesis and Yield Optimization of Cross-Coupled Resonator Filters,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22384,Stabilization of Yih's Viscosity Jump Interface in a Channel,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22481,Certified Residual Quasi-Newton Methods for Distributed Variational Inequalities,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22491,A Candidate Counterexample to a Conjecture on ISS for Time-Delay Systems,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22495,Combinatorial Optimization Augmented Machine Learning for Dynamic Electric Autonomous Dial-a-Ride Problem,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22576,Scalable Incremental Robustness Analysis of Neural Network Feedback Systems,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22616,Joint Observer-Based Output-Feedback Robust Guidance and Control Funnel Synthesis,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22668,Density-Driven Area Coverage for Nonholonomic Multi-Robot Systems with Safety Guarantee,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22678,Riemannian Density-Driven Optimal Control: Tangent-Space LQR for Second-Order Multi-Agent Systems on Curved Manifolds,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22752,D-IMPL: A Diffusion-based Solver for Parameterized BBOs,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22800,Jordan-Block Degeneracy and Cubic-Order Bifurcating Periodic Orbits in Minimum-Energy Optimal Control of Hamiltonian Equilibria,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22801,Hypersensitivity and Turnpikes in Optimal Control of Inverted Pendulum: A Dynamical Systems Perspective,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22802,Exact Truncation and Radial Rigidity in Time-Optimal Control,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22828,Data-Driven MPC with Adaptively Sampled Non-Expert Demonstrations: Performance Guarantees and Sample Complexity,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22883,Mean-field stochastic differential equations driven by sub-diffusions and their control problem,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22938,Presolve heuristics in HiGHS: implementation and computational study,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22950,CLEAR: Complex Learned Explicit Analytical Regularization for Ultra-Accelerated 4D Flow CMR Reconstruction,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22968,Searching for Primes: A Neural AlphaZero Approach to a Factoring Game,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.22986,On a Closed-Loop Controller for the Coevolutionary Model of Actions and Opinions via Broadcasting Information,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23028,"C^{2,\alpha} solution to the proportional transaction cost problem with two risky assets",arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23072,Exact Controllability of Backward-Structured Mean-Field SDEs: Hautus Criteria and Initial-Time Dichotomy,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23123,Composite Adaptive Higher-Order Control Barrier Functions for Joint Frequency-RoCoF Safety in Low-Inertia SIDS Microgrids,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23176,A scenario-cluster-based and enhanced progressive hedging algorithm for the two-stage stochastic quadratic knapsack problem,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23188,A General Multicriteria Optimization Perspective on Resilience,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23268,Blind Deconvolution of Binary and Pattern Images with Pixel Intensity Constraints and Sparse Gradient Prior,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23272,On Control of Drawdown: Robust Invariance and Optimality,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23279,On a Non-Prox-Regularity Example by Rockafellar and Wets,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23388,Online Wideband MIMO Channel Reconstruction from Periodically Swept RBs via Incremental CP Updates,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23461,A Combinatorial Benders Decomposition Framework for Two-Dimensional Irregular Bin Packing Problems with Convex Polygons,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23519,Semidefinite Implementations of the Proximal Point Algorithm and Consequences for Progressive Decoupling in Optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23739,Contextual Distributionally Robust Chance-Constrained Programs: Exact Reformulations and Valid Inequalities,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23751,Duality in Optimization: A Visual Tutorial,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23837,The Exponential Price of Determinism in Nonsmooth Nonconvex Optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23840,Accelerated Plug-and-Play Davis-Yin Splitting for Nonconvex Image Reconstruction,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23848,Anytime-Feasible Gradient Descent for Constrained Optimization Under Gradient Uncertainty,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23851,Stability of Slow-Fast Nonlinear Dynamics: Moving Equilibrium Case,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23855,Kadison--Singer partitions and Bilu--Linial graph signings in polynomial time,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23878,Modeling and Control of a Unicycle Robot on Manifolds,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23918,Quasi-Static Fault-Tolerant Feedback Control of a Quadrotor under Rotor Failure with Provable Safety Guarantees,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.23927,Time-uniform accuracy of ensemble Kalman filters with localization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24072,The Implementation Cost of Fairness in Service Policy Selection,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24185,General Leader-Follower Linear-Quadratic Stochastic Graphon Games with Indefinite Control Weights,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24192,Global Exponential Stabilization of a 3D Nonholonomic Vehicle in Spherical Coordinates,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24225,The Price of Covertness: Dual-Control Navigation in Uncertain Flows under Adversarial Sensing,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24421,Benign Geometry and Distributional Robustness of $\mathcal{H}_2$ Synthesis,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24423,Complexities of Weak Proximal Oracle Methods for Composite Convex Optimization,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24448,Numerical approximation of distributed optimal control problems governed by linear thermo-poroelasticity,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24454,The logarithmic spiral is optimal for shoreline search: a computer-assisted proof,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24505,"Parallel Optimization: Theory, Algorithms, and Applications,",arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24522,"Convergence of Rotation-based Matrix Optimizers: A Unified Analysis of SOAP, Conda, and SPlus",arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24542,The Generalized Lax Conjecture for Strictly Hyperbolic Polynomials,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24569,Poisson Exchange Beyond Submodularity: Effective Approximation Algorithms for Offline and Online Subset Selection over Matroids,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24593,Polyhedral Methods for Cooperative Games: Small Lifts and Hard Faces,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24605,Scalable Dynamic Pricing of Substitutable Products through Structure-Guided Policy Learning,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24661,"Conditional Infimum, Hidden Convexity and S-Procedure",arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24722,"Lowest-known Energy Configuration of $N=100\,000$ Coulomb Charges in a Disk: Breaking the $10^{5}$ Barrier",arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24750,Reinforcement Learning in Operational Research: A Technical Review and Practical Roadmap,arxiv,math
+2026-09-22,https://arxiv.org/abs/2609.24849,Quantitative finite-population approximation of heterogeneous linear--quadratic mean-field control with common noise,arxiv,math
+2026-09-22,https://huggingface.co/papers/2609.22068,CodeMidas: Scaling Agentic Coding RL Environments from Code Itself (88▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.05571,Grounded Skill Synthesis from Code at Scale for Agentic Intelligence (85▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.15779,EvoOntology: A Self-Evolving Ontology Layer for Data Agents (69▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.22000,RecreationWorld: Scalable and Verifiable Environments for Hybrid Computer-Use Agents (60▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.21346,IntBMoE: Integrating Block-Level Conditioning into Expert Composition for Full-Participation Mixture-of-Experts (33▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.21465,"OmniVChat: Synthesizing, Benchmarking, and Training for Native Audio-Visual Dialogue (30▲)",huggingface,
+2026-09-22,https://huggingface.co/papers/2609.20816,Paint-Anything: Unified Any-Color Control for Image Generation and Editing (29▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.22086,Designer-RSI: Evolving Procedural Memory from User Traffic for Agentic Graphic Design (22▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.22069,OmniVBench: A Benchmark and Large-Scale Dataset for Omni Reference-to-Video Generation (19▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.20886,BI-Agent and BI-Bench: Towards Automating End-to-End Business Intelligence (12▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.22083,MintAct: A Unified Visual Agent for Digital Environments (12▲),huggingface,
+2026-09-22,https://huggingface.co/papers/2609.21749,GraphSkillEvo: Evolutionary Optimization of Graph-Structured Agent Skills (9▲),huggingface,
