@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-09-12,https://huggingface.co/papers/2609.10715,NCP-ArchPreview Technical Report: Moving towards Latent Space Language Models through Next Concept Prediction (177▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11929,SenseNova-U1.5: Towards Native Unified Visual Intelligence (139▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.07064,SpatialBlock: Enhancing Spatial Intelligence in LVLMs via Synthetic Block-Stacking Problem (66▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11317,Mi-Ripple: Restoring Images Degraded by Iterative AI Editing (19▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11412,X-AuT: Progressive Audio-Encoder Compression for Speech LLMs with Cross-Scale Distillation (13▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.05903,EvoSafeHarness: Evolving Model- and Domain-Specific Harnesses for Securing Agents (11▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11561,Memory as Plans: World-Action Modeling with Memory-Grounded Planning (10▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11499,Recursive Code World Models: Building Complex Worlds through Recursive Scene Programs (7▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.01515,TempCloze: Can Video-LLMs Identify the Missing Middle? (6▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.10712,An Open Recipe for IMO Gold: Training Nemotron for Olympiad Mathematics (6▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11486,FreeFlow: A Bias-free Hierarchical Transformer for Optical Flow Estimation (5▲),huggingface,
-2026-09-12,https://huggingface.co/papers/2609.11548,World in World: Explore the World with World Models (5▲),huggingface,
 2026-09-14,https://arxiv.org/abs/2210.11003,Synthetic Blips: Generalizing Synthetic Controls for Dynamic Treatment Effects,arxiv,stat
 2026-09-14,https://arxiv.org/abs/2309.06534,Guided Adversarial Robust Transfer Learning with Source Mixing,arxiv,stat
 2026-09-14,https://arxiv.org/abs/2404.18732,Two-way Homogeneity Pursuit for Quantile Network Vector Autoregression,arxiv,stat
@@ -2085,3 +2073,15 @@ date,url,title,source,category
 2026-09-25,https://huggingface.co/papers/2609.23784,"PackLab: A Comprehensive Framework for Developing, Training, and Evaluating MLLMs in Robotic Bin Packing (10▲)",huggingface,
 2026-09-25,https://huggingface.co/papers/2609.28256,MemBodied: Recurrent Associative Memory for Vision-Language-Action Models (9▲),huggingface,
 2026-09-25,https://huggingface.co/papers/2609.27490,WhatWorkedBench: Benchmarking Experimental Understanding in AI Agents (8▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.28654,Training Object Permanence in World Models (177▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.29845,Your Transformer Can Hold Two Thoughts at Once: Evidence of Linear Superposition in LLMs (55▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.30221,WanPE: Towards Cinematic Prompt Enhancement for Modern Text-to-Video Generation (25▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.23407,OmniEcho: Spatial Audio Understanding for Embodied Agents (20▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.28416,Agent-Editing World Model: Rethinking World Modeling for LLM Agents (13▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.29362,Parts-of-Speech as Emergent Categories in SAE Latent Space (10▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.29892,Qwen-Planner-Agent: A Closed-Loop AI-for-AI Framework for Real-World Mobile Planner Agents (9▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.29444,IterSynth: Rethinking Deep Search Agents via Role-Decoupled Iterative Synthesis (8▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.29421,Rufus-Air: An Open LLM Post-Training Recipe (6▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.29028,RGBD20K: A Large-Scale Benchmark for RGB-D Semantic Segmentation (6▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.23087,Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone (6▲),huggingface,
+2026-09-26,https://huggingface.co/papers/2609.30233,Coding Agents for Generalized Task and Motion Planning Problems (6▲),huggingface,
