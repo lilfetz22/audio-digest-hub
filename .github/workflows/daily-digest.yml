@@ -21,13 +21,13 @@ name: Daily Audio Digest
 on:
   schedule:
     # 1:08 AM EDT / 12:08 AM EST
-    - cron: '8 5 * * *'
+    - cron: "8 5 * * *"
   workflow_dispatch:
     inputs:
       skip_cleanup:
-        description: 'Skip Friday cleanup step'
+        description: "Skip Friday cleanup step"
         required: false
-        default: 'false'
+        default: "false"
         type: boolean
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
-      contents: write  # needed to commit seen_papers.csv back to the repo
+      contents: write # needed to commit seen_papers.csv back to the repo
 
     steps:
       # -----------------------------------------------------------------------
@@ -50,7 +50,7 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       # -----------------------------------------------------------------------
       # 2b. Cache HuggingFace model weights so they are only downloaded once.
@@ -96,6 +96,34 @@ jobs:
           printf '%s' "$CONFIG_INI"              > config.ini
           printf '%s' "$GOOGLE_CREDENTIALS_JSON" > credentials.json
           printf '%s' "$GOOGLE_TOKEN_JSON"       > token.json
+
+      # -----------------------------------------------------------------------
+      # 5b. Seed raw_content from the tracked manual_content inbox so manually
+      #     added articles (committed under src/audiobooks/manual_content/)
+      #     get picked up by the existing dated *.txt loader in
+      #     generate_audiobook.py. Missing/empty manual_content is not an
+      #     error; only direct, regular *.txt files are copied (no
+      #     subdirectories, no non-.txt files).
+      # -----------------------------------------------------------------------
+      - name: Copy manual content into raw_content inbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src/audiobooks/raw_content
+          shopt -s nullglob
+          files=(src/audiobooks/manual_content/*.txt)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No manual_content/*.txt files found; skipping copy."
+          else
+            copied=0
+            for f in "${files[@]}"; do
+              if [ -f "$f" ]; then
+                cp -- "$f" src/audiobooks/raw_content/
+                copied=$((copied + 1))
+              fi
+            done
+            echo "Copied $copied file(s) from manual_content to raw_content."
+          fi
 
       # -----------------------------------------------------------------------
       # 6. Run the pipeline

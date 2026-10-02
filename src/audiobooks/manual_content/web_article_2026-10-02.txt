@@ -1,0 +1,535 @@
+===== Benchmarking LLM Inference at Scale with AIPerf ===== 
+
+You’re deploying a model on a system. It starts up, prompts are getting responses. Now the hard question: Is this fast?
+
+Your instincts might lead you to send curl commands, hand-roll an asyncio script, or vibe code yet another one-off load generator. All of these paths have the same problem: single-process performance limits, Python’s GIL capping concurrency, or numbers measured against a reference you built yourself. Either way, you end up with results you can’t fully trust, attached to tooling you’ll have to rewrite the moment requirements change.
+
+What you need is a load client that can saturate a real server without becoming the bottleneck, produce output you can act on, and take five minutes to configure, not five hours. That’s NVIDIA AIPerf.
+
+What AIPerf does differently
+AIPerf is the designated successor to GenAI-Perf and is a ground-up rewrite. The design choices reflect hard lessons from running LLM benchmarks at scale:
+
+A clean break from the old architecture. AIPerf doesn’t run on top of Perf Analyzer the way GenAI-Perf did. It’s a clean architectural break and the reason AIPerf can scale the way it does. If you’re porting an existing workflow, the migration guide covers the key deltas.
+The client shouldn’t be the bottleneck. Most benchmarkers, GenAI-Perf included, use a single-process architecture that becomes GIL-bound under real concurrency or request rate. AIPerf is a multiprocessed system: worker processes generate load, separate record-processor services handle results, and everything is coordinated over ZMQ.. This structure allows for more accurate server benchmarking by preventing AIPerf from becoming a client-side bottleneck.
+Workload breadth that matches what you actually run. AIPerf supports 15+ endpoint types: chat, responses, NIM rankings, image generation, and more — along with public datasets like ShareGPT and trace replay formats from Mooncake, Baseten, WEKA (AgentX), and others. Whether you’re running a quick synthetic smoke test or replaying captured production traffic, you don’t need a different tool.
+Load shape you actually control. AIPerf supports constant, Poisson, and gamma arrival patterns with tunable burstiness, gradual ramping for concurrency and request rate, and synthetic distributions including vLLM/SGLang range-ratio for variable ISL/OSL. You control the shape of the load, not just the volume.
+Your maiden benchmark: Synthetic ISL/OSL on vLLM
+For this walkthrough we’ll use Qwen3-0.6B served through vLLM. The model choice is deliberate; it’s small enough to run on a single GPU and fast enough to iterate on without waiting. The point isn’t to benchmark Qwen3-0.6B specifically; it’s to establish the measurement loop. Once you have that, swapping in a different model or endpoint is a one-flag change.
+
+Start the Server
+
+Pull and start vLLM with the reasoning parser enabled:
+
+docker pull vllm/vllm-openai:latest
+docker run --gpus all -p 8000:8000 -e HF_TOKEN vllm/vllm-openai:latest \
+  --model Qwen/Qwen3-0.6B \
+  --reasoning-parser qwen3 \
+  --host 0.0.0.0 --port 8000
+Install AIPerf
+We can use uv to install a central copy:
+
+uv tool install aiperf
+
+Or for a virtual environment:
+
+uv venv venv
+source venv/bin/activate
+uv pip install aiperf
+One platform note: on aarch64, the crick dependency ships as source-only and requires a C toolchain (build-essential on Debian/Ubuntu, Development Tools on RHEL). If the install stalls on that package, that’s why.
+
+Running the benchmark
+With the server up and AIPerf installed, we can now run our first profile:
+
+aiperf profile \
+  --model Qwen/Qwen3-0.6B \
+  --endpoint-type chat \
+  --streaming \
+  --url localhost:8000 \
+  --synthetic-input-tokens-mean 128 \
+  --synthetic-input-tokens-stddev 0 \
+  --output-tokens-mean 128 \
+  --output-tokens-stddev 0 \
+  --extra-inputs min_tokens:128 \
+  --extra-inputs ignore_eos:true
+A few flags here are doing more work than they look like:
+
+--synthetic-input-tokens-stddev 0 and --output-tokens-stddev 0 pin the workload to exactly 128 input and 128 output tokens per request. This reproduces a commonly used static benchmark that holds request and output lengths constant.
+
+--extra-inputs min_tokens:128 and --extra-inputs ignore_eos:true tell the model to actually emit 128 tokens rather than stopping early. Without these, the output token count is a suggestion. The model stops whenever it naturally finishes, which can be well short of your target OSL. Throughput numbers end up lower than they should be, and they’re not reproducible across runs.
+
+--streaming is not optional if you want to measure TTFT and ITL. Without streaming, the server batches the full response before sending it, and there are no first- or decode-token events to measure.
+
+What you’ll see
+An animated capture of the AIPerf live TUI dashboard that’s displayed while running a benchmark. The dashboard is split into three panels, with the top two-thirds split between live progress on the left and a breakdown of a variety of statistics broken down into percentiles on the right. The bottom third of the screen displays a running log from the AIPerf backend as it executes the benchmark.
+
+Figure 1. An example animation of the AIPerf live dashboard user interface. The live dashboard shows the progress of the run, a listing of metrics along with their distributions, as well as a running log of events from the AIPerf backend
+We’ll walk through how to read these numbers in the next section. For now, notice the shape of the output in Figure 2, below: latency broken down by percentile, throughput in tokens per second, and request-level statistics all in one place. That’s the baseline you’ll be comparing everything else against.
+
+A screenshot of the statistics summary displayed in the terminal at the end of an AIPerf benchmark run. The screenshot shows from top to bottom three tables: effective metrics, active metrics, and summary metrics. Each table is broken down into their average, minimum, maximum, p99, p90, p50, standard deviation with a column dedicated to each. At the end of the output, AIPerf reports the command line to repeat the benchmark, benchmark duration, paths to the final summary and server metric collection in both csv and JSON format, and the path to the run log file.
+
+Figure 2. An example screenshot of the output metrics at the end of an AIPerf run which includes a summary of effective, active, summary statistics for a variety of different metrics along with percentile breakdowns for quick review, reproduction command line, and output locations
+Reading the numbers: What AIPerf surfaces
+Once a run completes, AIPerf prints a metrics table to the console and writes the full results to CSV and JSON. Here’s what you’re looking at.
+
+The core four:
+
+TTFT (Time to First Token) — How long from request sent to first token received. The primary latency signal for interactive use cases.
+ITL (Inter-Token Latency) — Time between successive tokens during generation. High ITL means the decode phase is struggling, even if TTFT looks healthy.
+Request Latency — End-to-end time for the full response. Combines prefill and decode cost into a single number.
+Output Token Throughput — Tokens generated per second across all concurrent requests. The primary throughput signal for capacity planning.
+For full definitions of these and every other metric AIPerf reports, see the Metrics Reference.
+
+Getting the full picture. Each of the above is reported in percentile breakdowns (p25, p50, p75, p90, p95, p99) alongside their minimums, maximums, averages, and standard deviations. These breakdowns matter because they can highlight long tail distributions; a server with a healthy mean TTFT and an outlier p99 looks fine in aggregate and fails in production.
+
+Beyond the core four. With DCGM or pynvml available, AIPerf also pulls GPU power draw, utilization, and memory consumption into the same run output. Correlating a latency spike with a memory pressure event doesn’t require a separate profiling session, the telemetry is already there.
+
+Going further: Configuring a traffic pattern
+Now that our feet are wet with a static benchmark, we can start exploring something more dynamic. The section above provided an extremely fixed traffic pattern, but real inference traffic doesn’t follow a static pattern. To benchmark with a scenario that’s less rigid, we can use some of AIPerf’s synthetic workload knobs to introduce variability to our requests.
+
+aiperf profile \
+  --model Qwen/Qwen3-0.6B \
+  --endpoint-type chat \
+  --streaming \
+  --url localhost:8000 \
+  --request-rate 10 \
+  --arrival-pattern poisson \
+  --synthetic-input-tokens-mean 512 \
+  --synthetic-input-tokens-stddev 128 \
+  --output-tokens-mean 128 \
+  --output-tokens-stddev 32 \
+  --random-seed 42 \
+  --request-count 200
+A few things changed from the static benchmark above.
+
+--arrival-pattern poisson with --request-rate 10 means requests arrive at an average of 10 per second, with inter-arrival times drawn from an exponential distribution. The server now experiences bursts and gaps rather than a single user stream, which is what queuing actually looks like under real traffic.
+
+--synthetic-input-tokens-stddev 128 introduces variance around the 512-token mean, producing a mix of short and long prompts. The server has to handle variable prompt lengths during prefill rather than identical ones.
+
+--output-tokens-stddev 32 adds variance on the output side. Notice that min_tokens and ignore_eos are gone from this command. In the static benchmark those flags pinned outputs to exactly 128 tokens to keep the baseline clean; we’re deliberately releasing that constraint so the output distribution can vary.
+
+--random-seed 42 makes the Poisson timing and synthetic length draws reproducible. Rerunning this command produces the same sequence of requests.
+
+--streaming is not optional. Without streaming, the server batches the full response before sending it, and there’s no first- or decode-token events to measure.
+
+Looking at the LLM metrics from this run, the distributions are noticeably wider than the static baseline — which is expected when more requests are simultaneously competing for GPU access and prefill lengths vary per request.
+
+A screenshot that zooms in on the summary table from Figure 2. It shows aggregate metrics such as time to first token, request latency, inter-token latency, and a number of other metrics. Each metric is broken down with separate columns for average, minimum, maximum, p99, p90, p50, and standard deviation.
+
+Figure 3. An example screenshot of the summary statistics from the Poisson arrival pattern run. The distribution of statistics drastically differs from the 512/128 static scenario due to the new traffic pattern
+Looking at the graphs in Figure 4, below, you can see that the Poisson command line introduced a request rate centered, but not exactly matching, around 10 requests/second. This arrival rate emulates jitter around when requests arrive compared to the constant mode which guarantees a fixed 10 requests/second.
+
+A line plot that shows a dashed roofline compared against a blue line, where the x-axis is the time (in seconds) since the first request was sent and the y-axis is the cumulative number of requests dispatched. In this case, the slope of the dashed line is our requested 10 requests per second if we requested a constant rate (without any jitter) and the accompanying blue line follows a similar slope, but is more jagged due to the jitter introduced by the Poisson mode.
+
+Figure 4. The reported delay from first request dispatch, compared to the constant 10 requests/sec mode, showing variation in dispatch timing centered around the specified request rate
+You can see in Figure 5, below, that there is a variation in the request length centered around the mean of 512 tokens, with input sequence lengths ranging 154 to 818 tokens. 
+
+A histogram showing the distribution of input sequence lengths when requesting an average input length of 512 tokens with a standard deviation of 128 tokens. We see that the histogram is centered around 514 and produces a bell-shaped curve that is reasonably symmetrical on both sides spanning from a minimum of 154 tokens to a maximum of 818 tokens.
+
+Figure 5. A histogram showing the distribution of input (request) lengths centered around the requested 512 average token count
+Comparing TTFT between the two runs, you can see that the Poisson run shows a much wider spread. More requests are simultaneously competing for GPU access, prefill lengths vary, and prefill and decode operations overlap. The single-concurrency case is an idealized scenario which runs one request at a time presenting the lowest possible TTFT, at the cost of throughput.
+
+A histogram showing two distributions of time-to-first-token: a reference single-user (concurrency 1) histogram in blue and a request rate of 10 requests per second histogram in green On the x-axis is the time-to-first-token and on the y-axis the percentage of requests that express a specific time-to-first-token. We see that the single user scenario has much lower first token latency with very high center peak and much tighter distribution (less standard deviation). Comparatively, the green histogram has a much flatter and more broadly distributed first token latency showing the effect of a more contested server on initial response to the user.
+
+Figure 6. A histogram comparing the difference in time-to-first-token distribution between a single active user and Poisson arrival pattern AIPerf runs
+In Figure 6, above, you can see that the single user run experiences less TTFT variability than the much more varied workload in the Poisson experiment.
+
+There’s more to explore
+This walkthrough covers the basics, but AIPerf is also built for more complex scenarios.
+
+The same tool handles multi-node Kubernetes deployments, KV cache reuse warm up mechanics, trace replay from production traffic, prefix synthesis, custom datasets, and sweep configurations across concurrency levels.
+
+If you’re running distributed inference at scale, see How NVIDIA Dynamo 1.0 Powers Multi-Node Inference at Production Scale.
+
+The tutorials in the AIPerf repo are the fastest way in. The AIPerf repo and docs are the canonical reference for new features and contributions.
+
+====== How to Evaluate AI Agents From Tool Calls to Task Completion ======
+When you ship an AI agent, the key question is whether it can execute a chain of work across dozens of sequential tool calls against a live environment, and recover when a step fails. Scoring whether the model sounds right tells you almost nothing about whether the work finished.
+
+That gap is why agent evaluation has had to evolve from scoring a single function call to scoring an entire task, with tool calling as the connective tissue underneath. This post traces that arc and explains why nearly every serious agent benchmark now rests on tool use.
+
+Why isn’t standard LLM benchmarking enough?
+The original harnesses were built for static tasks. The first model-agnostic, open-source harness decoupled the model from the evaluation protocol.
+
+Agents broke this assumption. Operating across multi-step tasks, an agent calls tools, handles errors, and observes results over many steps, making a single output string insufficient. The Berkeley Function-Calling Leaderboard (BFCL) emerged to evaluate function selection and argument accuracy across single- and multi-turn scenarios. However, BFCL only evaluates individual calls—a valid issue_refund call still fails if underlying checks or updates were skipped. Call accuracy is necessary, but not sufficient.
+
+From scoring calls to scoring the environment
+Full agentic evaluation now requires a full execution environment: one that executes each tool call, tracks state across steps, and reads the world afterward to decide whether the work got done.
+
+Two scoring layers sit on top of it:
+
+Step-level (process scoring) asks was this call valid, relevant, and useful given the state at that point?
+End-to-end (E2E, or outcome scoring) ignores the path and checks only the final state: did the refund post, did the ticket route correctly?
+Step-level tells you where the chain breaks, which is what you want when debugging or targeting fine-tuning effort; E2E collapses a failure on step one and a failure on step nine into the same “task failed.” E2E is what your users actually experience, which is why most production evals gate the release on it and keep step-level tracing underneath for debugging.
+
+Those two scores are two readings of one object: the trace. A trace is the ordered log of a single attempt: the user message, each step, and the environment state when the attempt stops. Process scoring grades the rows. E2E scoring grades the final state.
+
+What a benchmark run measures
+A tool-calling benchmark scores three things in order: deciding to use a tool, selecting the right one, and populating its arguments. A model that reaches for a tool when a direct answer would fail as surely as one that skips a tool it needed. Cost and latency ride on top, set by the call’s verbosity and runtime.
+
+Every run rolls up through a fixed hierarchy: Benchmark → Trial → Task → Turn → Step:
+
+A trial is one independent pass over the whole task set under a fixed configuration.
+A task is one independently scorable problem instance, identified by a task ID.
+A turn is one exchange boundary: a message in, the agent’s reply out, everything between belongs to that turn.
+A step is one atomic action inside a turn — a tool/command invocation, or a non-tool emission like a plan or the final message.
+Diagram comparing turn vs. step in agent execution: Turn 1 shows a user message followed by 4 steps ending in a reply; Turn 2 shows a user message followed by 1 step ending in a reply.
+
+
+Figure 1. Visualization of turn vs step in agent workflows
+A step is usually a tool call, and every score above it rolls up from those steps. The metrics worth tracking collapse onto three axes: accuracy, verbosity, cost (see Table 1, below).
+
+Metric	Formula	Axis	Why it exists
+Task success rate	successful_tasks / tasks	Accuracy	The release gate. Did the environment reach the goal state?
+Consistency	range of success rate across 3–5 trials	Accuracy	A 90% / 74% split isn’t 84%. Report 82–88%, not a point estimate.
+Tool-call precision	correct_calls / calls_issued	Accuracy	Hallucinated names and extra calls surface here, not in success rate.
+Argument accuracy	correct_args / calls_with_right_tool	Accuracy	Separates “wrong API” from “right API, filled wrong.”
+Steps per success	steps / successful_tasks	Verbosity	How long the trajectory runs when the task actually finishes.
+Cost per success	spend / successful_tasks	Cost	The economic unit. Tokens and GPU-seconds only matter per successful task.
+Table 1. Core evaluation metrics, grouped by axis (accuracy, verbosity, cost)
+The pairings matter: success rate without consistency is a point estimate on a stochastic system (a model that hits 90% then 74% is a worse bet than one holding 84%); tool-call precision without argument accuracy hides slot-filling failures.
+
+Step count is often the axis that varies most across models on the same task — four steps versus fifteen — though on suites like Terminal-Bench 2.0 steps-per-turn varies too, so which axis moves most is benchmark-dependent. Parallel tool calling cuts step count and latency, but not call count: a one-step turn firing four tools still issued four calls. Roll up in order; don’t average steps and call it a benchmark score.
+
+How to read an evaluation
+Two benchmarks can both claim to test tool calling and produce numbers that aren’t comparable. Three dimensions explain most of the gap:
+
+Task complexity — single-turn with one tool, or multi-turn requiring planning, error recovery, and state management? A single-call benchmark won’t tell you whether a model collapses on step eight of fifteen.
+Statefulness — does the environment update on each action? Stateful benchmarks surface drift, context loss, and corrupted state that static ones miss.
+Methodology — executable verification (did the DB update, did tests pass) is the gold standard. Reference-based evaluation needs an annotated answer set someone must maintain. LLM-as-a-Judge fills the gap where no executable check exists, but treats its scores as provisional until validated against human ratings on a sample.
+Contamination now extends beyond training data leaks to live variants: web-searching agents retrieving answer keys during evaluation, and datasets on Hugging Face quickly re-scraped into pretraining corpora. Private domain evals solve this by being unable to scrape.
+
+Table 2, below, is a public trace from a real benchmark run using step-level and E2E scoring, where the suite rather than an artificial ticket provides the tools, user, and completion criteria.
+
+Suite: SWE-bench Verified (real GitHub issues, executable test verification)
+Task ID: pytest-dev__pytest-5262 (trial .2, turns 0–4)
+User / user-simulator opening: “Implement the necessary changes to the repository (/testbed) so that the requirements specified in the issue are satisfied” — the issue: _pytest.capture.EncodedFile reports mode rb+ (binary) from its underlying buffer, but its write() only accepts str, so external code that checks .mode (e.g. youtube-dl) crashes when it writes bytes.
+Harness notes (tools exposed, max steps, parallel calling on/off): OpenHands agent harness; tools exposed: terminal, file_editor, task_tracker, finish; parallel tool-calling off (one tool call per turn); repo state persists turn to turn (real filesystem + git, not a mock).
+Step	Turn	Call	Environment observation	Verdict	Why (valid / useful / redundant / recovered / policy)
+1	0	terminal(find /testbed -name "capture.py")	Returns /testbed/src/_pytest/capture.py	valid	Locates the file named in the issue before editing anything
+2	1	file_editor(view, capture.py)	Dumps the full file (400+ lines)	redundant	File is large; grepping for the class first would have been more targeted
+3	2	terminal(grep -n "EncodedFile" capture.py)	Returns 422: return EncodedFile(...) / 425: class EncodedFile(object):	recovered	Corrects step 2’s inefficiency by narrowing straight to the relevant lines
+4	3–4	file_editor(view, view_range=[420,450]/[450,470])	Shows EncodedFile.__init__/__getattr__, revealing it delegates .mode straight from the binary-mode buffer	valid	Pinpoints the exact root cause (unfiltered __getattr__ delegation) that step 5+ fixes
+Table 2. Extracted trace call on SWE-Bench verified evaluation
+E2E check (DB state / tests / ticket): PASSED
+E2E score (0 or 1): 1
+Step-level score (passes / steps): 3/4
+Tool-call precision: 3/4
+Argument accuracy: 4/4
+Looking at the results that were outputted, it is important to look at the last 5 bullets: E2E check, E2E score, step level score, tool-call precision, and argument accuracy. E2E check tells us that the related tests for the bug issues it sought to fix passed, meaning E2E score in this case is 1 (is_resolved: true). The next metric is the step level score that tells you how many of the steps the model took were actually needed. Looking at the score for the table above, step level is 3/4 due to one of the steps in this case being redundant – in particular step 2. In this case, it directly plays into the tool-call precision which also received a 3/4 due to the minor misstep. For this trace, our final metric argument accuracy saw that all arguments filled in correctly with no malformed arguments.
+
+Why benchmarks are converging on tool use
+The line between “calling a tool” and “completing a task” no longer holds: most benchmarks measuring general capability now also measure tool use because models aren’t run without tools in any viable deployment. A benchmark that withholds tool access scores a capability nobody ships.
+
+Not every benchmark makes the case. HumanEval runs generated Python against unit tests, providing executable verification, but no tool call and no environment to act on. SWE-bench is where the shift becomes clear: resolving a real GitHub issue means navigating a codebase, writing a patch, and passing the suite — file-read, search, and edit calls in sequence. The score measures the outcome, but the trajectory underneath consists entirely of tool calls. In many cases, then, the benchmarks you already run for general capability are already exercising tool use. That reframes the question that matters:
+
+Academic benchmarks measure a model’s capability ceiling in the abstract. Enterprise benchmarks answer the narrower, more useful question: can it do my job — your tasks, against your APIs, under your policies? The closer a benchmark sits to production, the more its score should weigh in your decision.
+
+Analyzing Nemotron 3.5 Lightning through this lens
+Read NVIDIA Nemotron 3.5 Lightning’s published suite as task completion and time-to-done, not isolated call accuracy. Banking scores completion across a multi-turn banking conversation — the refund trace at scale, not a single call. GDPval-AA v2 scores real agentic work from actual job outputs, judged pairwise by a panel of LLM judges with Elo anchored to a 1,000 human-expert baseline — the kind of human validation that keeps a judge score trustworthy. On PinchBench, Nemotron 3.5 Lightning hits 86% accuracy while finishing 10,000 tasks 30% faster than Qwen3.6 35B at comparable accuracy — a model that finishes efficiently beats one scoring higher on isolated accuracy while burning more steps and tokens.
+
+Scatter plot of PinchBench accuracy vs. time to complete 10,000 tasks (NVIDIA H100 GPU hours). Nemotron 3.5 Lightning (green) reaches ~86% accuracy in ~10 GPU hours. Qwen3.6-35B (blue) matches that accuracy but takes ~20 GPU hours. Gemma 4 26B (blue) scores ~75% accuracy at ~21 GPU hours.
+Figure 2. On PinchBench, Nemotron 3.5 Lightning reaches 86% accuracy while completing tasks up to 30% faster than Qwen3.6 35B at comparable accuracy
+Public scores are a great signal, but they shouldn’t be considered as a release gate. Adapting the model to your task and use-cases is as important as ever.
+
+Benchmarking your own workload
+Set a public floor. Run a published agentic suite; record success rate and its range across 3–5 trials.
+Build a domain eval from your real tickets, traces, and APIs. Gate on environment state — a database row, a merged PR, a closed ticket — not a judge’s opinion of the final message.
+Adapt the model and harness to that distribution.
+Re-measure success rate, consistency, steps per success, and cost per success. Keep step-level traces for debugging.
+Verify consequences in the environment, use judges for language, and use tool-call precision and argument accuracy to find where the chain breaks.
+
+To reproduce the published numbers, Nemotron ships reproducibility docs covering the configs behind the model card scores. Try it on build.nvidia.com, grab weights from Hugging Face, or follow the NIM guide.
+
+Tool calling in the realm of LLM benchmarking is the foundation that evaluations today rest on. Being able to build, read, and understand these evaluations is pertinent in making an informed decision for your use case.
+
+==== AI Native by Design: Lessons Learned from Building NVIDIA TensorRT Model Connect ====
+
+Parallel work, model-family isolation, reversible changes, and GPU-backed validation shaped an open source project designed around coding agents
+
+NVIDIA TensorRT Model Connect is an open source collection of AI model reference implementations in C++, built on top of NVIDIA TensorRT. It began with a practical question: could the performance of the NVIDIA inference stack be made accessible to model developers who are not TensorRT experts?
+
+The NVIDIA team initially approached the project as an experiment with coding agents. Within the first few days, however, the interest shifted to a larger question: what would it mean to design a serious software project around AI agents from the beginning—not merely use an agent to accelerate an existing development process?
+
+The answer has not been an elaborate orchestration system or an ever-growing collection of prompts. It has been a set of engineering choices:
+
+Choose work that can scale horizontally
+Give agents outcomes and objective references instead of prescribing every implementation step
+Isolate model family changes so failures remain local
+Make changes easy to evaluate and revert
+Treat automated validation as the production constraint
+AI increases the rate at which candidate implementations can be produced. Architecture and validation determine whether that increased output becomes reliable software.
+
+What does it mean to call TensorRT Model Connect AI native?
+AI native can mean many things. In reference to TensorRT Model Connect, the term is used in a narrow, operational sense. AI-native projects treat AI outputs as modular, verifiable units of work. Isolating these units prevents errors from cascading, ensuring that the inherent unpredictability of AI models does not compromise system stability.
+
+This does not mean that AI writes everything. It does not mean that human judgment disappears. And it does not mean that every software project should adopt the same model. Nor does it mean code emitted without supervision; rather, it refers to a production system capable of exploring many candidate changes and subjecting each one to repeatable quality control. Compute helps create the candidates. Tests, reference comparisons, benchmarks, and human review determine what is ready for shipping.
+
+The following sections explain the lessons learned from building AI-native TensorRT Model Connect.
+
+Start with work that can scale horizontally
+Some engineering workloads have a long serial critical path. Others comprise many independent workstreams. Adding agents helps far more in the second category.
+
+The long tail of AI models is a natural fit for horizontal work. Model families, configurations, operators, runtime paths, and validation cases can often be investigated independently. Work on one model family does not always need to block work on another.
+
+The geometry of that problem is central to TensorRT Model Connect.
+
+The project provides family-owned reference implementations that turn supported Hugging Face or local checkpoints into versioned .bundle artifacts, then expose task-oriented native C++ APIs for text, vision, audio, diffusion, segmentation, embedding, forecasting, and other workloads. The build and runtime boundary is documented in the TensorRT Model Connect Project Overview.
+
+As of the public July 29, 2026 release comparison, the project covered 128 model families tested on NVIDIA GB300. That number is not, in itself, a measure of agent productivity. It does show why the problem benefits from an architecture that can grow by adding independent units rather than extending one serial integration path.
+
+The first lesson is therefore simple: AI-native development begins with problem selection. If work cannot be decomposed into parallel tasks, adding more agents mostly introduces coordination overhead and the potential for error cascades.
+
+Provide agents with outcomes and references, not recipes
+Most TensorRT Model Connect agent runs begin with an outcome: support a model family, close an accuracy gap, improve a performance path, or strengthen a contract. The evidence required to accept the result is also identified. This often includes behavior from an established reference implementation, plus project-specific tests and constraints.
+
+The process intentionally began with a simple outer loop: a high-level goal, a general-purpose coding agent, repository instructions, and strict validation. Humans currently continue to initiate most long-running tasks. Prescribing the full implementation plan is generally avoided unless the task or an observed failure mode requires it.
+
+The working hypothesis is that a capable general-purpose agent benefits from room to use patterns it has already learned. Instead of encoding an engineer’s preferred implementation into every prompt, specify the result, the boundaries, and the evidence required.
+
+The implementation path is flexible. The acceptance criteria are not.
+
+This is minimal orchestration, not minimal control. The agent may explore, implement, test, fail, and revise inside an isolated task. The resulting change must still satisfy the same architectural and technical gates as any other contribution. Constraints are added when repeated evidence shows they are needed, not simply because a workflow can be hard-coded.
+
+Isolation as a scaling unit
+The most important constraint on AI-native development has not been the agent’s ability to complete an individual task. It has been the architecture surrounding that task.
+
+For TensorRT Model Connect, components that evolve at different speeds were separated:
+
+TensorRT and CUDA form the stable execution foundation: Compatibility, performance, reliability, and long-term contracts matter here.
+TensorRT Model Connect is the faster-moving integration layer: It connects a broad and rapidly changing model ecosystem to that foundation.
+Model-family implementations own model-specific knowledge: Builders, runtime pipelines, helper kernels, configuration, and validation evidence stay with the family that needs them.
+This design prioritizes independence. While shared abstractions can reduce code volume, they often couple unrelated tasks, increase merge conflicts, and expand the impact of potential errors. Some redundancy between similar model families is an acceptable trade-off for scaling.
+
+Therefore, promote behavior into shared infrastructure only when multiple independent owners need the same assumption-free contract. Everything else stays close to the model family that owns it. The public TensorRT Model Connect Units and Ownership documentation makes those boundaries explicit.
+
+Flow chart titled “An AI-native software factory” with sections labeled (left to right) Human Intent, High-Level Goal, Agent Runs x N, Validation, and Verified.
+
+Figure 1. An AI-native software factory is a pipeline—much like the assembly line introduced by Ford—that consumes tokens to produce software, shifting the focus of engineering work from the individual outcome to the optimization of the pipeline itself
+Isolation does not eliminate all systemic risk: shared build, runtime, packaging, and CI infrastructure can still affect multiple families. But it materially reduces the number of changes that must move together and makes parallel work safer.
+
+Isolation is paired with reversibility. Two-way doors are preferred: make changes that are easy to evaluate, simple to revert, and unlikely to cascade into unrelated model families. This approach enables rapid learning without mistaking speed for permission to weaken the system.
+
+When candidate code becomes cheaper, evidence becomes more expensive
+AI makes candidate implementations cheap. It does not make correctness cheap. Only a small number of candidates survive automation and human judgment.
+
+Make evidence human-legible: Machine checks are necessary, but a reviewer cannot quickly interpret a pile of tensors or raw values. Semantic task interfaces—text in/text out or text in/image out—make final behavior legible enough for a human to spot-check quickly. A spot check is not proof. It complements automated tests by ensuring that their evidence ends in behavior a person can understand.
+Make validation agent-native and self-improving: Agents can generate tests, probes, and operating procedures alongside the code, then refine them as real artifacts expose missing assumptions. If automated checks pass but a human finds a bad final artifact, the process has admitted a false success.
+Reproduce: Reproduce the failure, encode the missing invariant or regression, and harden the SOP so the next run is harder to fool.
+Make QA and development adversarial collaborators: QA is not a downstream team that receives a finished implementation. QA and developers operate on the same reproducible CI pipeline from organizationally independent positions. QA should function much like a red team attempting to falsify the implementation’s claims. Developers harden the implementation and the pipeline in response. Shared evidence makes findings reproducible. Independent ownership keeps the challenge credible.
+Candidate code can scale with agents and tokens. Trustworthy software can scale only as fast as its evidence and validation system.
+
+Diagram showing a shared TensorRT Model Connect interface feeding three isolated model-family workspaces, each with its own builder, runtime pipeline, and local tests. All families run on a common TensorRT and CUDA foundation, while a highlighted failure remains contained within Model family B. 
+
+Figure 2. Isolation is the unit of scale. Humans own intent and release, agents explore, evidence decides
+Human judgment moves up a level
+The practical effect of this approach is that every engineer takes on work that resembles management and direction. The highest-leverage questions move upstream:
+
+What problem is worth solving?
+Can the work be decomposed and scaled safely?
+What technical and organizational constraints can turn untrusted candidate outputs into a result that deserves trust?
+Agent outputs begin as untrusted candidates. Model-family ownership, reversible changes, independent QA challenge, reproducible CI, and human-legible evidence do not guarantee correctness. They make claims falsifiable, failures easier to contain, and acceptance or rejection easier to review.
+
+Humans still inspect implementations and debug failures. But their most valuable work increasingly lies in designing and governing the system: setting intent and acceptance criteria, deciding where independence is required, interpreting anomalous evidence, and remaining accountable for release.
+
+What aspects of TensorRT Model Connect remain unsolved?
+TensorRT Model Connect is currently in public preview, and several parts of this model are still being tested and refined.
+
+Not every engineering task can be decomposed into independent units.
+Minimal project-specific orchestration is not a universal best practice. Adding structure is expected where repeated failures justify it.
+Model-family isolation reduces blast radius but cannot eliminate failures in shared infrastructure.
+Reference implementations are useful comparison points, not infallible oracles. Tests also need independent invariants and carefully reviewed tolerances.
+More parallel agents can increase demand for validation faster than they increase accepted throughput.
+Most tasks are still initiated by humans. Automated task discovery and large-scale concurrency are future directions, not claims about the current system.
+These limitations are not incidental. They define the engineering work required to make AI-native development dependable.
+
+Moving from a production model to a better developer experience
+The purpose of this work is not just the inference system itself. It is the developer experience that the system can make possible.
+
+Model developers should not need to become inference experts before they can evaluate and deploy a supported model efficiently on NVIDIA hardware. TensorRT Model Connect aims to provide a clear path from a Hugging Face or local checkpoint to a versioned bundle and native task API, while keeping the model-family implementation visible enough to inspect, extend, and customize.
+
+The longer-term aspiration is straightforward: connect a model through a stable boundary, then continue benefiting as TensorRT, CUDA, kernels, compilers, and supported NVIDIA platforms improve underneath it. Note that this is an aspirational goal rather than a guarantee of current compatibility for every model or target. For more detailed information, refer to the TensorRT-Model-Connect documentation.
+
+TensorRT Model Connect will succeed only if it lowers the expertise barrier while preserving the accuracy, performance, reliability, and maintainability developers expect.
+
+That is also the larger promise of AI-native development: not code for its own sake, but a means to make previously expensive, fragmented engineering problems economically possible—without giving up evidence, accountability, or quality.
+
+Try TensorRT Model Connect and help improve it
+TensorRT Model Connect is open source and evolving rapidly. Want to get involved?
+
+==== Tracing Agent Harness Behavior with NVIDIA NeMo Relay ====
+
+An agent can finish a task and still take an inefficient path. A failed search can trigger another search. A truncated file read can lead to a command fetching the same content again. A correct final answer hides those extra steps, even though they increase latency and consume tokens. Inefficiencies create more chances for failure.
+
+To improve an agent’s behavior, developers must understand whether a task succeeded and how the agent completed it. A success check by itself cannot explain why an agent recovered from a tool error, stopped early, or needed extra model calls.
+
+In this tutorial, you’ll run two Hermes Agent examples with NVIDIA NeMo Relay. You’ll use the resulting traces to inspect model and tool calls, errors, retries, duration, and token use, then compare that evidence with each task’s verification result. A Hermes ToolPerf case study shows how to use the same approach to evaluate harness changes across repeated runs.
+
+This tutorial and video explain how to:
+
+Set up an isolated Hermes Agent runtime with its native NeMo Relay integration.
+Run a simple terminal tool task and inspect its event stream and trajectory.
+Run a file-and-web research task and explore its OpenTelemetry trace in Arize Phoenix.
+Combine task verification with trace evidence to evaluate a change to an agent harness.
+
+Video 1. A step-by-step code walkthrough for evaluating Hermes Agent traces with NeMo Relay
+Prerequisites
+Before you begin, make sure you have:
+
+macOS or Linux
+Git and curl
+Docker Desktop or Docker Engine installed and running
+An NVIDIA Build API key for NVIDIA Nemotron 3.5 Lightning. Open the model page and select Generate API Key.
+Next is an overview of the technologies used for this tutorial and how they work together.
+
+How NeMo Relay works with Hermes Agent harness
+NeMo Relay gives agent developers a common way to observe and control model and tool execution. The popular agent harness Hermes Agent includes NeMo Relay natively and represents its sessions, turns, model calls, and tool calls in NeMo Relay’s scope hierarchy. NeMo Relay records lifecycle events as work begins and ends, preserving its timing and parent-child relationships.
+
+Understand the trace outputs
+NeMo Relay is used for agent observability. You will work with three representations of agent execution:
+
+Format	What it contains	When to use it
+Agent Trajectory Observability Format (ATOF)	A JSONL log of scope starts, scope ends, and point-in-time mark, with IDs and timestamps to reconstruct the agent run.	Use ATOF to debug or audit individual events, timing, and parent-child relationships.
+Agent Trajectory Interchange Format (ATIF)	A step-by-step JSON record of agent interactions, tool calls, and observations, assembled from lifecycle events.	Use ATIF to review, analyze, or evaluate the agent’s path step by step.
+OpenTelemetry with OpenInference	OpenTelemetry records the run as parent-child spans. OpenInference labels agent, LLM, and tool spans and defines their attributes.	Use it in OTEL-compliant tools like Phoenix, to inspect model and tool calls, duration, token use, and errors.
+Table 1. Trace outputs are represented in three different formats to accommodate varied agent workflows
+An ATIF tool request shows what the model asked to run, but it does not confirm the outcome. To verify what happened, inspect ATOF for the matching tool start and end events and any recorded errors. Their shared uuid pairs the events, while parent_uuid connects the tool call to its parent.
+
+Review traces before sharing them. Depending on your configuration, they can contain prompts, model responses, tool arguments and results, file paths, and other application data.
+
+For agent safety and security governance, NeMo Relay helps provide the evidence layer: structured traces and trajectories that enterprises, evaluators, and security systems can use to investigate agent behavior, evaluate policies, improve controls, or create specialized security plugins that extend Relay.
+
+Let’s get started with the first agent task run.
+
+Experiment #1: Run a simple tool-use task with Hermes Agent
+The first example is intentionally small so you can verify the complete setup before adding web search and Phoenix. Hermes uses its terminal tool to run the included Python script inside an isolated Docker container. The script prints: VALUE=42.
+
+That fixed output gives the runner an exact success check. A passing run also confirms that Hermes reached the model, invoked the terminal tool in the sandbox, and produced both Relay trace files.
+
+The container cannot access the network, repository checkout, or NVIDIA API key. Hermes also cannot fall back to running terminal commands on the host.
+
+Run the following commands in order. After copying keys.env, add your NVIDIA API key to that file before continuing.
+
+# Clone the tutorial repository.
+git clone https://github.com/NVIDIA/nemoclaw-community
+ 
+# Enter the cloned repository.
+cd nemoclaw-community/examples/tools/hermes-relay-tracing
+ 
+# Create the isolated Hermes Agent and NeMo Relay runtime.
+./scripts/setup_tutorial_runtime.sh
+ 
+# Copy the API key template.
+cp keys.env.example keys.env
+ 
+# Add NVIDIA_API_KEY to keys.env before continuing.
+ 
+# Verify that Docker is running.
+docker version
+ 
+# Build the Docker image for the terminal-tool task.
+./scripts/build_tutorial_image.sh
+ 
+# Run the task and generate the ATOF and ATIF traces.
+./scripts/run_tutorial.sh
+The Hermes Agent and NeMo Relay processes run from this repository’s local environment. Docker is used separately for the terminal tool sandbox and the local Phoenix service.
+
+The setup script in the repository creates a self-contained environment under .tutorial-runtime/ with all the appropriate dependencies like Python 3.11 and Hermes 0.21.1 with NeMo Relay 0.8.3. It does not modify your existing Python or Hermes installation.
+
+When the task finishes, the runner checks the response and both trace files. A passing run prints the verification result, followed by the ATOF and ATIF summaries.
+
+Review the trace summaries
+After Hermes completes the task, the runner verifies the expected result and the generated traces. It checks that the terminal command succeeded, that the ATOF trace contains completed LLM activity with token usage and no tool errors, and that a nonempty ATIF trajectory was created. The following output comes from one verified run. Token counts, identifiers, and file paths can vary between runs.
+
+ATOF summary
+
+events: 74
+completed llm scopes: 2
+llm scopes with usage: 2
+prompt tokens: 7239
+completion tokens: 96
+total tokens: 7335
+tool calls: 1
+tool errors: 0
+correlated events: 74
+ATIF summary
+
+agent: Hermes Agent
+model: nvidia/nemotron-3.5-lightning-30b-a3b
+steps: 3
+llm calls: 2
+requested tool calls: 1
+ 
+Task verified: VALUE=42
+Artifacts: .../artifacts/runs/<run-id>
+Look for the line with Task verified: VALUE=42, which confirms the expected result. The ATOF summary reports the completed model scopes, token usage, tool calls, and tool errors. The ATIF summary presents the same execution as a three-step trajectory.
+
+The path following Artifacts: identifies the run directory containing the complete ATOF event stream and ATIF trajectory. The companion repository explains how to inspect or summarize either file again.
+
+Experiment #2: Run a multi-tool research task and explore its traces
+After verifying the basic setup, this second example uses the same Hermes and NeMo Relay environment for a task that requires several tools. Hermes receives a travel record containing clues about an unnamed machine-learning conference. It must read the record, find a conference matching the subject, dates, and location, confirm the answer on the official website, save the verified information in a report, and return the conference name.
+
+Use NeMo Relay’s OpenInference exporter to send OpenTelemetry spans to Arize Phoenix over OTLP (OpenTelemetry Protocol). Phoenix displays the run as an interactive trace, where you can inspect model and tool calls, timing, token usage, errors, and available inputs and outputs.
+
+You can send the same OpenTelemetry trace to other OTLP-compatible backends, such as LangSmith, by changing the endpoint and authentication settings. The NeMo Relay observability guide describes other available exporters and configuration options.
+
+The example reuses the NVIDIA Nemotron model and NVIDIA API key from the first example. Hermes uses its built-in keyless web search, and the runner starts Phoenix in a pinned local container. Run the conference search example:
+
+./scripts/run_conference_research_with_phoenix.sh
+During the run, NeMo Relay saves the ATOF event stream and ATIF trajectory locally.
+
+Before reporting success, the runner checks that Hermes:
+
+Identified COLT 2026 as a conference name
+Saved a report containing the expected conference details and official source
+Successfully completed the read_file, web_search, web_extract, and write_file calls
+Produced a nonempty ATIF trajectory
+Sent model and tool spans with positive token usage to Phoenix
+After the checks pass, the terminal output includes a link to the Phoenix project and the local run directory. Open the project in Phoenix to follow the agent run from the initial file read through the web search, source verification, report write, and final response.
+
+Screenshot of Hermes Agent run in Arize Phoenix.
+Figure 1. Phoenix shows the complete Hermes Agent run on the left and the selected model call on the right, including the conference query, requested read_file call, timing, and token usage
+Try the task with another model
+To see how another model handles the same conference query, follow the model-profile instructions in the companion repository. Keep the query, available tools, execution limits, and verifier unchanged so you can inspect how the execution path differs.
+
+Because the task uses live web search, use these runs to explore behavior rather than rank models. A controlled comparison requires fixed search responses and repeated runs.
+
+Use traces to evaluate an agent harness change
+The two examples show how to verify a result and inspect one run. Evaluating a harness change requires the same checks under controlled, repeated conditions.
+
+Steps for agent harness evaluation
+Choose a fixed task with an exact, automated success check.
+Define a baseline and one focused change to the prompt, tool, configuration, or harness.
+Keep everything except that change constant, including the model snapshot, provider, task input, execution budget, and timeout.
+Run the same number of repetitions for the baseline and candidate with NeMo Relay enabled.
+Compare verified task outcomes first. Then use the traces to examine model calls, tool calls, retries, errors, elapsed time, token usage, and cost.
+Repeat the evaluation across the models or workloads that the change is expected to support before generalizing the result.
+Call the candidate an improvement only when it produces a repeatable increase in task completion or preserves completion while improving the reliability, latency, or cost measure you intended to change. One faster run or fewer calls can help explain a result, but neither establishes an optimization by itself.
+
+An unchanged result is useful as well. It can show that an apparent improvement depended on a particular model, environment, or sample.
+
+Benchmark case study for evaluating Hermes tool-layer changes
+The Hermes ToolPerf benchmark was developed by Nous Research after analyzing production sessions, auditing tool schemas, and mining production session logs for failure classes. Then, NeMo Relay ATOF traces were used for ground-truth turn accounting. By examining nine failure patterns, the results were turned into deterministic benchmark cases and then used to evaluate a batch of Hermes tool-layer fixes.
+
+The August 6 rerun compared the pinned baseline of Hermes and fixed revisions across nine tasks. Each task ran three times per model per arm, giving 108 runs total, with the same prompts, tools, execution limits, and success checks throughout. A task verifier measured completion, and the NeMo Relay ATOF traces captured model calls, tool calls, errors, retries, tool-result data, and timing.
+
+Model	Arm	Task success	Mean LLM calls	Mean tool calls	Mean tool result data	Mean duration
+Claude Sonnet 4.5	Baseline	24/27 (89%)	2.9	2.2	17 KB	16 s
+Claude Sonnet 4.5	Fixes	23/27 (85%)	2.8	2.1	17 KB	22 s
+Qwen3 Coder 30B	Baseline	19/27 (70%)	3.8	2.8	16 KB	27 s
+Qwen3 Coder 30B	Fixes	22/27 (81%)	4.9	3.9	33 KB	42 s
+Table 2. Results from the August 6, 2026 A/B run comparing pinned baseline and fixes revisions across two models
+In this run, Sonnet showed no real change. It finished 24 of 27 runs on baseline and 23 of 27 on fixes, a difference of one run. Its turns, tool calls, and result data were the same on both arms.
+
+Qwen Coder is where the fixes did something, and the effect cuts two ways. It completed three more tasks successfully, going from 19 of 27 to 22 of 27. It also worked harder for them: mean LLM calls rose from 3.8 to 4.9, tool calls from 2.8 to 3.9, tool-result data from 16 KB to 33 KB, and duration from 27 s to 42 s. The fixes brought success to tasks the baseline abandoned, and the price was a slower, chattier agent.
+
+The task-level audit shows where those trade-offs come from.
+
+On the blocked-command task, baseline Qwen died at the parser block and scored 33%, while the recovery recipes took the fixes arm to 100%. That completion is the reason the turn count went up: recovering costs turns that giving up never spends.
+The case-insensitive search task moved the other way. The zero-match probe output pushed Qwen into extra exploratory searches on two of three reps, taking it from 3.3 turns to 9.3, a regression worth its own look.
+The hidden-file search stayed at 0 to 33% on both arms and both models, the same gap the original run found and still open at these SHAs.
+The success or failure of tasks alone could not have produced this conclusion. The NeMo Relay traces recorded every model call, tool call, error, retry, result payload, and timing for all 108 runs. Qwen’s extra turns were recoveries rather than flailing, and that one task’s regression traced back to a specific probe output. The traces are checked into the results directory, so anyone can unpack them and regenerate these tables from the raw records.
+
+Get started with evaluating agent traces
+NeMo Relay gives you a consistent way to capture evidence for evaluating changes to optimize your agent harnesses. ATOF preserves the ordered lifecycle events, while ATIF presents the same work as a readable trajectory. Pairing these traces with a deterministic verifier enables you to compare harness changes without confusing fewer calls with better results.
+
+The companion repository provides the sample artifacts, including the runnable tasks, verifiers, NeMo Relay configuration, and Phoenix setup used in this post.
