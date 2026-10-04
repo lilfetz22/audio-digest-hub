@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-09-19,https://huggingface.co/papers/2609.19969,DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression (57▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.20519,SoL-Pi: Recursively Scaling Auto-Research Loops for Efficient Agent Harness (47▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.20804,An Empirical Study of Harness Design for Coding Agents (37▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.20511,When EOS Tokens Disagree: Understanding Length Inflation in On-Policy Distillation (31▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.20800,JEPA-Anything: Learning Predictive Models across Different Worlds (23▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.16900,RiskChainBench: A Benchmark for Obfuscated Platform Message Restoration and Evidence-Grounded Web Investigation (16▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.20784,RetireOPD: Self-Retiring On-Policy Distillation for Agentic Reinforcement Learning (15▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.17496,Verifiable Social Reasoning for LLM Assistants (13▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.17653,"Reflect, Revise, Reuse: Training-Free Skill Evolution for GUI Agents (11▲)",huggingface,
-2026-09-19,https://huggingface.co/papers/2609.20423,WeVisDoc: From Coverage to Capability for Robust End-to-End Document Parsing (8▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.19656,Self-Evolving Search Index (7▲),huggingface,
-2026-09-19,https://huggingface.co/papers/2609.19554,"VABench: Measuring Embodied Spatial Intelligence through Visual Demonstrations, Active Perception, and Metric Control (7▲)",huggingface,
 2026-09-21,https://arxiv.org/abs/2112.01709,Optimized variance estimation under interference and complex experimental designs,arxiv,stat
 2026-09-21,https://arxiv.org/abs/2203.12179,Targeted Function Balancing: Flexible balancing weights that leverage strategic imbalance to estimate causal effects,arxiv,stat
 2026-09-21,https://arxiv.org/abs/2403.16773,Bias-Correction for Privacy-Protected Spatial Autoregressive Models with Application to Restaurant Network Analysis,arxiv,stat
@@ -2023,3 +2011,15 @@ date,url,title,source,category
 2026-10-02,https://huggingface.co/papers/2609.39045,RSIGame: Autonomous Agentic Game Development with Recursive Self-improvement (73▲),huggingface,
 2026-10-02,https://huggingface.co/papers/2609.38334,EVOKE: Eliciting World Knowledge in Agents for Transferable Decision-Making (64▲),huggingface,
 2026-10-02,https://huggingface.co/papers/2609.39578,Thinking Outside the Box: Can Language Models Rely on External Guidance Selectively? (61▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.01762,"OneStreamer: Unifying Perception, Memory, and Proactive Response in Streaming Video Interaction (146▲)",huggingface,
+2026-10-03,https://huggingface.co/papers/2609.37200,Adaptive Reward Routing: Dynamic Multi-Reward Optimization for Joint Audio-Video Diffusion via Forward-Process RL (117▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2609.35259,On-Policy or Off-Policy Learning? A Systematic Study of Distillation Dynamics (114▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.01415,Beyond Memory: Harnessing Long-Horizon Agents with Explicit Belief States (69▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.02193,Hierarchical Continuous Diffusion Language Models (69▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2609.35690,Agent Priors-guided Policy Learning (68▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2609.39027,A Missing Piece for Trustworthy AI Reviewers: From Benchmarking Rhetorical Robustness to SciCore Review (65▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.02162,World Observer: Joint Actor-Observer Generation for Persistent World Modeling (63▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.01509,Sharpening Tax in Post-Training (63▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.00906,ActiveSaddler: Automated Curriculum Learning for Agent Harness Optimization (50▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2609.37533,E-MoE: Enhanced Mixture-of-Experts for Non-Factorized Diffusion Language Models (49▲),huggingface,
+2026-10-03,https://huggingface.co/papers/2610.02205,ROWBench: Do Video Models Render What the Program Specifies? (48▲),huggingface,
