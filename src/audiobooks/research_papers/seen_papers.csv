@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-09-26,https://huggingface.co/papers/2609.28654,Training Object Permanence in World Models (177▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.29845,Your Transformer Can Hold Two Thoughts at Once: Evidence of Linear Superposition in LLMs (55▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.30221,WanPE: Towards Cinematic Prompt Enhancement for Modern Text-to-Video Generation (25▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.23407,OmniEcho: Spatial Audio Understanding for Embodied Agents (20▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.28416,Agent-Editing World Model: Rethinking World Modeling for LLM Agents (13▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.29362,Parts-of-Speech as Emergent Categories in SAE Latent Space (10▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.29892,Qwen-Planner-Agent: A Closed-Loop AI-for-AI Framework for Real-World Mobile Planner Agents (9▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.29444,IterSynth: Rethinking Deep Search Agents via Role-Decoupled Iterative Synthesis (8▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.29421,Rufus-Air: An Open LLM Post-Training Recipe (6▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.29028,RGBD20K: A Large-Scale Benchmark for RGB-D Semantic Segmentation (6▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.23087,Neural Spectral Capacity: Measuring and Designing Architectures from Network Specification Alone (6▲),huggingface,
-2026-09-26,https://huggingface.co/papers/2609.30233,Coding Agents for Generalized Task and Motion Planning Problems (6▲),huggingface,
 2026-09-28,https://arxiv.org/abs/2302.06518,SelectionBias: An R Package for Bounding Selection Bias in Causal Estimands,arxiv,stat
 2026-09-28,https://arxiv.org/abs/2312.16730,Foundations of Reinforcement Learning and Interactive Decision Making,arxiv,stat
 2026-09-28,https://arxiv.org/abs/2408.17346,On Nonparanormal Likelihoods,arxiv,stat
@@ -2304,3 +2292,15 @@ date,url,title,source,category
 2026-10-09,https://huggingface.co/papers/2610.10429,SGF+: Decoupling Gradient Flows for Autoregressive Video Generation (51▲),huggingface,
 2026-10-09,https://huggingface.co/papers/2610.02054,UniWAM: Unified World-Action Model (48▲),huggingface,
 2026-10-09,https://huggingface.co/papers/2609.40360,Semifactual Credit-Augmented Policy Optimization (36▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12374,AgentGarten: Code Worlds for Evolving Agents (131▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12242,TokenRouter: Efficient Serving System for Token-Level LLM Routing (103▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.06100,From Traces to Agentic Worlds: Agentic Language World Models for Interactive Environment Simulation (97▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.08215,Learn2Play Bench: How Well Do LLM Agents Learn from Experience in Unfamiliar Environments? (86▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12126,SuperNav: An Agentic Navigation System for Any Task in Any Scene (62▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.11959,MiMo-V2.6: Scaling Reinforcement Learning Towards Self-Improvement (56▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12299,Multi-Agent Egocentric World Model with Fine-Grained Embodied Interaction (43▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2609.38173,In-context Robot Learning Made Simple: A Democratized Recipe for Manipulation Tasks (40▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12468,DreamTrue: Action-Faithful Robot World Model with Counterfactual Post-Training (33▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12421,Beyond Spatio-Temporal Priors: A Generalizable Approach for Dense Correspondence Matching (31▲),huggingface,
+2026-10-10,https://huggingface.co/papers/2610.12461,"OuroWorld: Bringing Any 3D World Alive as Diverse, Endlessly Looping 3D Cinemagraphs (29▲)",huggingface,
+2026-10-10,https://huggingface.co/papers/2610.09087,U-Space: Uncovering When and Why Uncertainty Arises in Language Models (29▲),huggingface,
