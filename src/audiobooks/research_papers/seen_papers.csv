@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-10-03,https://huggingface.co/papers/2610.01762,"OneStreamer: Unifying Perception, Memory, and Proactive Response in Streaming Video Interaction (146▲)",huggingface,
-2026-10-03,https://huggingface.co/papers/2609.37200,Adaptive Reward Routing: Dynamic Multi-Reward Optimization for Joint Audio-Video Diffusion via Forward-Process RL (117▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2609.35259,On-Policy or Off-Policy Learning? A Systematic Study of Distillation Dynamics (114▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2610.01415,Beyond Memory: Harnessing Long-Horizon Agents with Explicit Belief States (69▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2610.02193,Hierarchical Continuous Diffusion Language Models (69▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2609.35690,Agent Priors-guided Policy Learning (68▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2609.39027,A Missing Piece for Trustworthy AI Reviewers: From Benchmarking Rhetorical Robustness to SciCore Review (65▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2610.02162,World Observer: Joint Actor-Observer Generation for Persistent World Modeling (63▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2610.01509,Sharpening Tax in Post-Training (63▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2610.00906,ActiveSaddler: Automated Curriculum Learning for Agent Harness Optimization (50▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2609.37533,E-MoE: Enhanced Mixture-of-Experts for Non-Factorized Diffusion Language Models (49▲),huggingface,
-2026-10-03,https://huggingface.co/papers/2610.02205,ROWBench: Do Video Models Render What the Program Specifies? (48▲),huggingface,
 2026-10-05,https://arxiv.org/abs/2308.12240,KL Convergence Guarantees for Score diffusion models under minimal data assumptions,arxiv,stat
 2026-10-05,https://arxiv.org/abs/2312.10234,Flexible Nonparametric Inference for Causal Effects under the Front-Door Model,arxiv,stat
 2026-10-05,https://arxiv.org/abs/2312.17015,Regularized Exponentially Tilted Empirical Likelihood for Bayesian Inference,arxiv,stat
@@ -2741,3 +2729,15 @@ date,url,title,source,category
 2026-10-16,https://huggingface.co/papers/2610.19366,"Seeing, Maintaining, and Learning: The Evolution of Multimodal Agent Memory (45▲)",huggingface,
 2026-10-16,https://huggingface.co/papers/2610.17771,"Many Right Answers, One Training Example: Removing Responder Noise from GRPO for LLM Recommenders (38▲)",huggingface,
 2026-10-16,https://huggingface.co/papers/2610.18072,LensErase: A Foundation Model for Erase Anything (36▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.18829,OmniCompass: A Holistic Benchmark for Omni-Modal Video Grounding and Understanding (566▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.21601,Waypoint-OPD: Transferring RL-Induced Policy Shifts via Gated On-Policy Distillation (451▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.22200,OpenGCUA: Toward a Fully Open Stack for Generalist Computer Use (277▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.22350,FDE-Gym: The Last Mile of AI Delivery (229▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.17665,RoTA-Bench: Evaluating 3D Spatial Reasoning through Interactive Projection Alignment (198▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.18813,Self-Evolving Agent Harness (188▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.22276,MJev-Spatial: System One Spatial Intelligence via Native Attention Matching (142▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.14993,Learning Where to Split: Dynamic Band Splitting for Audio Source Separation (131▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.20341,InfiniSplat v2: Analyzing and Improving Feed-Forward 3DGS from Any Views (114▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.22341,3DCodeVerse: Exploring 3D Worlds as Code (99▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.20939,MAI-Gym: An Open All-in-One Platform for GUI Agent Evaluation and RL Training across Mobile and Computer Environments (94▲),huggingface,
+2026-10-17,https://huggingface.co/papers/2610.22264,SCOPE: Semantic Bounded Credit Optimization for Prompt Engineering in Text-to-image Generation (77▲),huggingface,
