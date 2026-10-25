@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-10-10,https://huggingface.co/papers/2610.12374,AgentGarten: Code Worlds for Evolving Agents (131▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.12242,TokenRouter: Efficient Serving System for Token-Level LLM Routing (103▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.06100,From Traces to Agentic Worlds: Agentic Language World Models for Interactive Environment Simulation (97▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.08215,Learn2Play Bench: How Well Do LLM Agents Learn from Experience in Unfamiliar Environments? (86▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.12126,SuperNav: An Agentic Navigation System for Any Task in Any Scene (62▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.11959,MiMo-V2.6: Scaling Reinforcement Learning Towards Self-Improvement (56▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.12299,Multi-Agent Egocentric World Model with Fine-Grained Embodied Interaction (43▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2609.38173,In-context Robot Learning Made Simple: A Democratized Recipe for Manipulation Tasks (40▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.12468,DreamTrue: Action-Faithful Robot World Model with Counterfactual Post-Training (33▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.12421,Beyond Spatio-Temporal Priors: A Generalizable Approach for Dense Correspondence Matching (31▲),huggingface,
-2026-10-10,https://huggingface.co/papers/2610.12461,"OuroWorld: Bringing Any 3D World Alive as Diverse, Endlessly Looping 3D Cinemagraphs (29▲)",huggingface,
-2026-10-10,https://huggingface.co/papers/2610.09087,U-Space: Uncovering When and Why Uncertainty Arises in Language Models (29▲),huggingface,
 2026-10-12,https://arxiv.org/abs/2302.07373,Linearized Wasserstein dimensionality reduction with approximation guarantees,arxiv,stat
 2026-10-12,https://arxiv.org/abs/2309.09872,A Moment-assisted Approach for Improving Subsampling-based MLE with Large-scale data,arxiv,stat
 2026-10-12,https://arxiv.org/abs/2407.03725,Is Inference Conditional on Not Rejecting a Pre-test Less Reliable than Unconditional Inference?,arxiv,stat
@@ -4464,3 +4452,15 @@ date,url,title,source,category
 2026-10-23,https://huggingface.co/papers/2610.28698,Scaling in Games: Continued Pre-Training For Embodied Agents In Diverse Virtual Worlds (49▲),huggingface,
 2026-10-23,https://huggingface.co/papers/2610.17860,Socratic Skill Learning: Interleaving Teaching and Practice for Transferable Agent Skills (30▲),huggingface,
 2026-10-23,https://huggingface.co/papers/2610.29722,Retrieval Augmented Generation Compositionality (27▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.31329,WeVisOne-VL: Unified Visual Perception from Objects to Pixels (222▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.30926,Making MLLM Latents Matter: Factor-Aware Predictive Learning for Cinematic Video Generation (164▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.30181,Deep Search in Real-World Web Environments (152▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.24738,Editing Images into Reusable Layers via Compositional Edit-Prior Distillation (73▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.30949,IQuest-Q1: Advancing Foundation Capabilities for Agentic CLI Systems (54▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.29677,Toward Recursive Self-Improvement in Physical AI (46▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.25100,Deep Fusion Memory: A Chunk-Level Parametric Memory for Large Language Models (39▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.23987,What Generation Knows: Unlocking Fine-Grained Understanding in Unified Multimodal Models (31▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.27851,LaLa-World: Scaling Latent World Models with Natural Language Actions (28▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.27598,Meta Expert: Cross-Layer Expert Sharing for Storage- and Retrieval-Efficient MoE (25▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.30320,Self-Distilling Future Video Representations for World Action Models (23▲),huggingface,
+2026-10-24,https://huggingface.co/papers/2610.28889,Policy-Mask: Budget-Aware Adaptation of Diffusion Features to Discriminative Tasks (23▲),huggingface,
