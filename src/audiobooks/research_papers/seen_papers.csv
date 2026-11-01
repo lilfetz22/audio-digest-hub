@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-10-17,https://huggingface.co/papers/2610.18829,OmniCompass: A Holistic Benchmark for Omni-Modal Video Grounding and Understanding (566▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.21601,Waypoint-OPD: Transferring RL-Induced Policy Shifts via Gated On-Policy Distillation (451▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.22200,OpenGCUA: Toward a Fully Open Stack for Generalist Computer Use (277▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.22350,FDE-Gym: The Last Mile of AI Delivery (229▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.17665,RoTA-Bench: Evaluating 3D Spatial Reasoning through Interactive Projection Alignment (198▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.18813,Self-Evolving Agent Harness (188▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.22276,MJev-Spatial: System One Spatial Intelligence via Native Attention Matching (142▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.14993,Learning Where to Split: Dynamic Band Splitting for Audio Source Separation (131▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.20341,InfiniSplat v2: Analyzing and Improving Feed-Forward 3DGS from Any Views (114▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.22341,3DCodeVerse: Exploring 3D Worlds as Code (99▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.20939,MAI-Gym: An Open All-in-One Platform for GUI Agent Evaluation and RL Training across Mobile and Computer Environments (94▲),huggingface,
-2026-10-17,https://huggingface.co/papers/2610.22264,SCOPE: Semantic Bounded Credit Optimization for Prompt Engineering in Text-to-image Generation (77▲),huggingface,
 2026-10-19,https://arxiv.org/abs/1906.07073,Is the Policy Gradient a Gradient?,arxiv,stat
 2026-10-19,https://arxiv.org/abs/2402.01460,"Deep conditional distribution learning via conditional F\""ollmer flow",arxiv,stat
 2026-10-19,https://arxiv.org/abs/2501.04130,Multiple testing in multi-stream sequential change detection,arxiv,stat
@@ -4277,3 +4265,15 @@ date,url,title,source,category
 2026-10-30,https://arxiv.org/abs/2610.40557,The Value of Experiments in Assortment Optimization,arxiv,math
 2026-10-30,https://arxiv.org/abs/2610.40608,Improved Gradient Complexity for Quasi-Newton Proximal Extragradient Methods via Certified Curvature Reuse,arxiv,math
 2026-10-30,https://arxiv.org/abs/2610.40622,The Number of Tropical Order Types and Coherent Matching Fields,arxiv,math
+2026-10-31,https://huggingface.co/papers/2610.39633,Intrinsic Distribution Matching (238▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.38568,A-RSI: Adaptive Task Refresh for Zero-Data Multimodal Self-Improvement (150▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.29927,Your Benchmark Is an Empirical Measure Over Difficulty (140▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.36671,Look Only When Needed: Certificate-Guided Visual Routing for Efficient Diffusion VLMs (91▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.39301,"Youtu-Parsing-Omni: One Encoder, One Schema, All Modalities (55▲)",huggingface,
+2026-10-31,https://huggingface.co/papers/2610.39302,Proving and Improving the Platonic Representation Hypothesis with JEPAs (53▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.40614,L3G-World: Real-Time Infinite World Generation with Latent 3D Gaussian Memory (34▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.37161,WorkFactory: Turning Professional Intents into Executable Work for Scalable Agent Training (30▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.32411,A Broader Look into MLLM's Retrieval Heads (28▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.40647,"Read, Allocate, Route: Role-Coupled Tokenization for Pixel-Space Generative Transformers (26▲)",huggingface,
+2026-10-31,https://huggingface.co/papers/2610.35138,Co-Design Bench: Multimodal Collaborative Coding Evaluation for Agentic Models (19▲),huggingface,
+2026-10-31,https://huggingface.co/papers/2610.33106,VibeGame: Prompt-to-Game Development with AI-Native Engine and Self-Evolving Adversarial Agent Team (18▲),huggingface,
