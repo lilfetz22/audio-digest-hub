@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-10-24,https://huggingface.co/papers/2610.31329,WeVisOne-VL: Unified Visual Perception from Objects to Pixels (222▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.30926,Making MLLM Latents Matter: Factor-Aware Predictive Learning for Cinematic Video Generation (164▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.30181,Deep Search in Real-World Web Environments (152▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.24738,Editing Images into Reusable Layers via Compositional Edit-Prior Distillation (73▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.30949,IQuest-Q1: Advancing Foundation Capabilities for Agentic CLI Systems (54▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.29677,Toward Recursive Self-Improvement in Physical AI (46▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.25100,Deep Fusion Memory: A Chunk-Level Parametric Memory for Large Language Models (39▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.23987,What Generation Knows: Unlocking Fine-Grained Understanding in Unified Multimodal Models (31▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.27851,LaLa-World: Scaling Latent World Models with Natural Language Actions (28▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.27598,Meta Expert: Cross-Layer Expert Sharing for Storage- and Retrieval-Efficient MoE (25▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.30320,Self-Distilling Future Video Representations for World Action Models (23▲),huggingface,
-2026-10-24,https://huggingface.co/papers/2610.28889,Policy-Mask: Budget-Aware Adaptation of Diffusion Features to Discriminative Tasks (23▲),huggingface,
 2026-10-26,https://arxiv.org/abs/2405.11156,A Randomized Permutation Whole-Model Test Heuristic for Self-Validated Ensemble Models (SVEM),arxiv,stat
 2026-10-26,https://arxiv.org/abs/2410.00229,"Stochastic Inverse Problem: stability, regularization and Wasserstein gradient flow",arxiv,stat
 2026-10-26,https://arxiv.org/abs/2412.09539,Bayesian nonparametric mixtures of Archimedean copulas,arxiv,stat
@@ -4287,3 +4275,15 @@ date,url,title,source,category
 2026-11-06,https://huggingface.co/papers/2611.05609,On the Generalization Limitation of On-Policy Distillation for Post-RL Consolidation (16▲),huggingface,
 2026-11-06,https://huggingface.co/papers/2611.02857,Solv3R: 3D Looped Transformer as a Multi-view Solver (16▲),huggingface,
 2026-11-06,https://huggingface.co/papers/2611.01926,TAC-CoT: Tool-Empowered Implicit Chain-of-Thought via Interleaving Explicit Tokens (14▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.08449,"VFlash: Fast, Accurate Visual Planning via Flash Primitive Decoding (91▲)",huggingface,
+2026-11-07,https://huggingface.co/papers/2611.08373,SLA: Scaling Spatial-Language-Action Model via Continual Pre-training (82▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.04277,Harness-S: Learning from Sibling Harnesses for Generalizable Agent Training (54▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.00883,Random Is Almost Enough? Stable and Low-Cost Benchmark Compression via BestRand (50▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.07392,WeLM-Image: A Unified Image Generation Model towards Visual Intelligence (39▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.06741,TailSteer: Trajectory-Tail Steering for Drift-Resistant Multi-turn Image Editing (37▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.03743,EvoMemState: Evolving Memory State for Personal Agents (20▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.07854,Towards Foundation Decision Models: Drex (18▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.04894,VisSearch-Bench: Evaluating Long Horizon Visual Search in Multimodal Agents (17▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.06817,Open-HumanScale: An Open Recipe for Scaling Human and Robot Experience for Embodied Foundation Models (15▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.06976,On the Opportunities and Challenges of Prefill-to-Autoregressive Cross-Model Transfer (12▲),huggingface,
+2026-11-07,https://huggingface.co/papers/2611.07909,EDGAR: Efficient Diffusion-Driven Gaussian Avatar Refinement via Synthetic Failure (10▲),huggingface,
