@@ -1,16 +1,4 @@
 date,url,title,source,category
-2026-10-29,https://huggingface.co/papers/2610.35013,Multiscale Policy Optimization for Long-Horizon LLM Agents (373▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.34283,ChronoReplay: One Answer Interface Is Not Enough for Streaming Spatial Intelligence (345▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.36077,The Trinity:Capability-Driven Recursive Self-Improvement for Multimodal Agents (312▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.35864,VibeVideoBench: Evaluating Multimodal Agents on Code-Driven Video Generation (172▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.37381,PDRVLA: A Vision-Language-Action Model with Physical Dynamics Representations (136▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.34073,Memory Tax: Dissecting the Net Value of Agent Memory (124▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.36729,Hy-Nomas: Towards Free-form Interactive World Generation (105▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.32046,Can Test-Time Memory Evolution Outperform Test-Time Training for Scientific Discovery? (101▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.37662,Can Discrete Tokens Serve as Semantically Lossless Representations of Visual Signals? (82▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.24520,HABIT-Bench: Evaluating Habit Induction from Longitudinal Weak Evidence in Agent Memory (79▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.36068,Rollback: Experience Backtracking in World Models for Policy Improvement (51▲),huggingface,
-2026-10-29,https://huggingface.co/papers/2610.37341,CodeCap-Bench: Can Code Serve as a Good Video Caption? (49▲),huggingface,
 2026-10-30,https://arxiv.org/abs/2306.07007,On the closed-loop Volterra method for analyzing and forecasting time series,arxiv,stat
 2026-10-30,https://arxiv.org/abs/2307.04754,Dynamic Strategy Selection,arxiv,stat
 2026-10-30,https://arxiv.org/abs/2402.08222,Integration of multiview microbiome data for deciphering microbiome-metabolome-disease pathways,arxiv,stat
@@ -5178,3 +5166,15 @@ date,url,title,source,category
 2026-11-11,https://huggingface.co/papers/2611.11450,How Much Training-Inference Mismatch Can On-Policy Distillation Tolerate? (11▲),huggingface,
 2026-11-11,https://huggingface.co/papers/2611.10592,MotionGraphicsBench: Evaluating Motion Graphics Generation with Programmatic Verification (8▲),huggingface,
 2026-11-11,https://huggingface.co/papers/2611.02810,TRIO: Task Refinement with Individual Optimization for Retrieval-Augmented Generation (8▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.14210,Tree-Ising: Repairing Language Models with Bit-Level Ising Edits (75▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.14033,Few-Step Streaming Video Generation via Condition Shifting (66▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.12885,World In-Context Learning for Agentic Robot Manipulation (64▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.14320,Don't Just Trust Your Memory: Evidence-Linked Memory Reduces Memory-Induced Degradation in LLM Agents (50▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.12426,dNaViT: Discrete Codes are General-Purpose Visual Representations (32▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.14309,MMDM: Measuring Massive Multitask Decision Making (25▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.11166,DexForesight: Grounding Dexterous Policies with Implicit Spatial Foresight (24▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.10649,"MACaQ: Fast, Model Agnostic Calibrated Quantization for Low-Precision Weights and Activations (21▲)",huggingface,
+2026-11-12,https://huggingface.co/papers/2611.12177,Embodied First Exam (20▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.07464,FINCOSMOS: An Open-World Evaluation Paradigm for Agents in Finance (20▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.12527,WaveGen: Truly End-to-End Waveform Generation via Internal Spectral Trajectory Learning (14▲),huggingface,
+2026-11-12,https://huggingface.co/papers/2611.13348,ProTEUS: A mutation-resolved world model for closed-loop protein evolution (13▲),huggingface,
