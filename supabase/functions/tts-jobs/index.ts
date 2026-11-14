@@ -302,8 +302,9 @@ serve(async (req) => {
         return json({ error: 'Failed to update job' }, 500)
       }
 
-      // The input text is no longer needed once the audio is done.
-      if (update.status === 'done') {
+      // The input text is no longer needed once the job is finished. Failed
+      // jobs are final (the input endpoint rejects them), so drop it too.
+      if (update.status === 'done' || update.status === 'failed') {
         await supabase.storage.from(INPUT_BUCKET).remove([`${userId}/${jobId}.txt`])
       }
 
