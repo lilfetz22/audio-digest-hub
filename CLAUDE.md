@@ -43,9 +43,12 @@ python src/audiobooks/generate_audiobook.py --reauth   # force Google OAuth, rew
 python src/audiobooks/generate_tts_audio.py path/to/digest.txt --voice af_heart --workers 4
 python src/audiobooks/research_papers/run_wiki_ingestion.py --date 2026-03-19   # default: no-LLM verbatim archive
 python src/audiobooks/upload_mp3.py "C:\path\to\file.mp3"   # manual upload, auto-splits >35 MB
+python src/audiobooks/tts_on_demand.py --job-id <uuid>      # process a user-submitted TTS job (triggered by CI)
 ```
 
 **Date selection lives in one place: `src/audiobooks/date_range.py`.** `pipeline.py` runs it once as a subprocess before any stage, then passes the resolved window to all three stages as `--start-date`/`--end-date`, so they cannot disagree. Standalone, each stage falls back to its own default from the same module. See "Which days get processed" below. `generate_tts_audio.py --workers` controls how many worker processes synthesize TTS chunks in parallel (default `min(cpu_count, 4)`; pass `1` for the original sequential path).
+
+**TTS on-demand:** the `tts_on_demand.py` script processes user-submitted pasted-text TTS jobs. It fetches job input from the `/tts-jobs` API, synthesizes with `generate_audio_from_text()` (same Kokoro pipeline as the daily digest), reports progress back to the API as it goes, and uploads the MP3 to `/audiobooks` so it appears in the library. Triggered by `.github/workflows/tts-on-demand.yml` when a job is created.
 
 ### Python tests
 
@@ -171,6 +174,7 @@ Two things that live outside the repo and won't show up in a diff:
 
 - **Conventional Commits** for every commit message (from `.cursorrules`).
 - Kokoro TTS requires `espeak-ng` on the host for phonemization; text is chunked to 250 characters before synthesis. Chunks synthesize in parallel across worker processes (`--workers`, default `min(process_cpu_count, 4)`, falling back to `os.cpu_count()` on this project's Python 3.12), each holding its own Kokoro pipeline copy; pass `--workers 1` for the original sequential single-process path.
+  - `generate_audio_from_text()` accepts an optional `progress_callback(done, total)` for real-time synthesis progress reporting (e.g., to update a frontend status bar). The callback is called after each chunk completes, and errors are logged but don't abort synthesis.
 - The Friday-only cleanup (`scripts/cleanup-trigger.js` + `scripts/cleanup-local-files.js`) deletes audiobooks older than a Friday at least 7 days back — always a full week of retention. Test it with `node scripts/cleanup-trigger.js --force`.
 
 ## Known quirk
