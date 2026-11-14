@@ -40,6 +40,8 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/audiobooks/requirements.txt
 
       # Same cache key as daily-digest.yml so the Kokoro weights are shared.
       - name: Cache HuggingFace models
