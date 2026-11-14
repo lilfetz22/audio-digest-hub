@@ -70,6 +70,7 @@ jobs:
       # The job id is passed through an env var and validated as a UUID, so
       # the dispatch input never reaches the shell as code.
       - name: Run TTS job
+        id: run
         env:
           JOB_ID: ${{ inputs.job_id }}
           PYTHONUNBUFFERED: "1"
@@ -83,3 +84,16 @@ jobs:
             exit 1
           fi
           python src/audiobooks/tts_on_demand.py --job-id "$JOB_ID"
+
+      # A killed run (timeout, runner loss) never reaches the Python failure
+      # handler, so mark the job failed here. The API returns 409 for jobs that
+      # already finished, which is ignored.
+      - name: Report failure if the run did not finish
+        if: ${{ always() && steps.run.outcome != 'success' }}
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          if ! [[ "$JOB_ID" =~ ^[0-9a-fA-F-]{36}$ ]]; then exit 0; fi
+          API_URL=$(python -c "import configparser;c=configparser.ConfigParser();c.read('src/audiobooks/config.ini');print(c['WebApp']['API_URL'])") || exit 0
+          API_KEY=$(python -c "import configparser;c=configparser.ConfigParser();c.read('src/audiobooks/config.ini');print(c['WebApp']['API_KEY'])") || exit 0
+          curl -sf -X PATCH "$API_URL/tts-jobs/$JOB_ID"             -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json"             -d '{"status":"failed","error":"Worker run did not complete (timeout or runner loss)"}' || true
