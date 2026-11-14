@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import Player from "./pages/Player";
 import ResearchReview from "./pages/ResearchReview";
+import TextToSpeech from "./pages/TextToSpeech";
 import NotFound from "./pages/NotFound";
 import DevPlayerTest from "./pages/DevPlayerTest";
 
@@ -58,6 +59,14 @@ const App = () => (
                     <ResearchReview />
                   </ProtectedRoute>
                 } 
+              />
+              <Route
+                path="/text-to-speech"
+                element={
+                  <ProtectedRoute>
+                    <TextToSpeech />
+                  </ProtectedRoute>
+                }
               />
               {import.meta.env.DEV && (
                 <Route path="/devtest" element={<DevPlayerTest />} />
