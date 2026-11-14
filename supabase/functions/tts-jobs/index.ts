@@ -185,10 +185,8 @@ serve(async (req) => {
         await dispatchWorkflow(newJobId)
       } catch (err) {
         console.error('Dispatch error:', err)
-        await supabase
-          .from('tts_jobs')
-          .update({ status: 'failed', error: 'Could not start the audio worker' })
-          .eq('id', newJobId)
+        await supabase.from('tts_jobs').delete().eq('id', newJobId)
+        await supabase.storage.from(INPUT_BUCKET).remove([`${userId}/${newJobId}.txt`])
         return json({ error: 'Could not start the audio worker' }, 502)
       }
 
