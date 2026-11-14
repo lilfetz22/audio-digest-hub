@@ -57,10 +57,8 @@ const Dashboard = () => {
       if (document.visibilityState === 'visible') fetchAudiobooks();
     };
     document.addEventListener('visibilitychange', refreshIfVisible);
-    window.addEventListener('focus', refreshIfVisible);
     return () => {
       document.removeEventListener('visibilitychange', refreshIfVisible);
-      window.removeEventListener('focus', refreshIfVisible);
     };
   }, [fetchAudiobooks]);
 
