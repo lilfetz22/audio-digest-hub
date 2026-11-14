@@ -145,7 +145,7 @@ Provenance relies on `<!-- WIKI_SOURCE_URL: ... -->` markers that `transcript_ge
 
 ### Backend auth model
 
-Edge functions (`supabase/functions/{audiobooks,sources,research-papers,cleanup}/index.ts`) authenticate the Python pipeline with a **bearer API key that is SHA-256 hashed and matched against the `api_keys` table** — not a Supabase JWT. The frontend, by contrast, uses Supabase Auth with RLS; every route except `/` is wrapped in `ProtectedRoute`. Keep those two paths separate when adding endpoints.
+Edge functions (`supabase/functions/{audiobooks,sources,research-papers,cleanup,tts-jobs}/index.ts`) authenticate the Python pipeline with a **bearer API key that is SHA-256 hashed and matched against the `api_keys` table** — not a Supabase JWT. The frontend, by contrast, uses Supabase Auth with RLS; every route except `/` is wrapped in `ProtectedRoute`. Keep those two paths separate when adding endpoints. The one deliberate exception is `tts-jobs`, which accepts both credential types: the signed-in browser (JWT) creates and polls jobs, while the GitHub Actions worker (API key) fetches input and reports progress.
 
 ## Configuration and secrets
 
