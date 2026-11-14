@@ -52,6 +52,18 @@ const Dashboard = () => {
     fetchAudiobooks();
   }, [fetchAudiobooks]);
 
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') fetchAudiobooks();
+    };
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
+    };
+  }, [fetchAudiobooks]);
+
   const deleteAudiobook = async (audiobook: Audiobook) => {
     if (!confirm('Are you sure you want to delete this audiobook?')) return;
 
