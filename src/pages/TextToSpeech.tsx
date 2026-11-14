@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ const TextToSpeech = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const token = session?.access_token;
+  const lastErrorRef = useRef<string | null>(null);
 
   const fetchJobs = useCallback(async () => {
     if (!token) return;
@@ -58,14 +59,19 @@ const TextToSpeech = () => {
       });
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
       const data: TtsJob[] = await response.json();
+      lastErrorRef.current = null;
       setJobs(data);
     } catch (error) {
       console.error('Error fetching TTS jobs:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load jobs',
-        variant: 'destructive',
-      });
+      const message = 'Failed to load jobs';
+      if (lastErrorRef.current !== message) {
+        toast({
+          title: 'Error',
+          description: message,
+          variant: 'destructive',
+        });
+        lastErrorRef.current = message;
+      }
     } finally {
       setLoading(false);
     }
