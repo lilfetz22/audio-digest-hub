@@ -217,6 +217,9 @@ serve(async (req) => {
       if (!job) {
         return json({ error: 'Job not found' }, 404)
       }
+      if (TERMINAL_STATUSES.includes(job.status)) {
+        return json({ error: 'Job already finished' }, 409)
+      }
 
       const { data: file, error: downloadError } = await supabase.storage
         .from(INPUT_BUCKET)
