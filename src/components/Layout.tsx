@@ -39,12 +39,18 @@ export const Layout = ({ children }: LayoutProps) => {
               <h1 className="text-xl font-bold text-gray-900">Daily Digest Audio</h1>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center gap-2 overflow-x-auto sm:space-x-4">
               <Button
                 variant={location.pathname === '/dashboard' ? 'default' : 'ghost'}
                 onClick={() => navigate('/dashboard')}
               >
                 Library
+              </Button>
+              <Button
+                variant={location.pathname === '/text-to-speech' ? 'default' : 'ghost'}
+                onClick={() => navigate('/text-to-speech')}
+              >
+                Text to Speech
               </Button>
               <Button
                 variant={location.pathname === '/research-review' ? 'default' : 'ghost'}

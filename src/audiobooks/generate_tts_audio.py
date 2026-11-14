@@ -32,7 +32,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import imageio_ffmpeg
 import numpy as np
@@ -57,6 +57,23 @@ PAUSE_DURATION_SECONDS = 10
 QUESTION_LINE_RE = re.compile(r"^Q\d+:")
 
 PathLike = Union[str, Path]
+
+# Called as progress_callback(chunks_done, chunks_total). Counts every chunk,
+# including pause markers, so the ratio reaches 1.0 exactly when synthesis is done.
+ProgressCallback = Callable[[int, int], None]
+
+
+def _report_progress(
+    progress_callback: Optional[ProgressCallback], done: int, total: int
+) -> None:
+    """Forward progress to the caller, but never let a reporting failure
+    (e.g. a dropped status-update request) abort the synthesis itself."""
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(done, total)
+    except Exception as exc:  # noqa: BLE001 — progress is best-effort
+        logger.warning("Progress callback failed (ignored): %s", exc)
 
 
 def _split_into_sentences(text: str) -> List[str]:
@@ -196,6 +213,7 @@ def _synthesize_sequential(
     speed: float,
     device: str,
     audio_chunks: List[Optional[np.ndarray]],
+    progress_callback: Optional[ProgressCallback] = None,
 ) -> int:
     """Synthesize every chunk in this process. Returns the failed-chunk count.
 
@@ -215,6 +233,7 @@ def _synthesize_sequential(
                 logger.error("Chunk failed (%s): %.80s", exc, chunk)
                 audio_chunks[i] = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.float32)
                 failed += 1
+            _report_progress(progress_callback, i + 1, len(chunks))
     return failed
 
 
@@ -256,6 +275,7 @@ def generate_audio_from_text(
     bitrate: str = DEFAULT_BITRATE,
     keep_wav: bool = False,
     max_workers: Optional[int] = None,
+    progress_callback: Optional[ProgressCallback] = None,
 ) -> Path:
     """
     Synthesize TTS audio for `text_content` and write it to `output_mp3_path`.
@@ -269,6 +289,10 @@ def generate_audio_from_text(
     single-process sequential path. Never exceeds the number of chunks, and
     for any non-"cpu" device this defaults to a single process (one
     accelerator context) unless `max_workers` is set explicitly.
+
+    `progress_callback(done, total)` is called as chunks finish, with `total`
+    the full chunk count (pause markers included). Errors raised by the
+    callback are logged and ignored.
     """
     if not text_content or not text_content.strip():
         raise ValueError("text_content is empty")
@@ -300,7 +324,9 @@ def generate_audio_from_text(
     failed = 0
 
     if resolved_workers <= 1:
-        failed = _synthesize_sequential(chunks, voice, speed, device, audio_chunks)
+        failed = _synthesize_sequential(
+            chunks, voice, speed, device, audio_chunks, progress_callback
+        )
     else:
         logger.info("Using %d worker processes for TTS synthesis", resolved_workers)
         # set_num_threads(1) in _init_worker only caps ATen intra-op
@@ -322,6 +348,9 @@ def generate_audio_from_text(
                 )
             else:
                 work.append((i, chunk))
+        # Pauses are already done, so they count toward progress from the start.
+        done = len(chunks) - len(work)
+        _report_progress(progress_callback, done, len(chunks))
         try:
             with ProcessPoolExecutor(
                 max_workers=resolved_workers,
@@ -341,6 +370,8 @@ def generate_audio_from_text(
                     if error is not None:
                         logger.error("Chunk %d failed (%s): %.80s", index, error, chunks[index])
                         failed += 1
+                    done += 1
+                    _report_progress(progress_callback, done, len(chunks))
         except BrokenProcessPool as exc:
             logger.error(
                 "TTS worker pool died (%s) — likely an OOM kill. Retrying the whole "
@@ -348,7 +379,9 @@ def generate_audio_from_text(
                 exc,
             )
             audio_chunks[:] = [None] * len(chunks)
-            failed = _synthesize_sequential(chunks, voice, speed, device, audio_chunks)
+            failed = _synthesize_sequential(
+                chunks, voice, speed, device, audio_chunks, progress_callback
+            )
 
     synth_seconds = time.time() - start
     logger.info(
