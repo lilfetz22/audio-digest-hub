@@ -143,7 +143,10 @@ def run_job(job_id):
         return 0
     except Exception as exc:  # noqa: BLE001 — every failure must reach the job row
         logger.exception("Job %s failed", job_id)
-        reporter.finish("failed", error=f"{type(exc).__name__}: {exc}")
+        try:
+            reporter.finish("failed", error=f"{type(exc).__name__}: {exc}")
+        except RuntimeError as report_exc:
+            logger.error("Could not record failure: %s", report_exc)
         return 1
 
 
