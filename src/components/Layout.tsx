@@ -47,6 +47,12 @@ export const Layout = ({ children }: LayoutProps) => {
                 Library
               </Button>
               <Button
+                variant={location.pathname === '/text-to-speech' ? 'default' : 'ghost'}
+                onClick={() => navigate('/text-to-speech')}
+              >
+                Text to Speech
+              </Button>
+              <Button
                 variant={location.pathname === '/research-review' ? 'default' : 'ghost'}
                 onClick={() => navigate('/research-review')}
               >
