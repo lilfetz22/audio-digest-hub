@@ -39,7 +39,7 @@ export const Layout = ({ children }: LayoutProps) => {
               <h1 className="text-xl font-bold text-gray-900">Daily Digest Audio</h1>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center gap-2 overflow-x-auto sm:space-x-4">
               <Button
                 variant={location.pathname === '/dashboard' ? 'default' : 'ghost'}
                 onClick={() => navigate('/dashboard')}
