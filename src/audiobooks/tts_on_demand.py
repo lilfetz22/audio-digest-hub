@@ -116,7 +116,13 @@ def run_job(job_id):
 
     reporter.update("starting", 0)
     try:
-        title, text = fetch_job_input(api_url, api_key, job_id)
+        try:
+            title, text = fetch_job_input(api_url, api_key, job_id)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 409:
+                logger.info("Job %s already finished; nothing to do.", job_id)
+                return 0
+            raise
         title = title or fallback_title(text)
         logger.info("Job %s: '%s' (%d chars)", job_id, title, len(text))
 
