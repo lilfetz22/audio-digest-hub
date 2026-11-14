@@ -177,6 +177,7 @@ serve(async (req) => {
       })
       if (insertError) {
         console.error('Job insert error:', insertError)
+        await supabase.storage.from(INPUT_BUCKET).remove([`${userId}/${newJobId}.txt`])
         return json({ error: 'Failed to create job' }, 500)
       }
 
