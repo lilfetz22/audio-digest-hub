@@ -14,3 +14,7 @@ verify_jwt = false
 
 [functions.research-papers]
 verify_jwt = false
+
+[functions.tts-jobs]
+# Accepts both browser JWTs and the pipeline API key; the function checks both itself
+verify_jwt = false
