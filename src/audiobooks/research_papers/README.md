@@ -34,12 +34,14 @@ An automated pipeline that fetches daily research papers from **Arxiv** and **Hu
 
 ## Overview
 
-This pipeline solves the problem of staying current with AI research at scale. It processes two distinct paper sources with different strategies:
+This pipeline solves the problem of staying current with AI research at scale. It processes papers from two sources and ranks them on one list:
 
-| Source | Volume | Strategy |
+| Source | Volume | Handling |
 |--------|--------|----------|
-| **HuggingFace** | ~10 papers/day | All papers get full deep-dive treatment (curated, high signal) |
-| **Arxiv** | 50+ papers/day | AI-scored by relevance → top papers get deep-dives, rest get brief summaries |
+| **HuggingFace** | ~10 papers/day | Scored and ranked together with arXiv papers |
+| **Arxiv** | 50+ papers/day | Scored and ranked together with HuggingFace papers |
+
+The top `TOP_N_DEEP_DIVE` papers (default 10) across both sources get a full deep-dive narration. The rest are stored as summary metadata and are not narrated.
 
 The final output is a text transcript deposited into `raw_content/` where the existing TTS pipeline (`generate_audiobook.py`) picks it up automatically for audio conversion.
 
@@ -67,7 +69,7 @@ The system follows SOLID principles with dependency injection throughout:
 │                                                                     │
 │  ┌──────────────┐  ┌────────────────┐  ┌──────────────────────┐     │
 │  │ EmailParser  │  │ PaperDownloader│  │ PaperScorer          │     │
-│  │ (Gmail→refs) │  │ (PDF/HTML→text)│  │ (Gemini Flash score) │     │
+│  │ (Gmail→refs) │  │ (PDF/HTML→text)│  │ (embedding score)    │     │
 │  └──────────────┘  └────────────────┘  └──────────────────────┘     │
 │                                                                     │
 │  ┌──────────────────────┐  ┌──────────────────────────────────┐     │
@@ -87,29 +89,25 @@ Gmail Inbox
     ├── HuggingFace daily digest email
     │       │
     │       ▼
-    │   EmailParser extracts paper URLs + titles
-    │       │
-    │       ▼
-    │   ALL marked as "deep_dive" (no scoring — small curated set)
-    │       │
-    │       ▼
-    │   PaperDownloader fetches HuggingFace page HTML → extract text
+    │   EmailParser extracts paper URLs + titles + abstracts
     │
     ├── Arxiv daily digest emails (one per category: cs, stat, math, ...)
     │       │
     │       ▼
     │   EmailParser extracts URLs + titles + abstracts from email body
+    │
+    ▼
+All papers from both sources → dedup against the last 14 days
+    │
+    ▼
+EmbeddingPaperScorer scores every paper 1-10 in one ranking
+    │
+    ├── Top TOP_N_DEEP_DIVE (default 10) by score → "deep_dive"
     │       │
     │       ▼
-    │   PaperScorer (Gemini Flash) scores each paper 1-10
-    │       │
-    │       ├── Top N per category → "deep_dive"
-    │       │       │
-    │       │       ▼
-    │       │   PaperDownloader fetches Arxiv PDF → pymupdf text extraction
-    │       │
-    │       └── Next M per category → "summary" (title + abstract only, no download)
-    │           (remaining papers are discarded)
+    │   PaperDownloader fetches PDF/HTML → text extraction
+    │
+    └── Remaining papers → "summary" (metadata only; no download, not narrated)
     │
     ▼
 TranscriptGenerator
@@ -177,22 +175,17 @@ Downloads full paper content for deep-dive papers only:
 **File:** [paper_scorer.py](paper_scorer.py)
 **Class:** `GeminiPaperScorer` (implements `PaperScorer`)
 
-Scores **Arxiv papers only** (HuggingFace papers bypass scoring entirely). Uses Gemini Flash for fast, cheap relevance scoring.
+**Active class:** `EmbeddingPaperScorer` (implements `PaperScorer`), constructed by `run_research_pipeline.py`.
 
-**Scoring criteria** (from [prompts/scorer_system.txt](prompts/scorer_system.txt)):
-- **8-10**: Directly advances AI agents, time series analysis, or optimization
-- **5-7**: Tangentially related (new architectures, RL, foundation models)
-- **1-4**: Unrelated to user interests
+Scores **every paper from both sources together** (arXiv and HuggingFace) by cosine similarity between a local sentence-transformers embedding of each paper's title + abstract and an embedding of the interest query. No API calls are made. The model (`all-MiniLM-L6-v2` by default, ~80 MB) is downloaded on first use and cached.
 
-**Key behaviors:**
-- Papers are scored in **batches of 50** to avoid output token truncation
-- Requests **structured JSON output** via `response_mime_type="application/json"`
-- Temperature set to **0.1** for consistent scoring
-- Handles **LaTeX in reasoning strings** by sanitizing invalid escape sequences before JSON parsing
-- **Preference profile injection**: if a cumulative profile exists from user feedback, it's appended to the system prompt to improve scoring over time
-- **Fallback on failure**: if the API call fails, all papers default to `"summary"` tier (no crash)
+**Interest query** (from [prompts/interest_profile.txt](prompts/interest_profile.txt)): AI agents and agentic systems, optimization, and computer vision / video AI (object detection, OCR, video understanding, retail shelf monitoring). Learned preferences from the feedback loop are appended to this query at runtime.
 
-**Tiering**: after scoring, papers are sorted by score descending. The top N become `"deep_dive"`, the rest become `"summary"`.
+**Score mapping**: cosine similarity is clamped to [0, 1] and mapped to the 1–10 scale (`similarity * 9 + 1`), which keeps the Supabase schema unchanged. If embedding fails, every paper gets a neutral 5.0 and tiering still runs.
+
+**Tiering**: the pipeline sorts all scored papers by score descending and takes the top `TOP_N_DEEP_DIVE` (default 10) as `"deep_dive"`. Everything else is `"summary"`. There is no per-source or per-category quota. The scorer's own `top_n` (from `TOP_N_THRESHOLD`) only sets the tier labels it returns, and the pipeline ignores them.
+
+**Gemini scorer (not wired):** `GeminiPaperScorer` in the same file scores papers with Gemini Flash using [prompts/scorer_system.txt](prompts/scorer_system.txt). `run_research_pipeline.py` does not construct it today. If it is re-enabled, it scores in batches of 50 with JSON output at temperature 0.1, and falls back to all-`"summary"` on failure.
 
 ### Transcript Generator
 
@@ -209,7 +202,7 @@ Generates the final podcast transcript using sequential Gemini API calls with ra
 
 This marker lets the wiki ingestion engine reliably associate the original paper URL with the concepts it extracts, without asking the LLM to re-discover URLs from prose text.
 
-**Summary papers** — formatted as **plain text without any LLM call**. Papers are grouped by Arxiv category with human-readable headings (e.g., "Computer Science", "Statistics") and listed with title + abstract. This section is appended after the deep-dive transcripts.
+**Summary papers** — not passed to the transcript generator, so they are never narrated. They are sent only as `tier: "summary"` metadata to Supabase for the Research Review frontend.
 
 **Multi-tier API key & model fallback:**
 
@@ -232,7 +225,7 @@ On any Gemini failure (429 quota, other client errors, or exhausted retries), th
 **File:** [feedback.py](feedback.py)
 **Classes:** `PreferenceProfileManager` (implements `FeedbackStore`), `FeedbackClient`
 
-Implements a **cumulative learning loop** that improves Arxiv scoring over time based on implicit user behavior:
+Implements a **cumulative learning loop** that improves paper scoring over time based on implicit user behavior:
 
 **`FeedbackClient`** — queries the Supabase edge function for papers the user clicked on in the Research Review frontend over the last 30 days. Clicking a paper signals "I was interested enough to investigate" — low friction, no explicit rating needed.
 
@@ -240,7 +233,7 @@ Implements a **cumulative learning loop** that improves Arxiv scoring over time 
 - Stores up to **50 example papers** (most recent kept when cap exceeded)
 - Uses **Gemini Flash** to extract 1-3 broad interest patterns from newly clicked papers
 - Deduplicates learned interests
-- Formats the profile as a natural language string for injection into the scorer system prompt
+- Formats the profile as a natural language string that is appended to the scorer's interest query
 
 **Profile format example:**
 > The user has previously shown interest in papers like: "Paper A", "Paper B", "Paper C". Patterns noticed: multi-agent coordination, temporal graph networks. Prioritize papers similar to these.
@@ -254,16 +247,16 @@ Wires all components together and executes the 10-step pipeline:
 
 1. **Idempotency check** — skips if output file already exists for the date
 2. **Load preference profile** — fetches recent click feedback, updates profile
-3. **Parse emails** — extracts paper references from Gmail
-4. **Split by source** — separates HuggingFace and Arxiv papers
-5. **Score Arxiv papers** — AI relevance scoring with per-category selection
-6. **Mark HuggingFace as deep_dive** — all HF papers get full treatment
+3. **Parse emails** — extracts paper references from Gmail (both sources)
+4. **Deduplicate** — removes papers seen in the past 14 days
+5. **Score all papers together** — one ranking across HuggingFace and Arxiv
+6. **Select top N** — the top `TOP_N_DEEP_DIVE` become deep-dives; the rest become summary
 7. **Download content** — fetches PDFs/HTML for deep-dive papers; demotes failures to summary
-8. **Generate transcript** — produces narration via Gemini Pro Batch API
+8. **Generate transcript** — narrates the deep-dive papers only
 9. **Save transcript** — writes to `raw_content/research_digest_{date}.txt`
-10. **Push metadata** — sends paper metadata JSON to Supabase for the frontend
+10. **Push metadata** — sends paper metadata JSON (deep-dive and summary) to Supabase for the frontend
 
-**Per-category selection**: Arxiv papers are grouped by their email category (cs, stat, math, etc.). Within each category, the top `deep_dive_per_category` papers (default 5) get full treatment, the next `summary_per_category` (default 10) get brief mentions, and the rest are discarded. This prevents a single high-volume category from crowding out others.
+**Global ranking**: papers from both sources compete on the same score. There is no per-source or per-category quota, so one source or category can fill every deep-dive slot if its papers score highest.
 
 ---
 
@@ -288,8 +281,11 @@ Located in the [prompts/](prompts/) directory:
 ### `narrator_system.txt`
 System prompt for Gemini 3.1 Pro when generating deep-dive segments. Instructs the model to act as a knowledgeable AI researcher narrating for a data scientist audience. Defines a 5-part structure: introduction → methodology → results → implications → transition.
 
+### `interest_profile.txt`
+Interest query used by the active `EmbeddingPaperScorer`. Lists the topics that raise a paper's rank: AI agents and agentic systems, optimization, and computer vision / video AI (object detection, OCR, video understanding, retail shelf monitoring). Learned preferences are appended at runtime.
+
 ### `scorer_system.txt`
-System prompt for Gemini Flash when scoring Arxiv papers. Defines the three core interest areas (AI agents, time series, optimization) and the 1-10 scoring rubric. Contains a `{preference_profile_section}` placeholder that gets replaced with learned user preferences at runtime.
+System prompt for the Gemini scorer (`GeminiPaperScorer`), which is not currently wired into the pipeline. Covers the same core areas as `interest_profile.txt` and defines the 1-10 scoring rubric. Contains a `{preference_profile_section}` placeholder that gets replaced with learned user preferences at runtime.
 
 ---
 
@@ -309,8 +305,10 @@ TOKEN_FILE = token.json                # Auto-created after first auth
 [Gemini]
 API_KEY = your-gemini-api-key
 BACKUP_API_KEY = your-backup-gemini-key   # Optional: second free-tier key for failover
-SCORING_MODEL = gemini-3-flash-preview
 GENERATION_MODEL = gemini-3.1-flash-lite-preview
+
+[Scoring]
+MODEL_NAME = all-MiniLM-L6-v2             # Sentence-transformers model used for paper scoring
 
 [OpenRouter]                              # Optional: final fallback for summaries; sole LLM for wiki ingestion
 OPENROUTER_API_KEY = your-openrouter-key
@@ -319,11 +317,12 @@ OPENROUTER_MODEL = openrouter/free
 [ResearchPapers]
 ARXIV_SENDERS = no-reply@arxiv.org
 HUGGINGFACE_SENDERS = daily_papers_digest@notifications.huggingface.co
-TOP_N_THRESHOLD = 10
-DEEP_DIVE_PER_CATEGORY = 5
-SUMMARY_PER_CATEGORY = 10
+TOP_N_THRESHOLD = 10                      # Sets the scorer's own tier labels only; pipeline ignores them
+TOP_N_DEEP_DIVE = 10                      # Papers narrated per day, ranked across all sources
 ARXIV_DELAY_SECONDS = 3
 ```
+
+In CI, this file is rebuilt from the `CONFIG_INI` secret, so change values there as well.
 
 ### Gmail Setup
 
@@ -442,7 +441,7 @@ Day 2: FeedbackClient fetches clicked papers from Supabase
          ↓
 Day 2: PreferenceProfileManager uses Gemini Flash to extract interest patterns
          ↓
-Day 2: Updated preference profile injected into scorer system prompt
+Day 2: Updated preference profile appended to the scorer's interest query
          ↓
 Day 2: Scoring now reflects both base interests AND learned preferences
          ↓
@@ -460,8 +459,8 @@ The preference profile is stored locally at `preference_profile.json` and caps a
 - **Idempotency**: re-running for the same date is a no-op if the output file exists
 - **Graceful degradation**: API failures, download errors, and malformed emails are all handled — the pipeline continues with whatever papers it can process
 - **Rate limit respect**: configurable delays between Arxiv requests (default 3s)
-- **Cost optimization**: Gemini Flash for cheap scoring, Batch API for 50% savings on transcript generation
-- **Per-category fairness**: top-N selection happens within each Arxiv category, preventing one category from dominating the digest
+- **Cost optimization**: local embedding scoring makes no API calls; Gemini is used only for transcript generation and preference extraction
+- **Global ranking**: top-N selection happens across all sources and categories in one ranking
 
 ---
 
@@ -488,7 +487,7 @@ pytest tests/test_feedback.py -v
 | `test_paper_downloader.py` | Arxiv PDF extraction, HuggingFace page extraction, text cleaning, rate limiting, size limits, error handling |
 | `test_paper_scorer.py` | Scoring logic, tiering, batch processing, preference profile injection, HuggingFace bypass, JSON parsing, error fallback; embedding scorer (similarity mapping, MagicMock stubs for optional deps) |
 | `test_transcript_generator.py` | Prompt construction, per-paper generation, batch mode, summary text assembly, category grouping |
-| `test_pipeline.py` | Full end-to-end orchestration, per-category selection, idempotency, Supabase metadata push, error scenarios |
+| `test_pipeline.py` | Full end-to-end orchestration, global top-N selection, idempotency, Supabase metadata push, error scenarios |
 | `test_feedback.py` | Profile loading/writing, interest extraction, growth capping, FeedbackClient API calls |
 | `test_gemini_client_retry.py` | `Retry-After` parsing (delta-seconds, HTTP-date, past dates, unparseable values), model locking, and thread-safe resolution under concurrent `generate()` calls |
 | `test_run_wiki_ingestion.py` | `run_wiki_ingestion.py` CLI: default no-LLM archive path (idempotency skip, date-range iteration, per-date failure isolation), opt-in `--llm-wiki` path, correct done-marker per mode |
@@ -684,7 +683,7 @@ research_papers/
 ├── models.py                    # Data classes (PaperReference, PaperContent, ScoredPaper)
 ├── email_parser.py              # Gmail → paper references (Arxiv + HuggingFace)
 ├── paper_downloader.py          # PDF/HTML → full text extraction
-├── paper_scorer.py              # Gemini Flash relevance scoring (Arxiv only)
+├── paper_scorer.py              # Embedding relevance scoring (active); Gemini scorer (unused)
 ├── transcript_generator.py      # Gemini Pro podcast narration (Batch API)
 ├── feedback.py                  # Preference profile management + Supabase feedback client
 ├── pipeline.py                  # Pipeline orchestrator (wires everything together)
@@ -694,7 +693,8 @@ research_papers/
 ├── README.md                    # This file
 ├── prompts/
 │   ├── narrator_system.txt      # System prompt for deep-dive narration
-│   └── scorer_system.txt        # System prompt for relevance scoring
+│   ├── interest_profile.txt     # Interest query for the embedding scorer
+│   └── scorer_system.txt        # Gemini scorer prompt (not wired in)
 ├── wiki_engine/
 │   ├── __init__.py
 │   ├── classifier.py        # Section classification + extract_source_urls_from_section
