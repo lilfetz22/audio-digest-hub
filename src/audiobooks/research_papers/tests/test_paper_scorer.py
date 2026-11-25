@@ -102,17 +102,6 @@ class TestScoringLogic:
         assert result[2].tier == "summary"
 
 
-class TestHuggingFaceBypass:
-    """HuggingFace papers should never be scored."""
-
-    def test_hf_papers_are_never_scored(self, scorer, sample_hf_papers):
-        """HuggingFace papers bypass scoring — all marked as deep_dive."""
-        # This is actually handled in the pipeline, not the scorer.
-        # The scorer should only receive Arxiv papers.
-        # But if HF papers are accidentally passed, they should still work.
-        pass
-
-
 class TestPreferenceProfile:
     """Tests for preference profile injection."""
 
