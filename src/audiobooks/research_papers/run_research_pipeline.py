@@ -103,7 +103,7 @@ def load_config(config_path=None):
                 "ResearchPapers", "TOP_N_THRESHOLD", fallback=10
             ),
             "top_n_deep_dive": config.getint(
-                "ResearchPapers", "TOP_N_DEEP_DIVE", fallback=25
+                "ResearchPapers", "TOP_N_DEEP_DIVE", fallback=10
             ),
             "arxiv_delay_seconds": config.getint(
                 "ResearchPapers", "ARXIV_DELAY_SECONDS", fallback=3
