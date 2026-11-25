@@ -112,7 +112,7 @@ EmbeddingPaperScorer scores every paper 1-10 in one ranking
     ▼
 TranscriptGenerator
     │
-    ├── Deep-dive papers → individual Gemini 3.1 Pro calls (Batch API, 50% savings)
+    ├── Deep-dive papers → individual Gemini 3.1 Pro calls
     │   Each paper gets a thorough, standalone narration segment
     │
     └── Summary papers → plain text assembly (no LLM call)
@@ -128,7 +128,7 @@ Supabase edge function (paper metadata JSON for Research Review frontend)
 User clicks on papers → implicit feedback → preference profile evolves
     │
     ▼
-Future Arxiv scoring improves based on learned preferences
+Future paper scoring improves based on learned preferences
 ```
 
 ---
@@ -684,7 +684,7 @@ research_papers/
 ├── email_parser.py              # Gmail → paper references (Arxiv + HuggingFace)
 ├── paper_downloader.py          # PDF/HTML → full text extraction
 ├── paper_scorer.py              # Embedding relevance scoring (active); Gemini scorer (unused)
-├── transcript_generator.py      # Gemini Pro podcast narration (Batch API)
+├── transcript_generator.py      # Gemini Pro podcast narration
 ├── feedback.py                  # Preference profile management + Supabase feedback client
 ├── pipeline.py                  # Pipeline orchestrator (wires everything together)
 ├── run_research_pipeline.py     # CLI entry point (config loading, Gmail auth, arg parsing)
