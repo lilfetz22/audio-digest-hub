@@ -130,7 +130,7 @@ Strict SOLID/DI layout — `interfaces.py` defines abstract contracts, concrete 
 
 Two things worth knowing before editing:
 
-- **Arxiv and HuggingFace take different paths.** HF papers skip scoring entirely and are all `deep_dive`. Arxiv papers are Gemini-scored 1–10 and tiered *per category* (top N deep-dive, next M summary, rest discarded) so one high-volume category can't crowd out the others.
+- **Arxiv and HuggingFace are ranked together.** Every paper from both sources is scored in one pass by `EmbeddingPaperScorer` (local sentence-transformers, no API calls) against `prompts/interest_profile.txt`, and the top `TOP_N_DEEP_DIVE` (default 10) become `deep_dive` globally. There are no per-source or per-category quotas. Summary papers are metadata only and are never narrated.
 - **`dedup.py` maintains a 14-day rolling window** in `seen_papers.csv`, which is **committed to the repo** by the GitHub Actions workflow so dedup state survives between runs. That is why the commit log is full of `chore: update seen_papers.csv [skip ci]`.
 
 All Gemini calls go through `gemini_client.GeminiClientWithFallback`, which walks primary key → backup key → paid key, each across a model chain, treating 429 as "skip to next key tier immediately" rather than burning retries. Add new LLM calls through this class, not a raw `genai.Client`.
