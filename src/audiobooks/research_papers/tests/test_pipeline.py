@@ -188,6 +188,23 @@ class TestTopNSelection:
         assert "https://arxiv.org/abs/2603.12352" not in deep_dive_urls  # score 5
         assert "https://arxiv.org/abs/2603.12350" not in deep_dive_urls  # score 3
 
+    def test_hf_papers_are_scored_in_same_call_as_arxiv(self, pipeline, mock_deps, sample_papers, tmp_path):
+        """HuggingFace papers are ranked together with arXiv papers, not bypassed."""
+        mock_deps["feedback_client"].fetch_clicked_papers.return_value = []
+        mock_deps["feedback_manager"].load_profile.return_value = ""
+        mock_deps["email_parser"].fetch_papers.return_value = sample_papers
+        mock_deps["paper_scorer"].score.return_value = [
+            ScoredPaper(paper=p, score=5, tier="summary", reasoning="")
+            for p in sample_papers
+        ]
+        mock_deps["transcript_generator"].generate.return_value = "Transcript"
+        mock_deps["paper_downloader"].extract.return_value = None
+
+        pipeline.run("2026-03-14")
+
+        scored_input = mock_deps["paper_scorer"].score.call_args[0][0]
+        assert {p.source for p in scored_input} == {"arxiv", "huggingface"}
+
     def test_discards_no_papers_all_become_deep_dive_or_summary(self, mock_deps, tmp_path):
         """All papers should be either deep-dive or summary — none discarded."""
         mock_deps["output_dir"] = str(tmp_path)

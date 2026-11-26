@@ -37,6 +37,16 @@ def test_load_config_resolves_paths_relative_to_config_file(tmp_path):
     assert config["token_file"] == str(tmp_path / "token.json")
 
 
+def test_load_config_defaults_top_n_deep_dive_to_10(tmp_path):
+    """A config.ini without TOP_N_DEEP_DIVE narrates 10 papers, matching the pipeline default."""
+    config_path = tmp_path / "config.ini"
+    _write_config(config_path)
+
+    config = rrp.load_config(str(config_path))
+
+    assert config["top_n_deep_dive"] == 10
+
+
 def test_load_config_preserves_absolute_paths(tmp_path):
     config_path = tmp_path / "config.ini"
     absolute_credentials = tmp_path / "nested" / "credentials.json"

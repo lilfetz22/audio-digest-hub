@@ -36,7 +36,7 @@ class ResearchPaperPipeline:
         api_url: str,
         api_key: str,
         output_dir: str = "raw_content",
-        top_n_deep_dive: int = 25,
+        top_n_deep_dive: int = 10,
     ):
         self.email_parser = email_parser
         self.paper_downloader = paper_downloader
